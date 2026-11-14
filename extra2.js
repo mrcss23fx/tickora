@@ -1268,6 +1268,85 @@
   }
   const PERS = [["30", "30 días"], ["90", "90 días"], ["365", "1 año"], ["all", "Todo"]];
   const perFilter = (L, per, key) => per === "all" ? L : L.filter(t => new Date(t[key || "open_time"]) >= Date.now() - (+per) * 864e5);
+
+  // ---------- Hoy · Mi día: cabina de la sesión ----------
+  V.hoy = {
+    view() {
+      const D = hData(); let X = {}; try { X = dayX(D); } catch (e) { }
+      const p = D.p, mx = p.maxTrades || 3, used = D.today.length, L = p.dayLimitR || 2, dr = D.st.n ? D.st.tot : 0, now = D.now, tk = todayKey(), ph = D.phase;
+      const tm = t => { const d = new Date(t); return d.getHours() * 60 + d.getMinutes(); };
+      const TT = D.today.slice().sort((a, b) => new Date(a.open_time) - new Date(b.open_time));
+      let a0 = D.a, b0 = D.b; TT.forEach(t => { a0 = Math.min(a0, tm(t.open_time)); if (t.close_time) b0 = Math.max(b0, tm(t.close_time)); });
+      a0 = Math.max(0, Math.floor((a0 - 20) / 15) * 15); b0 = Math.min(1440, Math.ceil((b0 + 20) / 15) * 15);
+      const xp = m => ((m - a0) / Math.max(1, b0 - a0) * 100), inR = m => m >= a0 && m <= b0, hm = m => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+      const step = b0 - a0 > 240 ? 60 : b0 - a0 > 120 ? 30 : 15, ticks = []; for (let m = Math.ceil(a0 / step) * step; m <= b0; m += step) ticks.push(m);
+      // curva acumulada
+      const CL = closed(TT).filter(t => t.close_time).sort((a, b) => new Date(a.close_time) - new Date(b.close_time));
+      let cum = 0; const pts = [[a0, 0]]; CL.forEach(t => { pts.push([tm(t.close_time), cum]); cum += +t.r || 0; pts.push([tm(t.close_time), cum]); });
+      pts.push([Math.min(b0, ph === "antes" ? a0 : now), cum]);
+      const lo = Math.min(0, ...pts.map(x => x[1])), hi = Math.max(0, ...pts.map(x => x[1])), rg = (hi - lo) || 1, yp = v => (82 - (v - lo) / rg * 64);
+      const curve = CL.length ? `<svg class="hc-cv" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><line x1="0" x2="100" y1="${yp(0).toFixed(1)}" y2="${yp(0).toFixed(1)}" class="z"/><polyline points="${pts.map(([m, v]) => `${xp(m).toFixed(2)},${yp(v).toFixed(2)}`).join(" ")}"/></svg>` : `<div class="hc-zero" style="top:${yp(0).toFixed(1)}%"></div>`;
+      const marks = TT.map((t, i) => { const m = t.close_time ? tm(t.close_time) : tm(t.open_time), o = !t.close_time || t.status !== "closed", v = o ? cum : (CL.slice(0, CL.indexOf(t) + 1).reduce((a, x) => a + (+x.r || 0), 0)), ok = !o && evaluate(t).good;
+        return `<a class="hc-mk${o ? " open" : +t.r < 0 ? " neg" : ""}${ok ? "" : o ? "" : " bad"}" href="#op/${encodeURIComponent(t.id)}" style="left:${xp(m).toFixed(2)}%;top:${yp(v).toFixed(1)}%" title="${esc(t.symbol || "")} ${hhmm(t.open_time)}"><b></b><small class="${i % 2 ? "dn" : ""}">${esc(t.symbol || "")} · ${o ? "abierta" : fmtMs(+t.r, mOf(t))}</small></a>`; }).join("");
+      // noticias del día
+      const ev = (D.todayEv || []).filter(e => (e.impact === "High" || e.impact === "Medium") && inR(tm(e.ts)));
+      const flags = ev.map(e => `<span class="hc-nw ${e.impact === "High" ? "hi" : ""}" style="left:${xp(tm(e.ts)).toFixed(2)}%" title="${esc((e.country || e.cur || "") + " · " + (e.title || ""))}"><em>${hhmm(e.ts)} · ${esc(e.country || e.cur || "")} ${esc(String(e.title || "").slice(0, 22))}</em></span>`).join("");
+      // mejor y peor hora (90 días)
+      const byH = {}; D.C90.forEach(t => { const h = new Date(t.open_time).getHours(); byH[h] = byH[h] || [0, 0]; byH[h][1]++; if (evaluate(t).good) byH[h][0]++; });
+      const hs = Object.entries(byH).filter(([, v]) => v[1] >= 3).map(([h, v]) => [+h, v[0] / v[1]]).sort((a, b) => b[1] - a[1]);
+      const band = (h, cls, lbl) => { const s = Math.max(a0, h * 60), e = Math.min(b0, h * 60 + 60); return e > s ? `<span class="hc-bd ${cls}" style="left:${xp(s).toFixed(2)}%;width:${(xp(e) - xp(s)).toFixed(2)}%"><em>${lbl}</em></span>` : ""; };
+      const bands = hs.length >= 2 ? band(hs[0][0], "best", "Tu mejor hora") + band(hs[hs.length - 1][0], "worst", "Tu peor hora") : "";
+      const pu = S.pauseUntil && S.pauseUntil > Date.now() ? S.pauseUntil : 0;
+      const pause = pu ? `<span class="hc-ps" style="left:${xp(now).toFixed(2)}%;width:${Math.max(.5, xp(Math.min(b0, tm(pu))) - xp(now)).toFixed(2)}%"><em>Pausa</em></span>` : "";
+      const sess = `<span class="hc-ss" style="left:${xp(D.a).toFixed(2)}%;width:${(xp(D.b) - xp(D.a)).toFixed(2)}%"></span>`;
+      const nowM = inR(now) && ph !== "antes" ? `<span class="hc-done" style="width:${xp(now).toFixed(2)}%"></span><span class="hc-now" style="left:${xp(now).toFixed(2)}%"><b>${hm(now)}</b></span>` : "";
+      const tl = `<div class="hc-tl"><div class="hc-in">${sess}${bands}${pause}${nowM}${ticks.map(m => `<span class="hc-tk" style="left:${xp(m).toFixed(2)}%"><i>${hm(m)}</i></span>`).join("")}${flags}${curve}${marks}</div></div>`;
+      // instrumentos
+      const C = 2 * Math.PI * 30, fr = Math.min(1, used / mx), lim = Math.min(1, Math.max(0, -dr) / L), margin = L + dr;
+      const lv = (String(X.sem || "").match(/hd-sem s-(\w)/) || [])[1] || "x", lt = (String(X.sem || "").match(/<b>([^<]*)<\/b>/) || [])[1] || "—", why = ((String(X.sem || "").match(/<small>([^<]*)<\/small>/) || [])[1] || "").split(" · ")[0];
+      const hl = /paused/.test(X.heat || "") ? 3 : +((String(X.heat || "").match(/ht lv(\d)/) || [])[1] || 0), HL = ["Tranquilo", "Atento", "Caliente", "En pausa"];
+      const ins = `<div class="hc-ins">
+        <div class="hc-g"><svg viewBox="0 0 72 72"><circle cx="36" cy="36" r="30" class="t"/><circle cx="36" cy="36" r="30" class="f${used > mx ? " over" : ""}" style="stroke-dasharray:${(fr * C).toFixed(1)} ${C.toFixed(1)}"/></svg><div><span class="hc-k">Operaciones</span><b class="mono">${used} de ${mx}</b><small>${used > mx ? "te has pasado" : used === mx ? "llegaste al máximo" : "te " + (mx - used === 1 ? "queda 1" : "quedan " + (mx - used))}</small></div></div>
+        <div class="hc-g"><svg viewBox="0 0 72 72"><path d="M12 52 A30 30 0 1 1 60 52" class="t"/><path d="M12 52 A30 30 0 1 1 60 52" class="f l" pathLength="100" style="stroke-dasharray:${(100 - lim * 100).toFixed(1)} 100"/></svg><div><span class="hc-k">Aún puedes perder</span><b class="mono">${margin > 0 ? fmtVabs(margin) : "0"}</b><small>${margin > 0 ? "hasta tocar −" + fmtLim(L, 1) : "has tocado tu límite"}</small></div></div>
+        <div class="hc-g sem s-${lv}"><span class="hc-sem"><i></i></span><div><span class="hc-k">Semáforo</span><b>${esc(lt)}</b><small>${esc(why)}</small></div></div>
+        <div class="hc-g ht${hl}"><div class="hc-heat"><span><i style="left:${[10, 50, 90, 50][hl]}%"></i></span></div><div><span class="hc-k">Calentón</span><b>${HL[hl]}</b><small>${hl === 3 ? "hasta las " + hhmm(pu) : hl === 2 ? "para 10 minutos" : hl === 1 ? "respira antes de la siguiente" : "sin señales"}</small></div></div>
+        <div class="hc-g res"><div><span class="hc-k">Resultado de hoy</span><b class="mono hc-big">${D.st.n ? fmtV(D.st.tot, D.st.mt) : fmtV(0, 0)}</b><small>${D.st.n ? D.st.n + (D.st.n === 1 ? " cerrada" : " cerradas") : "aún sin operaciones"}</small></div></div></div>`;
+      // normas en directo
+      const fails = new Set(); D.today.forEach(t => evaluate(t).fail.forEach(f => { const k = NK(f.fix); if (k) fails.add(k); }));
+      const stt = (k, w) => fails.has(k) ? "bad" : w ? "warn" : used ? "ok" : "idle", rp = num(p.riskPct, 2).replace(/,?0+$/, "");
+      const rows = [["Máx. " + mx + " operaciones", used > mx ? "te pasaste" : used === mx ? "cierra el día" : used ? "llevas " + used : "aún ninguna", stt("max", used === mx)], ["Límite −" + fmtLim(L, 1), D.st.n ? "llevas " + fmtMs(dr, D.st.mt) : "sin pérdidas", dr <= -L ? "bad" : stt("lim", D.st.n && dr <= -L * .6)], ["Horario " + esc(p.start) + "–" + esc(p.end), ph === "antes" ? "empieza a las " + esc(p.start) : ph === "en" ? "estás dentro" : "terminado", fails.has("hora") ? "bad" : ph === "en" ? "ok" : "idle"], ["Riesgo " + rp + " %", fails.has("risk") ? "te pasaste" : used ? "respetado" : "—", stt("risk")], ["Stop sin moverlo", fails.has("stop") ? "hoy no" : used ? "bien" : "—", stt("stop")]];
+      const rules = `<div class="hc-rules">${rows.map(([l, s, c]) => `<div class="hc-r ${c}"><i>${c === "ok" ? ico("check", 12, 2.8) : c === "bad" ? ico("x", 11, 2.8) : c === "warn" ? "!" : ""}</i><span><b>${l}</b><small>${s}</small></span></div>`).join("")}</div>`;
+      // operaciones de hoy
+      const ops = TT.length ? TT.slice().reverse().map(t => { const ev = evaluate(t), o = !t.close_time || t.status !== "closed", f = ev.fail[0], dur = t.close_time ? Math.max(1, Math.round((new Date(t.close_time) - new Date(t.open_time)) / 6e4)) : null;
+        return `<a class="hc-op" href="#op/${encodeURIComponent(t.id)}"><time>${hhmm(t.open_time)}</time><span class="hc-ob"><b>${esc(t.symbol || "")} · ${t.side === "buy" ? "Compra" : "Venta"}</b><small>${o ? "Abierta" : (dur ? durTxt(dur) + " · " : "") + (ev.good ? (+t.r < 0 ? "pérdida buena" : "dentro del plan") : "fuera: " + esc((NLAB[NK(f && f.fix || "")] || (f && f.label) || "una norma").toLowerCase()))}</small></span><span class="hc-tag ${o ? "" : ev.good ? "ok" : "bad"}">${o ? "Abierta" : ev.good ? "En plan" : "Evitable"}</span><b class="mono">${o ? "—" : fmtV(+t.r, mOf(t))}</b></a>`; }).join("") : `<div class="hc-emp">Aún sin operaciones hoy.<br><small>Cuando entres, aparecerán aquí y en la línea de tu sesión.</small></div>`;
+      // regla y consejo
+      const M = healthOk() ? (S.mente || {})[tk] : null; let adv = null; try { adv = mDone(M) ? psyAdvice(M, D) : null; } catch (e) { }
+      const regla = `<div class="hc-c hc-rg"><span class="hc-k">Tu regla de hoy</span>${M && M.sit ? `<p class="hc-si"><b>Si</b> ${esc(M.sit)} <b>→</b> ${esc(M.then)}</p>` : `<p class="hc-si m">${mDone(M) ? "Hoy no hay regla especial." : "Haz el chequeo y te propongo una regla para hoy."}</p>`}${adv && adv.tip ? `<span class="hc-k" style="margin-top:14px">Consejo</span><p class="hc-tip">${esc(adv.tip)}</p>` : ""}${!mDone(M) && healthOk() ? `<a class="x-ch pri" href="#inicio">Hacer el chequeo · 1 min</a>` : ""}</div>`;
+      // antes de operar y próximas noticias
+      let nvSeen = false; try { nvSeen = localStorage.getItem("tk-nv") === tk; } catch (e) { }
+      const nh = (D.todayEv || []).filter(e => e.impact === "High"), com = S.planOk && S.planOk.day === tk;
+      const chk = [[mDone(M) || !healthOk(), "Chequeo de cómo llegas"], [com, "Compromiso con tu plan"], [!nh.length || nvSeen, nh.length ? "Revisar las noticias fuertes" : "Sin noticias fuertes hoy"], [!!(M && M.sit) || !healthOk(), "Tu regla de hoy a mano"]];
+      const allOk = chk.every(c => c[0]);
+      const nx = (D.todayEv || []).filter(e => e.ts > Date.now() - 5 * 6e4 && (e.impact === "High" || e.impact === "Medium")).slice(0, 4);
+      const prep = `<div class="hc-c hc-pr ${allOk ? "ok" : ""}"><span class="hc-k">Antes de operar</span><div class="hc-cl">${chk.map(([ok, l]) => `<div class="${ok ? "on" : ""}"><i>${ok ? ico("check", 11, 3) : ""}</i>${l}</div>`).join("")}</div>${!com ? `<button type="button" class="x-ch pri" data-pcommit>Me comprometo hoy</button>` : ""}
+        <span class="hc-k" style="margin-top:16px">Próximas noticias</span>${nx.length ? `<div class="hc-nx">${nx.map(e => `<a href="#noticias" data-hcnv><time>${hhmm(e.ts)}</time><i class="${e.impact === "High" ? "hi" : ""}"></i><span>${esc(e.country || e.cur || "")} · ${esc(e.title || "")}</span></a>`).join("")}</div>` : `<p class="m hc-sm">No quedan noticias importantes hoy.</p>`}</div>`;
+      const title = ph === "antes" ? `Tu sesión empieza <em>a las ${esc(p.start)}</em>` : ph === "en" ? `Tu sesión, <em>en directo</em>` : `Tu sesión <em>de hoy</em>`;
+      const live = ph === "en" ? `<span class="hc-live on"><i></i>En sesión · quedan ${durTxt(D.b - now)}</span>` : ph === "antes" ? `<span class="hc-live"><i></i>Empieza en ${durTxt(D.a - now)}</span>` : `<span class="hc-live"><i></i>Sesión terminada</span>`;
+      return `<div class="stack hc">
+        <div class="xhead"><div><h1>${title}</h1><div class="small muted">${cap(new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" }))} · ${esc(p.start)}–${esc(p.end)}</div></div>
+          <div class="hc-acts">${live}<button type="button" class="x-ch" data-act="emo">Registrar emoción</button>${ph === "en" ? `<button type="button" class="x-ch" data-hcpause>${pu ? "Terminar pausa" : "Pausa 10 min"}</button>` : ""}<button type="button" class="x-ch pri" data-act="addop">+ Operación</button></div></div>
+        ${tl}${ins}${rules}
+        <div class="hc-low"><div class="hc-c hc-ops"><div class="hc-ch"><span class="hc-k">Operaciones de hoy</span><a href="#informe/${tk}" class="hc-lk">Informe del día →</a></div>${ops}</div>${regla}${prep}</div>
+      </div>`;
+    },
+    bind() {
+      const m = document.getElementById("main"); if (!m) return; bindWidgets(m);
+      m.querySelectorAll("[data-hcpause]").forEach(b => b.onclick = () => { S.pauseUntil = S.pauseUntil && S.pauseUntil > Date.now() ? 0 : Date.now() + 10 * 6e4; re(); });
+      m.querySelectorAll("[data-hcnv]").forEach(a => a.addEventListener("click", () => { try { localStorage.setItem("tk-nv", todayKey()); } catch (e) { } }));
+      clearInterval(S.hcT); S.hcT = setInterval(() => { if ((location.hash || "").replace("#", "") === "hoy" && !document.hidden) re(); else if ((location.hash || "").replace("#", "") !== "hoy") clearInterval(S.hcT); }, 60000);
+    }
+  };
+
   V.rendimiento = {
     view() {
       const per = S.rendPer || "90", L = perFilter(S.trades, per), C = closed(L).sort((a, b) => new Date(a.open_time) - new Date(b.open_time)), st = tradeStats(L);
