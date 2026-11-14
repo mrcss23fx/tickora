@@ -1812,3 +1812,44 @@ button.mc-d:focus-visible{outline:2px solid var(--cobalto);outline-offset:1px}
 .nv-sub a[aria-current="page"] i{background:var(--gc);border-color:var(--gc);box-shadow:0 0 8px var(--gc)}
 .nv-sub a:focus-visible{outline:2px solid var(--gc);outline-offset:-2px}
 @media (prefers-reduced-motion:reduce){.nv-sub,.nv-sub a,.nv-cv{transition:none}}
+/* =====================================================================
+   BASE COMÚN DE LOS APARTADOS: mismo estilo en todas las páginas
+   ===================================================================== */
+.pgmain{--pg:#9a9aa3}
+.pgmain>.stack{gap:22px}
+/* cabecera: etiqueta del grupo en su color + título grande y fino */
+.pgmain .xhead h1,.pgmain .ptop h1,.pgmain>.stack>h1,.pgmain .ashead h1{font-family:var(--sans,Inter,system-ui,sans-serif);font-size:clamp(30px,3.1vw,42px);font-weight:500;letter-spacing:-.035em;line-height:1.05;margin:0}
+.pgmain .xhead h1::before,.pgmain .ptop h1::before{content:"● " var(--pg-eye,"");display:block;margin-bottom:10px;font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:color-mix(in srgb,var(--pg) 85%,var(--hb-ink));text-shadow:0 0 12px color-mix(in srgb,var(--pg) 45%,transparent)}
+.pgmain .xhead .small.muted,.pgmain .ptop .small.muted,.pgmain .xhead>div>.muted,.pgmain .ptop .muted{font-size:14px;line-height:1.5;margin-top:8px;color:var(--hb-ink2)}
+.pgmain .xhead,.pgmain .ptop{align-items:flex-end;padding-bottom:6px}
+/* tarjetas */
+.pgmain .card{border-radius:22px;border:1px solid var(--hb-line);background:var(--hb-t);box-shadow:0 20px 50px -34px rgba(0,0,0,.65)}
+.pgmain .card:not([style*="padding"]){padding:22px}
+.pgmain .h2b,.pgmain .card>h2,.pgmain .card .between>h2{font-size:16.5px;font-weight:600;letter-spacing:-.01em}
+.pgmain .xg2,.pgmain .xg3,.pgmain .grid2{gap:18px}
+/* datos (KPI) */
+.pgmain .xkgrid{gap:16px}
+.pgmain .xk{border-radius:20px;border:1px solid var(--hb-line);background:var(--hb-t);box-shadow:none;padding:18px 18px 16px;min-height:112px;transition:border-color .2s,transform .2s}
+.pgmain .xk:hover{border-color:color-mix(in srgb,var(--pg) 35%,var(--hb-line));transform:translateY(-1px)}
+.pgmain .xk-l{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--hb-ink2)}
+/* pantallas vacías */
+.pgmain .xempty{gap:10px;padding:44px 20px}
+.pgmain .xempty>svg:first-child{box-sizing:content-box;width:26px;height:26px;padding:16px;border-radius:50%;color:color-mix(in srgb,var(--pg) 80%,var(--hb-ink));background:color-mix(in srgb,var(--pg) 10%,transparent);box-shadow:0 0 0 1px color-mix(in srgb,var(--pg) 30%,transparent),0 0 30px -6px color-mix(in srgb,var(--pg) 60%,transparent)}
+.pgmain .xempty b{font-size:16px;font-weight:600}
+.pgmain .xempty span{font-size:13.5px;color:var(--hb-ink2)}
+/* pestañas: la activa con un toque del color del grupo */
+.pgmain .pgtabs a[aria-current="page"],.pgmain .pgtabs a.on{box-shadow:inset 0 -2px 0 color-mix(in srgb,var(--pg) 80%,transparent)}
+/* fuera los azules antiguos: portadas de Diario, Backtesting y Asistente */
+.pgmain .pghero{background:radial-gradient(520px 220px at 82% 0%,color-mix(in srgb,var(--pg) 28%,transparent),transparent 70%),radial-gradient(420px 220px at 0% 100%,color-mix(in srgb,var(--pg) 14%,transparent),transparent 70%),var(--hb-t);border:1px solid var(--hb-line);border-radius:24px}
+.pgmain .pghero::after{display:none}
+.pgmain .pghero h1,.pgmain .pghero h2,.pgmain .pghero b{color:var(--hb-ink)}
+.pgmain .bshero{background:radial-gradient(520px 260px at 85% 40%,color-mix(in srgb,var(--pg) 30%,transparent),transparent 70%),var(--hb-t);border:1px solid var(--hb-line);border-radius:24px}
+.pgmain .bshero h1{color:var(--hb-ink)}
+.pgmain .bshero p{color:var(--hb-ink2)}
+.pgmain .ashead>svg:first-child,.pgmain .ashead .asico,.pgmain .ashead>span:first-child{color:color-mix(in srgb,var(--pg) 85%,var(--hb-ink));background:color-mix(in srgb,var(--pg) 14%,transparent)!important;box-shadow:0 0 30px -4px color-mix(in srgb,var(--pg) 60%,transparent)}
+/* botones principales en tinta, no azul */
+.pgmain .pghero .btn,.pgmain .bshero .btn{background:var(--hb-ink);color:var(--hx-on);border-color:var(--hb-ink)}
+.pgmain .pkc{border-radius:20px;border:1px solid var(--hb-line);background:var(--hb-t);box-shadow:none}
+.pgmain .banner{border-radius:18px;border:1px solid var(--hb-line);background:radial-gradient(400px 120px at 50% 0%,color-mix(in srgb,var(--pg) 18%,transparent),transparent 70%),var(--hb-t);color:var(--hb-ink)}
+.pgmain .banner svg{color:color-mix(in srgb,var(--pg) 85%,var(--hb-ink))}
+.pgmain .acc2{border-radius:22px}
