@@ -32,7 +32,7 @@
     const { error } = await sb.from("trades").update({ review: t.review }).eq("id", t.id);
     if (error) toast("No se pudo guardar"); if (X2.gRefresh) X2.gRefresh();
   }
-  const answered = t => { const r = t.review || {}; return !!((r.mot && r.mot.length) || r.wtxt || r.strat || (typeof r.why === "string" && r.why.trim())); };
+  const answered = t => { const r = t.review || {}; return !!((r.mot && r.mot.length) || r.wtxt || r.strat || r.err || (typeof r.why === "string" && r.why.trim())); };
   const saidOf = rv => rv.wtxt || (typeof rv.why === "string" ? rv.why.trim() : "");
 
   /* ---------------- voz ---------------- */
@@ -79,6 +79,7 @@
     return `<div class="dj-mo${done ? " done" : ""}${open ? " now" : ""}" id="mo-${esc(t.id)}"><span class="dj-dot" aria-hidden="true"></span>
       <div class="dj-h"><b>${esc(t.symbol || "")} · ${t.side === "buy" ? "Compra" : "Venta"}${t.status === "closed" ? " · " + fmtV(t.r, A.mOf(t)) : ""}</b><small>${new Date(t.open_time).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}${done ? " · hecho" : ""}</small></div>
       <div class="dj-auto">${auto}</div>
+      ${ev && !ev.good ? `<button type="button" class="dt-go" data-dt="${esc(t.id)}">${rv.err ? "Fallo encontrado · ver" : "Buscar el fallo · 1 min"}</button>` : ""}
       ${done && !open ? `<div class="dj-sum">${(rv.mot || []).map(w => `<span class="dj-chip on${WHY_BAD.has(w) ? " bad" : ""}">${esc(w)}</span>`).join("")}${rv.strat && stratName(rv.strat) ? `<span class="dj-chip st on">${esc(stratName(rv.strat))}</span>` : ""}${saidOf(rv) ? `<p class="dj-said">«${esc(saidOf(rv))}»</p>` : ""}<button type="button" class="dj-edit" data-djopen="${esc(t.id)}">Cambiar</button></div>`
       : `<p class="dj-q">${q}</p>${chips(WHY, rv.mot, "data-why", `data-tid="${esc(t.id)}"`)}
         ${st.length ? `<p class="dj-q2">¿Qué estrategia era?</p><div class="dj-chips">${st.map(s => `<button type="button" class="dj-chip st${rv.strat === s.id ? " on" : ""}" data-strat="${esc(s.id)}" data-tid="${esc(t.id)}" aria-pressed="${rv.strat === s.id}">${esc(s.name)}</button>`).join("")}<button type="button" class="dj-chip st${rv.strat === "none" ? " on" : ""}" data-strat="none" data-tid="${esc(t.id)}">Ninguna</button></div>` : `<p class="dj-hint">Crea tus estrategias en <a href="#estrategias">Mi plan › Estrategias</a> y podrás marcar cuál usaste.</p>`}
@@ -184,8 +185,9 @@
       if (r && r.id) return DI0.view(r);
       if (!S.d3Loaded) loadAllD().then(() => { if ((location.hash || "").startsWith("#diario")) re(); });
       const tab = S.djTab || "hoy";
-      const tabs = `<div class="dj-tabs" role="tablist">${[["hoy", "Hoy"], ["semana", "Semana"], ["cuaderno", "Cuaderno libre"]].map(([k, l]) => `<button type="button" role="tab" data-djtab="${k}" aria-selected="${tab === k}">${l}</button>`).join("")}</div>`;
+      const tabs = `<div class="dj-tabs" role="tablist">${[["hoy", "Hoy"], ["semana", "Semana"], ["libro", "Tu libro"], ["cuaderno", "Cuaderno libre"]].map(([k, l]) => `<button type="button" role="tab" data-djtab="${k}" aria-selected="${tab === k}">${l}</button>`).join("")}</div>`;
       if (tab === "cuaderno") return `<div class="stack dj" style="gap:18px"><div class="xhead"><div><h1>Tu cuaderno <em>libre</em></h1><div class="small muted">Para escribir largo: páginas en blanco o con plantilla</div></div></div>${tabs}${DI0.view(r)}</div>`;
+      if (tab === "libro" && window.TK_LIBRO) return `<div class="stack dj" style="gap:18px">${window.TK_LIBRO.head()}${tabs}${!S.d3Loaded ? `<div class="dj-c" aria-busy="true">Cargando tu libro…</div>` : window.TK_LIBRO.view()}</div>`;
       const body = !S.d3Loaded ? `<div class="dj-c" aria-busy="true">Cargando tu diario…</div>` : tab === "semana" ? weekView() : `<div class="dj-g"><div>${dayView()}</div><aside class="dj-side">
         <div class="dj-c"><span class="dj-k">Lo que te dijiste ayer</span>${ayer()}</div>
         <div class="dj-c"><span class="dj-k">Tu diario te dice</span><p class="dj-sp">${insight()}</p></div>
@@ -197,6 +199,7 @@
       if (r && r.id) return DI0.bind(r);
       $$("[data-djtab]").forEach(b => b.onclick = () => { S.djTab = b.dataset.djtab; re(); });
       if ((S.djTab || "hoy") === "cuaderno") { DI0.bind(r); return; }
+      if (S.djTab === "libro") { if (window.TK_LIBRO) window.TK_LIBRO.bind(); return; }
       bindDay(document.getElementById("main") || document);
       $$("[data-djw]").forEach(b => b.onclick = () => { S.djW = Math.min(0, (S.djW || 0) + +b.dataset.djw); re(); });
       $$("[data-wans]").forEach(ta => { const sv = () => { const k = ta.dataset.wans, cur = Object.assign({}, (S.dlog || {})[k] || {}, { q: ta.dataset.q, a: ta.value.trim() }); S.dlog[k] = cur; saveDoc("dlog", k, cur); }; ta.onchange = sv; ta.onblur = sv; });
@@ -238,7 +241,7 @@
       ${chips(WHY, rv.mot, "data-swhy")}
       ${strats().length ? `<p class="dj-q2">¿Qué estrategia era?</p><div class="dj-chips">${strats().map(s => `<button type="button" class="dj-chip st${rv.strat === s.id ? " on" : ""}" data-sst="${esc(s.id)}">${esc(s.name)}</button>`).join("")}</div>` : ""}
       <div class="dj-in"><textarea id="sh-tx" class="dj-ta" rows="2" maxlength="400" placeholder="Cuéntalo en una frase (opcional)…"></textarea>${micBtn("sh-tx")}</div>
-      <div class="dj-sb"><button type="button" class="x-ch" data-sno>Ahora no</button><button type="button" class="x-ch pri" data-sok>Guardar</button></div></div>`; bind(); };
+      ${!ev.good ? `<button type="button" class="dt-go" data-dt="${esc(t.id)}">No seguiste el plan · buscar el fallo en 1 min</button>` : ""}<div class="dj-sb"><button type="button" class="x-ch" data-sno>Ahora no</button><button type="button" class="x-ch pri" data-sok>Guardar</button></div></div>`; bind(); };
     const close = () => { box.classList.remove("in"); setTimeout(() => box.remove(), 220); document.removeEventListener("keydown", ek); };
     const ek = e => { if (e.key === "Escape") { skip(); } };
     const skip = () => { const L = lsGet("tk-whyskip", []); L.push(t.id); lsSet("tk-whyskip", L.slice(-200)); close(); };
@@ -329,6 +332,8 @@
     view(r) { if (!S.d3Loaded) loadAllD().then(() => { if ((location.hash || "").startsWith("#plan")) re(); }); const h = PL0.view(r); const i = h.indexOf('<div class="pg-edit">'); const blk = `<div class="tn-sep"><span>Tu libro de reglas</span></div>${recBlock()}`; return i > 0 ? h.slice(0, i) + blk + h.slice(i) : h + blk; },
     bind(r) { if (PL0.bind) PL0.bind(r); bindRec(); }
   };
+
+  window.TK_X3 = { loadAllD, setReview, saveDoc, dlogOf, answered, saidOf, micBtn, startMic, recList, strats, stratName, WHY_BAD, autoGrow };
 
   /* ---------------- arranque ---------------- */
   setInterval(() => { if (S.user && S.trades) { if (!S.d3Loaded) loadAllD(); else checkSheet(); } }, 20000);

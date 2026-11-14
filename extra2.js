@@ -146,7 +146,8 @@
       finanzas: [inSession(D.p) ? "Bloqueado" : "Disponible", inSession(D.p) ? "hasta las " + esc(D.p.end) : "cobros y gastos", null],
       asistente: ["R", "responde con tus datos", null],
       noticias: [D.nextHigh ? hhmm(D.nextHigh.ts) : "—", D.nextHigh ? "próxima fuerte · " + esc(D.nextHigh.country) : "sin noticias fuertes", null],
-      aprender: ["Pronto", "tras el bootcamp", null]
+      aprender: window.tkApTile ? window.tkApTile("aprender") : ["—", "tus decisiones", null],
+      errores: window.tkApTile ? window.tkApTile("errores") : ["—", "tus errores", null]
     };
     return M[k] || ["", "", null];
   }
@@ -550,7 +551,7 @@
       } catch (e) { }
       return "";
     };
-    const SUBD = { estrategias: "Tus formas de operar y sus resultados", hoy: "Tu sesión de hoy", noticias: "Calendario económico", backtest: "Tus sesiones de práctica", btanalisis: "Los números de tu práctica", btops: "Todas tus operaciones simuladas", btnotas: "Notas de cada sesión", rendimiento: "Tus números en dinero y en R", progreso: "Tu nota, racha y normas", emociones: "Cómo te afecta cada emoción", cuentas: "Fondeo, propias y demo", finanzas: "Cobros y gastos", historial: "Todas tus operaciones", calendario: "Tu mes día a día" };
+    const SUBD = { aprender: "Cómo hiciste cada operación", errores: "Lo que se repite y lo que ya superaste", estrategias: "Tus formas de operar y sus resultados", hoy: "Tu sesión de hoy", noticias: "Calendario económico", backtest: "Tus sesiones de práctica", btanalisis: "Los números de tu práctica", btops: "Todas tus operaciones simuladas", btnotas: "Notas de cada sesión", rendimiento: "Tus números en dinero y en R", progreso: "Tu nota, racha y normas", emociones: "Cómo te afecta cada emoción", cuentas: "Fondeo, propias y demo", finanzas: "Cobros y gastos", historial: "Todas tus operaciones", calendario: "Tu mes día a día" };
     const CHV = '<svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 5l5 5-5 5"/></svg>';
     const item = (k, col) => { const a = NAV_APPS.find(x => x[0] === k); if (!a) return ""; const [, l, items] = a, on = curApp && curApp[0] === k, multi = items.length > 1;
       const inner = `<span class="nv-ic">${ico(k, 17)}</span><span class="nv-n">${esc(l)}</span><span class="nv-mv">${mv(k)}</span>`;

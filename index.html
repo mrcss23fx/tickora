@@ -989,6 +989,7 @@ const ICON={
  btops:'<path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/>',
  btcal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M9 15l2 2 4-4"/>',
  btnotas:'<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h5"/>',
+ errores:'<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4M11 8v3.5M11 14v.01"/>',
  estrategias:'<path d="M4 19V5M4 19h16"/><path d="m7 14 4-4 3 3 5-6"/><circle cx="19" cy="7" r="1.5"/>',
  rendimiento:'<path d="M3 12a9 9 0 1 1 18 0"/><path d="M12 12l4-4"/><circle cx="12" cy="12" r="1.5"/><path d="M5 17h14"/>',
  calendario:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M7 14h2M11 14h2M15 14h2M7 17.5h2M11 17.5h2"/>',
@@ -1005,13 +1006,14 @@ const NAV_APPS=[
  ["backtest","Backtesting",[["backtest","Sesiones"],["btanalisis","Análisis"],["btops","Operaciones simuladas"],["btnotas","Cuaderno"]]],
  ["resultados","Psicología",[["rendimiento","Rendimiento"],["progreso","Disciplina"],["emociones","Emociones"]]],
  ["diario","Diario",[["diario","Diario"]]],
+ ["aprender","Aprender",[["aprender","Tus decisiones"],["errores","Tus errores"]]],
  ["cartera","Cuentas y dinero",[["cuentas","Cuentas"],["finanzas","Finanzas"]]],
  ["plan","Mi plan",[["plan","Reglas"],["estrategias","Estrategias"]]],
  ["asistente","Asistente",[["asistente","Asistente"]]],
  ["calendario","Calendario",[["historial","Historial"],["calendario","Calendario"]]],
  ["ajustes","Ajustes",[["ajustes","Ajustes"]]]];
 /* páginas que existen pero no salen en el menú (se llega desde otras) */
-const NAV_HIDDEN=["informe","btcal","grupo","aprender"];
+const NAV_HIDDEN=["informe","btcal","grupo"];
 const NAV_GROUPS=NAV_APPS.map(a=>[a[1],a[2]]);
 const appOf=v=>NAV_APPS.find(a=>a[2].some(x=>x[0]===v));
 const NAV_SIDE=NAV_GROUPS.flatMap(g=>g[1]).concat(NAV_HIDDEN.map(k=>[k,k]));
@@ -2032,7 +2034,7 @@ function render(){
   S.lastView=key;
   if(r.view!=="analizar"&&window.TkChart&&TkChart.current){TkChart.destroy();document.body.style.overflow=""}
   const XV=window.TK_VIEWS&&TK_VIEWS[r.view];
-  const NEWV=["app","backtest","historial","emociones","diario","noticias","asistente","inicio","btanalisis","btops","btcal","btnotas","rendimiento","calendario","informe","finanzas"];
+  const NEWV=["app","backtest","historial","emociones","diario","noticias","asistente","inicio","btanalisis","btops","btcal","btnotas","rendimiento","calendario","informe","finanzas","aprender","errores"];
   if(NEWV.includes(r.view)&&!XV&&document.readyState==="complete"&&!S.loadWarn){S.loadWarn=setTimeout(()=>{S.lastView=null;render()},2500)}
   const content=(window.tkCrumb&&!["analizar","inicio","app"].includes(r.view)?tkCrumb(r.view):"")+(XV?XV.view(r):NEWV.includes(r.view)?`<div class="stack" style="gap:12px;max-width:520px;padding:40px 0"><div class="muted">Cargando…</div>${document.readyState==="complete"?`<div class="small muted">Si tarda mucho, recarga la página sin caché: Ctrl + F5 (en Mac, ⌘ + Mayús + R).</div><button type="button" class="btn" onclick="location.replace(location.pathname+'?r='+Date.now()+location.hash)" style="height:40px;align-self:flex-start">Recargar ahora</button>`:""}</div>`:r.view==="mas"?viewMas():r.view==="op"?viewOp(r.id):r.view==="analizar"?viewAnalizar():r.view==="progreso"?viewProgreso():r.view==="plan"?viewPlan("plan"):r.view==="ajustes"?viewPlan("ajustes"):r.view==="cuentas"?viewCuentas():
     r.view==="grupo"?viewSoon("Grupo","Los grupos nuevos, donde solo se comparte disciplina y nunca dinero, llegan en el último paso de esta versión. Mientras tanto, tus grupos siguen en la versión anterior."):
@@ -2247,9 +2249,10 @@ if(SB_OK){
 window.viewPlan=viewPlan;window.viewProgreso=viewProgreso;window.TKAPP={S,sb,esc,SVG,fmtR,fmtV,fmtVt,fmtMoney,mOf,sumM,oneR,dispCur,moneyOn,prefU,CURS,fmtVabs,fmtLim,fmtMs,num,fmtPct,dayKey,todayKey,evaluate,tradeStats,toast,render,spark,MARKETS,symbolsInfo,lsGet,lsSet,acctName,selAcct,FEELS,greet,initials,minOf,minOfDate,money,inSession,MESES_L,NAV_APPS,appOf,ico,isDark,refreshWidgets,effectivePlan,applyAcct,thumb};
 })();
 </script>
-<link rel="stylesheet" href="extra2.css?v=93">
+<link rel="stylesheet" href="extra2.css?v=94">
 <script src="extra.js?v=18"></script>
-<script src="extra2.js?v=65"></script>
-<script src="extra3.js?v=5"></script>
+<script src="extra2.js?v=66"></script>
+<script src="extra3.js?v=6"></script>
+<script src="extra4.js?v=1"></script>
 </body>
 </html>
