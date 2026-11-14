@@ -1415,6 +1415,41 @@
     }
   };
 
+  // ---------- Rendimiento: tus números, contados ----------
+  function told(C, st, per) {
+    const PL = { "30": "En 30 días", "90": "En 90 días", "365": "En un año", all: "Desde el principio" }[per] || "En este periodo";
+    if (C.length < 3) return `<div class="tn tn-empty"><span class="tn-k">Tus números, contados</span><p class="tn-h">Cuando tengas <b>3 operaciones</b> cerradas en este periodo, aquí te contaré tus números en frases.</p><small>Llevas ${C.length}.</small></div>`;
+    const pos = st.tot >= 0, ex = st.exp || 0;
+    let cum = 0; const cv = [0]; C.forEach(t => { cum += +t.r || 0; cv.push(cum); });
+    const mn = Math.min(...cv), mx = Math.max(...cv), rg = (mx - mn) || 1, path = cv.map((v, i) => `${(i / (cv.length - 1) * 100).toFixed(2)},${(92 - (v - mn) / rg * 84).toFixed(2)}`).join(" ");
+    const c1 = `<div class="tn tn-big ${pos ? "" : "neg"}"><span class="tn-k">${PL}</span><div class="tn-n">${fmtV(st.tot, st.mt)}</div><small>con ${st.n} ${st.n === 1 ? "operación" : "operaciones"}</small>
+      <svg class="tn-cv" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${path}"/></svg>
+      <p class="tn-h">${ex >= 0 ? `Por cada operación has ganado <b>${fmtMs(ex, st.mexp)}</b> de media. Eso es lo que vale tu forma de operar.` : `Por cada operación pierdes <b>${fmtMs(Math.abs(ex), st.mexp == null ? null : Math.abs(st.mexp))}</b> de media. Mira qué operaciones lo causan: casi siempre son pocas.`}</p></div>`;
+    // mejor hora
+    const H = {}; C.forEach(t => { const h = new Date(t.open_time).getHours(); (H[h] = H[h] || []).push(t); });
+    const hs = Object.keys(H).map(Number).sort((a, b) => a - b).map(h => ({ h, s: tradeStats(H[h]) }));
+    const cand = hs.filter(x => x.s.n >= 2), bh = (cand.length ? cand : hs).slice().sort((a, b) => b.s.tot - a.s.tot)[0];
+    const hmax = Math.max(...hs.map(x => Math.abs(x.s.tot)), .0001);
+    const restL = C.filter(t => new Date(t.open_time).getHours() !== bh.h), rs = tradeStats(restL), ratio = rs.n && rs.exp > 0 && bh.s.exp > 0 ? bh.s.exp / rs.exp : null;
+    const c2 = `<div class="tn tn-hr"><span class="tn-k">Tu mejor hora</span><div class="tn-bars">${hs.slice(0, 8).map(x => `<div class="${x.h === bh.h ? "on" : x.s.tot < 0 ? "neg" : ""}"><i style="height:${Math.max(6, Math.abs(x.s.tot) / hmax * 100).toFixed(0)}%"></i><small>${x.h} h</small></div>`).join("")}</div>
+      <p class="tn-h">${bh.s.tot <= 0 ? `Aún no tienes una hora que te dé dinero. La que menos te cuesta es la de las <b>${bh.h} h</b>.` : ratio && ratio >= 1.5 ? `De ${bh.h} a ${bh.h + 1} h ganas <b>${ratio >= 10 ? "mucho" : num(ratio, ratio < 3 ? 1 : 0) + " veces"} más</b> por operación que el resto.` : rs.n && rs.tot <= 0 ? `De ${bh.h} a ${bh.h + 1} h ganas <b>${fmtMs(bh.s.tot, bh.s.mt)}</b>. El resto de horas, en conjunto, pierdes.` : `Tu mejor hora es de ${bh.h} a ${bh.h + 1} h: <b>${fmtMs(bh.s.tot, bh.s.mt)}</b> en ${bh.s.n} operaciones.`}</p></div>`;
+    // acierto
+    const w = st.win || 0, of = Math.round(w / 10), rr = st.avgW != null && st.avgL ? Math.abs(st.avgW / st.avgL) : null;
+    const c3 = `<div class="tn tn-win"><span class="tn-k">Aciertas</span><div class="tn-dots">${Array.from({ length: 10 }, (_, i) => `<i class="${i < of ? "" : "l"}"></i>`).join("")}</div>
+      <p class="tn-h"><b>${of} de cada 10</b>.${rr != null ? rr >= 1 ? ` Y cuando ganas, ganas <b>${num(rr, 1)} veces</b> lo que pierdes.` : ` Pero cuando ganas, ganas <b>menos</b> de lo que pierdes (${num(rr, 1)} veces).` : ""}</p></div>`;
+    // mercado
+    const SY = {}; C.forEach(t => (SY[t.symbol || "—"] = SY[t.symbol || "—"] || []).push(t));
+    const ss = Object.entries(SY).map(([k, l]) => ({ k, s: tradeStats(l) })).sort((a, b) => b.s.tot - a.s.tot), gainSum = ss.filter(x => x.s.tot > 0).reduce((a, x) => a + x.s.tot, 0), top = ss[0], wst = ss[ss.length - 1];
+    const smax = Math.max(...ss.map(x => Math.abs(x.s.tot)), .0001);
+    const c4 = `<div class="tn tn-sym"><span class="tn-k">Tu mercado</span><div class="tn-sl">${ss.slice(0, 4).map(x => `<div class="${x.s.tot < 0 ? "neg" : ""}"><span>${esc(x.k)}</span><i><b style="width:${(Math.abs(x.s.tot) / smax * 100).toFixed(0)}%"></b></i><em>${fmtMs(x.s.tot, x.s.mt)}</em></div>`).join("")}</div>
+      <p class="tn-h">${ss.length === 1 ? `Solo operas <b>${esc(top.k)}</b>. Conocerlo bien es una ventaja.` : top.s.tot > 0 ? (top.s.tot >= gainSum - 1e-9 ? `Todo lo que ganas viene del <b>${esc(top.k)}</b>.` : `El <b>${Math.round(top.s.tot / gainSum * 100)} %</b> de lo que ganas viene del ${esc(top.k)}.`) : `Ningún mercado te da dinero todavía. El que menos te cuesta es el ${esc(top.k)}.`}</p>${wst && wst !== top && wst.s.tot < 0 ? `<small>${esc(wst.k)}: ${fmtMs(wst.s.tot, wst.s.mt)} en ${wst.s.n} operaciones</small>` : ""}</div>`;
+    // peor caída y recuperación
+    let peak = 0, pi = 0, dd = 0, ddS = 0, ddE = 0; for (let i = 1; i < cv.length; i++) { if (cv[i] > peak) { peak = cv[i]; pi = i; } if (cv[i] - peak < dd) { dd = cv[i] - peak; ddS = pi; ddE = i; } }
+    let rec = null; if (dd < 0) { const lvl = cv[ddS]; for (let i = ddE + 1; i < cv.length; i++) if (cv[i] >= lvl) { rec = i; break; } }
+    const dOf = i => new Date(C[Math.max(0, i - 1)].open_time), days = rec ? Math.max(1, Math.round((dOf(rec) - dOf(ddE)) / 864e5)) : null;
+    const c5 = `<div class="tn tn-dd"><span class="tn-k">Lo peor que has pasado</span><p class="tn-h">${dd >= 0 ? "No has tenido ninguna caída en este periodo. Cada operación te ha dejado más arriba." : `Una caída de <b>${fmtMs(st.dd, st.mdd)}</b>. ${rec ? `Tardaste <b>${days} ${days === 1 ? "día" : "días"}</b> en recuperarla.` : `Aún no la has recuperado del todo.`}`}</p>${dd < 0 ? `<small>Del ${fmtD(dOf(ddS).toISOString())} al ${fmtD(dOf(ddE).toISOString())}${rec ? "" : " · sigue abierta"}</small>` : ""}</div>`;
+    return `<div class="tn-grid">${c1}${c2}${c3}${c4}${c5}</div>`;
+  }
   V.rendimiento = {
     view() {
       const per = S.rendPer || "90", L = perFilter(S.trades, per), C = closed(L).sort((a, b) => new Date(a.open_time) - new Date(b.open_time)), st = tradeStats(L);
@@ -1429,8 +1464,10 @@
       const bySym = {}; C.forEach(t => (bySym[t.symbol] = bySym[t.symbol] || []).push(t));
       const accts = (S.accts || []).filter(a => a.number).map(a => { const T = closed(perFilter(S.allTrades.filter(t => String(t.account || "") === String(a.number)), per)); return { a, st: tradeStats(T) }; }).filter(x => x.st.n);
       return `<div class="stack" style="gap:18px">
-        <div class="xhead"><div><h1>Rendimiento</h1><div class="small muted">${st.n} operaciones cerradas${selAcct() ? " de " + esc(acctName(selAcct().a)) : ""} · ${moneyOn() ? "en " + dispCur() + " y en R" : "todo en R"}</div></div>
+        <div class="xhead"><div><h1>Tus números, <em>contados</em></h1><div class="small muted">${st.n} operaciones cerradas${selAcct() ? " de " + esc(acctName(selAcct().a)) : ""} · ${moneyOn() ? "en " + dispCur() + " y en R" : "todo en R"}</div></div>
           <div class="pseg" role="group" aria-label="Periodo">${PERS.map(([k, l]) => `<button type="button" data-rper="${k}" aria-pressed="${per === k}">${l}</button>`).join("")}</div></div>
+        ${told(C, st, per)}
+        <div class="tn-sep"><span>Todos los números</span></div>
         <div class="xkgrid">
           ${kpi("Resultado neto", st.n ? fmtV(st.tot, st.mt) : "—", st.n + " operaciones", spark(curve, 96, 40), "Suma de todas las operaciones cerradas del periodo")}
           ${kpi("Factor de beneficio", fpf(st.pf), "lo ganado ÷ lo perdido", ring(st.pf == null ? 0 : Math.min(100, (st.pf === Infinity ? 3 : st.pf) / 3 * 100)), "Por encima de 1 ganas más de lo que pierdes")}
