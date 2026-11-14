@@ -2153,3 +2153,34 @@ html[data-theme="light"] .nimp.i3{color:#d6363c}html[data-theme="light"] .nimp.i
 .dsc-b i{background:#c49dff;box-shadow:0 0 8px rgba(196,157,255,.4)}
 .heat7 i.hbad,.hleg i.hbad,i.hbad{background:repeating-linear-gradient(135deg,#ff5a5f 0 3px,color-mix(in srgb,#ff5a5f 35%,transparent) 3px 6px)!important;opacity:1!important}
 .heat7 i.hg,.hleg i.hg{background:#c49dff!important}
+/* =====================================================================
+   EMOCIONES — la volatilidad de tu mente
+   ===================================================================== */
+.vm-k{display:block;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--hb-ink2)}
+.vm-g{display:block;overflow:visible}.vm-g path{fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.vm-hero{display:grid;grid-template-columns:auto 1fr auto;gap:30px;align-items:center;padding:30px 34px;border-radius:26px;border:1px solid var(--hb-line);background:radial-gradient(600px 300px at 0 0,color-mix(in srgb,var(--pg) 24%,transparent),transparent 70%),var(--hb-t)}
+.vm-hg{padding:14px 18px;border-radius:22px;background:color-mix(in srgb,var(--hb-ink) 4%,transparent);border:1px solid var(--hb-line)}
+.vm-hg .vm-g path{stroke-width:3;filter:drop-shadow(0 0 8px currentColor)}
+.vm-hero h2{margin:6px 0 0;font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:clamp(28px,2.8vw,40px);line-height:1.1;color:var(--hb-ink)}
+.vm-hero p{margin:10px 0 0;font-size:14.5px;line-height:1.5;color:var(--hb-ink2)}
+.vm-pc{text-align:right}.vm-pc b{display:block;font-size:52px;font-weight:200;letter-spacing:-.04em;color:var(--hb-ink);line-height:1.1}.vm-pc small{font-size:12px;color:var(--hb-ink2)}
+.vm-wk{display:grid;grid-template-columns:repeat(7,1fr);gap:12px}
+.vm-wk>div{display:flex;flex-direction:column;align-items:center;gap:6px;padding:18px 8px 14px;border-radius:20px;border:1px solid var(--hb-line);background:var(--hb-t);text-align:center;min-width:0}
+.vm-wk b{font-size:13px;color:var(--hb-ink);margin-top:4px}
+.vm-wk small{font-size:11.5px;color:var(--hb-ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.vm-wk em{font-style:normal;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--hb-ink2)}
+.vm-wk .td{border-color:var(--hb-ink)}.vm-wk .fu{opacity:.4}
+.vm-wk .pk{border-color:color-mix(in srgb,#ff5a5f 35%,var(--hb-line))}
+.vm-sec{display:flex;justify-content:space-between;align-items:baseline;margin-top:6px}.vm-sec small{font-size:12px;color:var(--hb-ink2)}
+.vm-st{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.vm-s{display:flex;flex-direction:column;gap:5px;padding:18px 20px;border-radius:22px;border:1px solid var(--hb-line);background:var(--hb-t);min-width:0}
+.vm-s .vm-g{margin-bottom:6px}
+.vm-s b{font-size:15px;color:var(--hb-ink)}
+.vm-n{font-size:11.5px;font-weight:600;color:var(--hb-ink2)}
+.vm-s small{font-size:12px;color:var(--hb-ink2)}
+.vm-s i{display:block;height:6px;border-radius:6px;background:color-mix(in srgb,var(--hb-ink) 8%,transparent);margin-top:8px;overflow:hidden}.vm-s i em{display:block;height:100%;border-radius:6px;background:#c49dff}
+.vm-s.lv3{border-color:color-mix(in srgb,#ff5a5f 30%,var(--hb-line))}
+.vm-empty{padding:22px;border-radius:22px;border:1px dashed var(--hb-line);font-size:14px;color:var(--hb-ink2)}
+@media (max-width:1100px){.vm-st{grid-template-columns:repeat(2,minmax(0,1fr))}.vm-hero{grid-template-columns:1fr;gap:16px}.vm-pc{text-align:left}}
+@media (max-width:700px){.vm-wk{grid-template-columns:repeat(4,1fr);gap:8px}.vm-hero{padding:22px}}
+@media (max-width:460px){.vm-st{grid-template-columns:1fr}}

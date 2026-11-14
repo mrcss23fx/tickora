@@ -1269,6 +1269,61 @@
   const PERS = [["30", "30 días"], ["90", "90 días"], ["365", "1 año"], ["all", "Todo"]];
   const perFilter = (L, per, key) => per === "all" ? L : L.filter(t => new Date(t[key || "open_time"]) >= Date.now() - (+per) * 864e5);
 
+  // ---------- Emociones: la volatilidad de tu mente ----------
+  const MK = [
+    { re: /^(tranquilo)$/i, n: "Mercado en calma", lv: 0, g: "M2 16 C 12 14, 20 15, 30 14 S 48 13, 58 14" },
+    { re: /^(paciente)$/i, n: "Rango ordenado", lv: 0, g: "M2 14 C 8 8, 14 8, 18 14 S 28 20, 32 14 S 42 8, 46 14 S 54 20, 58 14" },
+    { re: /^(confiado|ganas)$/i, n: "Tendencia sana", lv: 1, g: "M2 22 L 12 18 L 18 20 L 28 13 L 34 15 L 46 8 L 58 5" },
+    { re: /^(aburrido|cansado)$/i, n: "Mercado lento", lv: 1, g: "M2 12 C 14 13, 22 16, 30 17 S 48 18, 58 18" },
+    { re: /^(con prisa|ansioso|nervioso)$/i, n: "Volatilidad alta", lv: 2, g: "M2 15 L 7 6 L 12 22 L 17 4 L 22 20 L 27 9 L 32 24 L 37 5 L 42 19 L 47 8 L 52 21 L 58 12" },
+    { re: /^(con miedo)$/i, n: "Mercado bajista", lv: 2, g: "M2 5 L 10 9 L 16 7 L 24 14 L 30 12 L 40 19 L 46 17 L 58 25" },
+    { re: /^(eufórico|euforico|fomo)$/i, n: "Burbuja", lv: 2, g: "M2 23 L 14 22 L 24 19 L 32 15 L 40 8 L 46 2 L 50 10 L 58 24" },
+    { re: /^(frustrado|con ganas de recuperar|recuperar)$/i, n: "Desplome", lv: 3, g: "M2 6 L 12 8 L 20 7 L 26 24 L 30 18 L 36 25 L 42 14 L 50 20 L 58 12" }
+  ];
+  const LVN = ["baja", "media", "alta", "extrema"], LVC = ["#c49dff", "#86a9ff", "var(--hb-ink)", "#ff5a5f"];
+  const mkOf = f => MK.find(m => m.re.test(String(f || "").trim())) || null;
+  const glyph = (m, w = 60, h = 28) => m ? `<svg class="vm-g" viewBox="0 0 60 28" width="${w}" height="${h}" aria-hidden="true"><path d="${m.g}" style="stroke:${LVC[m.lv]}"/></svg>` : `<svg class="vm-g" viewBox="0 0 60 28" width="${w}" height="${h}" aria-hidden="true"><path d="M2 14 H58" style="stroke:color-mix(in srgb,var(--hb-ink) 18%,transparent);stroke-dasharray:3 4"/></svg>`;
+  const EMOL = { tranquilo: "Tranquilo", ganas: "Con ganas", nervioso: "Nervioso", cansado: "Cansado", frustrado: "Frustrado", euforico: "Eufórico" };
+  function vmWeek() {
+    const mon = new Date(); mon.setHours(12, 0, 0, 0); mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7)); const tk = todayKey(), hok = healthOk();
+    const days = []; for (let i = 0; i < 7; i++) { const d = new Date(mon); d.setDate(d.getDate() + i); const k = dayKey(d), feels = [];
+      const m = hok ? (S.mente || {})[k] : null; if (m && m.emo) feels.push(EMOL[m.emo] || m.emo);
+      const T = S.trades.filter(t => dayKey(t.open_time) === k); T.forEach(t => { const f = (t.review || {}).feel; if (f) feels.push(f); });
+      (S.emoLog || []).filter(x => dayKey(x.ts) === k).forEach(x => feels.push(x.feel));
+      const cnt = {}; feels.forEach(f => cnt[f] = (cnt[f] || 0) + 1); const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+      const mks = feels.map(mkOf).filter(Boolean), peak = mks.length ? mks.reduce((a, b) => b.lv > a.lv ? b : a) : null;
+      days.push({ d, k, f: top ? top[0] : null, m: top ? mkOf(top[0]) : null, peak, T, fut: k > tk }); }
+    const seen = days.filter(x => x.m), spikes = days.filter(x => x.peak && x.peak.lv >= 2), calm = seen.filter(x => x.m.lv === 0).length;
+    const dn = x => x.d.toLocaleDateString("es-ES", { weekday: "long" });
+    const head = !seen.length ? "Aún no sabemos cómo está tu mente esta semana." : (spikes.length > seen.length / 2 ? "Semana movida" : "Semana estable") + (spikes.length ? `, con ${spikes.length === 1 ? "un pico" : "picos"} de volatilidad ${spikes.length === 1 ? "el " + dn(spikes[0]) : "el " + spikes.slice(0, -1).map(dn).join(", el ") + " y el " + dn(spikes[spikes.length - 1])}.` : ", sin picos de volatilidad.");
+    const subs = []; if (seen.length) subs.push(`Llegaste en calma ${calm} de ${seen.length} ${seen.length === 1 ? "día" : "días"} con datos.`);
+    const sp = spikes.find(x => x.T.length); if (sp) subs.push(`El ${dn(sp)} operaste con un pico de volatilidad: ${sp.peak.n.toLowerCase()}.`);
+    if (!seen.length) subs.push(hok ? "Haz el chequeo de la mañana o anota cómo te sentías en cada operación y aquí verás tu semana." : "Activa el registro de emociones en Ajustes para ver tu semana.");
+    const CW = closed(S.trades).filter(t => new Date(t.open_time) >= mon.getTime() - 12 * 36e5), gp = CW.length ? Math.round(CW.filter(t => evaluate(t).good).length / CW.length * 100) : null;
+    const big = (spikes.length && spikes.length > seen.length / 2 ? spikes[0].peak : seen.length ? (seen.slice().sort((a, b) => a.m.lv - b.m.lv)[Math.floor(seen.length / 2)] || seen[0]).m : null);
+    return `<div class="vm-hero"><div class="vm-hg">${glyph(big, 150, 70)}</div><div><span class="vm-k">Parte de esta semana</span><h2>${esc(head)}</h2><p>${subs.map(esc).join(" ")}</p></div>
+      <div class="vm-pc"><span class="vm-k">Dentro del plan</span><b>${gp == null ? "—" : gp + " %"}</b><small>${CW.length ? CW.length + (CW.length === 1 ? " operación" : " operaciones") + " esta semana" : "sin operaciones esta semana"}</small></div></div>
+      <div class="vm-wk">${days.map(x => `<div class="${x.k === tk ? "td" : ""}${x.fut ? " fu" : ""}${x.peak && x.peak.lv >= 2 ? " pk" : ""}">${glyph(x.m)}<b>${x.k === tk ? "Hoy" : cap(x.d.toLocaleDateString("es-ES", { weekday: "short" }).replace(".", ""))}</b><small>${x.f ? esc(x.f) : x.fut ? "" : "—"}${x.T.length ? " · " + x.T.length + " op." : ""}</small>${x.m ? `<em>${x.m.n}</em>` : ""}</div>`).join("")}</div>`;
+  }
+  function vmStates(L) {
+    const by = {}; closed(L).forEach(t => { const f = (t.review || {}).feel; if (!f) return; const o = by[f] || (by[f] = { f, n: 0, g: 0, sum: 0, ms: 0, mk: 0 }); o.n++; if (evaluate(t).good) o.g++; o.sum += +t.r || 0; const mm = mOf(t); if (mm != null) { o.ms += mm; o.mk++; } });
+    const E = Object.values(by).sort((a, b) => b.n - a.n).slice(0, 8);
+    if (!E.length) return `<div class="vm-empty">Anota cómo te sentías al entrar en tus operaciones (abajo tienes las que faltan) y aquí verás en qué estado de mente operas mejor.</div>`;
+    return `<div class="vm-st">${E.map(e => { const m = mkOf(e.f), p = Math.round(e.g / e.n * 100); return `<div class="vm-s lv${m ? m.lv : 1}">${glyph(m, 72, 32)}<b>${esc(e.f)}</b><span class="vm-n">${m ? m.n + " · volatilidad " + LVN[m.lv] : "—"}</span><small>${e.n} ${e.n === 1 ? "vez" : "veces"} · ${p} % en plan · ${fmtMs(e.sum, e.mk ? e.ms : null)}</small><i><em style="width:${p}%"></em></i></div>`; }).join("")}</div>`;
+  }
+  const EMO0 = V.emociones;
+  if (EMO0) V.emociones = {
+    view(r) {
+      let h = EMO0.view(r); if (!healthOk()) return h;
+      h = h.replace("<h1>Emociones</h1>", "<h1>La volatilidad <em>de tu mente</em></h1>").replace(/Qué emociones te ayudan y cuáles te cuestan · /, "Cada emoción es un tipo de mercado. En unos operas bien; en otros, mejor no entrar · ");
+      const per = S.emoPer || "all", from = per === "all" ? null : Date.now() - (+per) * 864e5, L = S.trades.filter(t => !from || new Date(t.open_time) >= from);
+      const a = h.indexOf('<div class="xkgrid x3">'); if (a < 0) return h;
+      const b = h.indexOf('<div class="card', a);
+      return h.slice(0, a) + vmWeek() + `<div class="vm-sec"><span class="vm-k">Cómo operas en cada estado</span><small>${per === "all" ? "todo el tiempo" : "últimos " + per + " días"}</small></div>` + vmStates(L) + `<div class="tn-sep"><span>Todo el detalle</span></div>` + h.slice(b);
+    },
+    bind(r) { if (EMO0.bind) EMO0.bind(r); }
+  };
+
   // ---------- Disciplina: tu entrenamiento ----------
   const TIPS = { stop: "Antes de pulsar comprar o vender, escribe el precio del stop en la orden. Si no está, no hay entrada.", risk: "Calcula el tamaño en Gráfico antes de entrar y cópialo tal cual. Nunca redondees hacia arriba.", hora: "Pon una alarma a la hora en que termina tu horario. Cuando suene, cierras la plataforma, vayas como vayas.", max: "Cuando cierres tu última operación permitida, apaga la plataforma y apunta en el diario cómo te sientes. Así no hay una más.", lim: "Al llegar a tu límite, levántate de la mesa 10 minutos antes de hacer nada más." };
   const MISS = { stop: "Poner el stop al entrar y no moverlo en contra.", risk: "Arriesgar solo lo que dice tu plan en cada operación.", hora: "Operar solo dentro de tu horario.", max: "Cerrar el día al llegar a tus {mx} operaciones.", lim: "Parar en cuanto llegues a tu límite del día." };
