@@ -2,7 +2,7 @@
    Usa las utilidades de la página principal (S, sb, esc, fmtR, evaluate, tradeStats…). */
 (function () {
   "use strict";
-  const { S, sb, esc, SVG, fmtR, fmtV, fmtVt, fmtMoney, mOf, sumM, oneR, dispCur, moneyOn, prefU, num, fmtPct, dayKey, todayKey, evaluate, tradeStats, toast, render, spark, MARKETS, symbolsInfo, lsGet, lsSet, acctName, selAcct, FEELS, greet, initials, minOf, minOfDate } = window.TKAPP;
+  const { S, sb, esc, SVG, fmtR, fmtV, fmtVt, fmtMs, fmtMoney, mOf, sumM, oneR, dispCur, moneyOn, prefU, num, fmtPct, dayKey, todayKey, evaluate, tradeStats, toast, render, spark, MARKETS, symbolsInfo, lsGet, lsSet, acctName, selAcct, FEELS, greet, initials, minOf, minOfDate } = window.TKAPP;
   const V = window.TK_VIEWS = {};
   const $ = s => document.querySelector(s), $$ = s => Array.from(document.querySelectorAll(s));
   const I = (p, sz, w) => SVG(p, sz || 18, w || 1.8);
@@ -39,8 +39,10 @@
   /* ======================= HISTORIAL ======================= */
   const HGROUPS = [["Información", ["open_time", "symbol", "account", "side", "status"]], ["Rendimiento", ["r", "risk_pct", "plan", "feel"]], ["Precios", ["open_price", "close_price", "sl", "tp"]], ["Fechas", ["close_time", "dur"]]];
   const HLABEL = { open_time: "Fecha de entrada", symbol: "Símbolo", account: "Cuenta", side: "Dirección", status: "Estado", r: "Resultado", risk_pct: "Riesgo", plan: "Plan", feel: "Emoción", open_price: "Entrada", close_price: "Salida", sl: "Stop", tp: "Objetivo", close_time: "Fecha de salida", dur: "Duración" };
-  function histState() { return S.hist || (S.hist = { q: "", from: "", to: "", side: "", st: "", plan: "", sort: "open_time", dir: -1, page: 0, per: lsGet("tk-hist-per", 25), sel: new Set(), hide: lsGet("tk-hcols-off", []) }); }
-  function histRows() {
+  function histState() { return S.hist || (S.hist = { q: "", from: "", to: "", side: "", st: "", plan: "", sort: "open_time", dir: -1, page: 0, per: lsGet("tk-hist-per", 25), sel: new Set(), hide: lsGet("tk-hcols-off", []), quick: "" }); }
+  const HARD = ["Con prisa", "Con miedo", "Ansioso", "Eufórico", "Frustrado", "Con ganas de recuperar", "FOMO", "Cansado"];
+  const quickOk = (t, k) => k === "ev" ? t.status === "closed" && !evaluate(t).good : k === "gl" ? t.status === "closed" && evaluate(t).good && t.r < 0 : k === "hard" ? HARD.includes((t.review || {}).feel) : k === "in" ? t.status === "closed" && evaluate(t).good : true;
+  function histRows(noQuick) {
     const h = histState(), q = norm(h.q);
     let L = S.trades.filter(t => t.open_time);
     if (q) L = L.filter(t => norm([t.symbol, t.account, acctLabel(t.account), t.broker, (t.review || {}).why, (t.review || {}).feel].join(" ")).includes(q));
@@ -49,22 +51,24 @@
     if (h.side) L = L.filter(t => t.side === h.side);
     if (h.st) L = L.filter(t => (t.status === "closed" ? "closed" : "open") === h.st);
     if (h.plan) L = L.filter(t => t.status === "closed" && (evaluate(t).good ? "in" : "out") === h.plan);
+    if (h.quick && !noQuick) L = L.filter(t => quickOk(t, h.quick));
     const key = t => h.sort === "dur" ? (t.close_time ? new Date(t.close_time) - new Date(t.open_time) : -1) : h.sort === "plan" ? (t.status === "closed" ? (evaluate(t).good ? 1 : 0) : -1) : h.sort === "feel" ? ((t.review || {}).feel || "") : h.sort === "open_time" || h.sort === "close_time" ? (t[h.sort] ? new Date(t[h.sort]).getTime() : null) : t[h.sort];
     L.sort((a, b) => { const x = key(a), y = key(b); if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1; return (x > y ? 1 : x < y ? -1 : 0) * h.dir; });
     return L;
   }
-  function histCards(L) {
-    const st = tradeStats(L), pf = st.pf == null ? "—" : st.pf === Infinity ? "∞" : num(st.pf, 2), wl = st.avgW != null && st.avgL ? num(Math.abs(st.avgW / st.avgL), 2) : "—";
-    return `<div class="xkgrid">${statCard("Resultado", st.n ? fmtV(st.tot, st.mt) : fmtV(0, 0), st.n + " operaciones cerradas", spark(st.curve, 96, 40), "Suma de todas las operaciones filtradas, en R")}
-      ${statCard("Factor de beneficio", pf, "lo ganado ÷ lo perdido", ring(st.pf == null ? 0 : Math.min(100, (st.pf === Infinity ? 3 : st.pf) / 3 * 100)), "Por encima de 1 ganas más de lo que pierdes")}
-      ${statCard("Acierto", st.win == null ? "—" : num(st.win, 0) + " %", st.n ? closed(L).filter(t => t.r > 0).length + " de " + st.n : "", ring(st.win))}
-      ${statCard("Ganancia / pérdida media", wl, st.avgW != null ? fmtV(st.avgW, st.mW) + " / " + (st.avgL != null ? fmtV(st.avgL, st.mL) : "—") : "", "", "Cuánto ganas de media en las ganadoras frente a lo que pierdes en las perdedoras")}</div>`;
+  function histCards() {
+    const h = histState(), B = histRows(true), st = tradeStats(B), C = closed(B);
+    const ev = C.filter(t => !evaluate(t).good), gl = C.filter(t => evaluate(t).good && t.r < 0), hd = B.filter(t => HARD.includes((t.review || {}).feel)), inn = C.filter(t => evaluate(t).good);
+    const evS = tradeStats(ev);
+    const Q = [["", "Todas", B.length, st.n ? fmtMs(st.tot, st.mt) + " en total" : "sin operaciones"], ["ev", "Evitables", ev.length, ev.length ? (evS.tot < 0 ? "te costaron " + fmtMs(Math.abs(evS.tot), evS.mt == null ? null : Math.abs(evS.mt)).replace(/^\+/, "") : "fuera de tu plan") : "ninguna, muy bien"], ["gl", "Pérdidas buenas", gl.length, "perdiste haciéndolo bien"],
+      healthOk() ? ["hard", "Con emoción difícil", hd.length, "prisa, miedo, recuperar…"] : ["in", "Dentro del plan", inn.length, C.length ? Math.round(inn.length / C.length * 100) + " % de las cerradas" : "—"]];
+    return `<div class="hq">${Q.map(([k, l, n, sub]) => `<button type="button" class="hq-c${(h.quick || "") === k ? " on" : ""}${k === "ev" ? " ev" : ""}" data-hq="${k}" aria-pressed="${(h.quick || "") === k}"><span class="hq-k">${l}</span><b>${n}</b><small>${sub}</small></button>`).join("")}</div>`;
   }
   const visCols = () => { const h = histState(), health = healthOk(); return HGROUPS.map(([g, ks]) => [g, ks.filter(k => !h.hide.includes(k) && (k !== "feel" || health))]).filter(g => g[1].length); };
   function histTable(L) {
     const h = histState(), pages = Math.max(1, Math.ceil(L.length / h.per)); if (h.page >= pages) h.page = pages - 1;
     const rows = L.slice(h.page * h.per, (h.page + 1) * h.per), G = visCols(), cols = G.flatMap(g => g[1]);
-    const allSel = rows.length && rows.every(t => h.sel.has(t.id));
+    const allSel = rows.length && rows.every(t => h.sel.has(t.id)), RMAX = Math.max(1, ...rows.map(t => Math.abs(+t.r || 0)));
     const cell = (t, k) => {
       const ev = t.status === "closed" ? evaluate(t) : null;
       switch (k) {
@@ -74,11 +78,11 @@
         case "account": return `<td class="muted">${esc(acctLabel(t.account))}</td>`;
         case "side": return `<td><span class="xside ${t.side}">${t.side === "buy" ? "Compra" : "Venta"}</span></td>`;
         case "status": return `<td>${t.status === "closed" ? "Cerrada" : `<span class="xtag">Abierta</span>`}</td>`;
-        case "r": return `<td class="mono"><b>${t.status === "closed" ? fmtV(t.r, mOf(t)) : "—"}</b></td>`;
+        case "r": { if (t.status !== "closed") return `<td class="mono">—</td>`; const w = Math.min(50, Math.abs(+t.r || 0) / RMAX * 50); return `<td class="mono hres"><b>${fmtV(t.r, mOf(t))}</b><span class="hrb"><i class="${t.r >= 0 ? "u" : "d"}" style="${t.r >= 0 ? "left:50%" : "right:50%"};width:${w.toFixed(1)}%"></i></span></td>`; }
         case "risk_pct": return `<td class="mono">${t.risk_pct != null ? fmtPct(t.risk_pct) : "—"}</td>`;
         case "open_price": case "close_price": case "sl": case "tp": return `<td class="mono">${px(t[k])}</td>`;
         case "dur": return `<td class="mono">${dur(t.open_time, t.close_time)}</td>`;
-        case "plan": return `<td>${ev ? (ev.good ? `<span class="xok">${I(IC.check, 14, 2.4)} Dentro</span>` : `<span class="xbad">${ev.fail.length} norma${ev.fail.length > 1 ? "s" : ""}</span>`) : "—"}</td>`;
+        case "plan": return `<td>${ev ? (ev.good ? (t.r < 0 ? `<span class="htg">Pérdida buena</span>` : `<span class="htg">Dentro</span>`) : `<span class="htg e" title="${esc(ev.fail.map(f => f.bad).join(" · "))}">Evitable · ${ev.fail.length} norma${ev.fail.length > 1 ? "s" : ""}</span>`) : "—"}</td>`;
         case "feel": return `<td>${(t.review || {}).feel ? esc(t.review.feel) : `<span class="muted">—</span>`}</td>`;
       }
       return "<td></td>";
@@ -94,7 +98,8 @@
   function selBar() {
     const h = histState(), n = h.sel.size; if (!n) return "";
     const man = S.allTrades.filter(t => h.sel.has(t.id) && t.source === "manual").length;
-    return `<div class="xselbar"><b>${n} seleccionada${n > 1 ? "s" : ""}</b><button type="button" class="btn2" data-hselcsv style="height:32px">${I(IC.down, 15)} Exportar</button>${man ? `<button type="button" class="btn2" data-hseldel style="height:32px">${I(IC.trash, 15)} Borrar ${man} añadida${man > 1 ? "s" : ""} a mano</button>` : ""}<button type="button" class="link small" data-hselclear>Quitar selección</button></div>`;
+    const SL = S.trades.filter(t => h.sel.has(t.id)), ss = tradeStats(SL), sc = closed(SL), sg = sc.filter(t => evaluate(t).good).length;
+    return `<div class="xselbar"><b>${n} seleccionada${n > 1 ? "s" : ""}</b>${ss.n ? `<span class="hsel-s">Resultado <b>${fmtMs(ss.tot, ss.mt)}</b></span><span class="hsel-s">${sg} dentro del plan · ${sc.length - sg} evitable${sc.length - sg === 1 ? "" : "s"}</span>` : ""}<button type="button" class="btn2" data-hselcsv style="height:32px">${I(IC.down, 15)} Exportar</button>${man ? `<button type="button" class="btn2" data-hseldel style="height:32px">${I(IC.trash, 15)} Borrar ${man} añadida${man > 1 ? "s" : ""} a mano</button>` : ""}<button type="button" class="link small" data-hselclear>Quitar selección</button></div>`;
   }
   const csvOf = L => {
     const q = v => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
@@ -183,9 +188,9 @@
     view() {
       const h = histState(), L = histRows();
       return `<div class="stack" style="gap:18px">
-        <div class="xhead"><div><h1>Operaciones</h1><div class="small muted">Todas tus operaciones${selAcct() ? " de " + esc(acctName(selAcct().a)) : ""}, en una tabla que puedes filtrar y ordenar</div></div>
+        <div class="xhead"><div><h1>Operaciones</h1><div class="small muted">Todas tus operaciones${selAcct() ? " de " + esc(acctName(selAcct().a)) : ""}, con atajos para encontrar lo que te enseña</div></div>
           <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn2" id="hImp" style="height:38px">${I('<path d="M10 17V7M6 11l4-4 4 4M4 3h12"/>', 16)} Importar CSV</button><button type="button" class="btn2" id="hCsv" style="height:38px">${I(IC.down, 16)} Exportar CSV</button><button type="button" class="btn" data-hadd style="height:38px">${I(IC.plus, 16, 2)} Operación</button></div></div>
-        <div id="hCards">${histCards(L)}</div>
+        <div id="hCards">${histCards()}</div>
         <div class="card xcard">
           <div class="xtools">
             <label class="xsearch">${I(IC.search, 16)}<input id="hQ" placeholder="Buscar símbolo, cuenta, nota…" value="${esc(h.q)}" aria-label="Buscar operaciones"></label>
@@ -206,8 +211,9 @@
     },
     bind() {
       const h = histState();
-      const paint = () => { const L = histRows(); $("#hCards").innerHTML = histCards(L); $("#hTable").innerHTML = histTable(L); $("#hSel").innerHTML = selBar(); bindTable(); };
+      const paint = () => { const L = histRows(); $("#hCards").innerHTML = histCards(); $("#hTable").innerHTML = histTable(L); $("#hSel").innerHTML = selBar(); bindTable(); };
       const bindTable = () => {
+        $$("[data-hq]").forEach(b => b.onclick = () => { h.quick = b.dataset.hq; h.page = 0; paint(); });
         $$("[data-hsort]").forEach(b => b.onclick = () => { const k = b.dataset.hsort; if (h.sort === k) h.dir = -h.dir; else { h.sort = k; h.dir = k === "symbol" || k === "account" ? 1 : -1; } paint(); });
         $$("[data-hpage]").forEach(b => b.onclick = () => { h.page += +b.dataset.hpage; paint(); });
         $$("[data-hop]").forEach(tr => { tr.onclick = e => { if (e.target.closest(".xcb")) return; location.hash = "#op/" + encodeURIComponent(tr.dataset.hop); }; tr.onkeydown = e => { if (e.key === "Enter") tr.click(); }; });
@@ -226,7 +232,7 @@
       };
       const on = (id, k) => { const x = $(id); x.oninput = x.onchange = () => { h[k] = x.value; h.page = 0; paint(); }; };
       on("#hQ", "q"); on("#hFrom", "from"); on("#hTo", "to"); on("#hSide", "side"); on("#hSt", "st"); on("#hPlan", "plan");
-      $("#hReset").onclick = () => { Object.assign(h, { q: "", from: "", to: "", side: "", st: "", plan: "", page: 0 }); S.lastView = null; render(); };
+      $("#hReset").onclick = () => { Object.assign(h, { q: "", from: "", to: "", side: "", st: "", plan: "", quick: "", page: 0 }); S.lastView = null; render(); };
       $("#hCsv").onclick = () => download("tickora-operaciones-" + todayKey() + ".csv", csvOf(histRows()));
       $("#hImp").onclick = importCsv;
       const cb = $("#hColsB"), cm = $("#hCols");
