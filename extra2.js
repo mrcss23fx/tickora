@@ -1269,6 +1269,48 @@
   const PERS = [["30", "30 días"], ["90", "90 días"], ["365", "1 año"], ["all", "Todo"]];
   const perFilter = (L, per, key) => per === "all" ? L : L.filter(t => new Date(t[key || "open_time"]) >= Date.now() - (+per) * 864e5);
 
+  // ---------- Disciplina: tu entrenamiento ----------
+  const TIPS = { stop: "Antes de pulsar comprar o vender, escribe el precio del stop en la orden. Si no está, no hay entrada.", risk: "Calcula el tamaño en Gráfico antes de entrar y cópialo tal cual. Nunca redondees hacia arriba.", hora: "Pon una alarma a la hora en que termina tu horario. Cuando suene, cierras la plataforma, vayas como vayas.", max: "Cuando cierres tu última operación permitida, apaga la plataforma y apunta en el diario cómo te sientes. Así no hay una más.", lim: "Al llegar a tu límite, levántate de la mesa 10 minutos antes de hacer nada más." };
+  const MISS = { stop: "Poner el stop al entrar y no moverlo en contra.", risk: "Arriesgar solo lo que dice tu plan en cada operación.", hora: "Operar solo dentro de tu horario.", max: "Cerrar el día al llegar a tus {mx} operaciones.", lim: "Parar en cuanto llegues a tu límite del día." };
+  const LVL = [[0, 1], [3, 2], [8, 3], [16, 4], [30, 5]];
+  function training() {
+    const C = closed(S.trades).slice().sort((a, b) => new Date(a.open_time) - new Date(b.open_time)), p = S.plan || {}, mx = p.maxTrades || 3;
+    if (!C.length) return `<div class="tr-empty"><span class="tr-k">Tu entrenamiento</span><p>Cuando cierres tus primeras operaciones, aquí tendrás tu misión de la semana y el nivel de cada norma.</p></div>`;
+    const keysOf = t => new Set(evaluate(t).fail.map(f => NK(f.fix)).filter(Boolean));
+    const mon = new Date(); mon.setHours(0, 0, 0, 0); mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
+    const cnt = {}; C.filter(t => { const d = new Date(dateOf(t)); return d < mon && d >= mon - 30 * 864e5; }).forEach(t => keysOf(t).forEach(k => cnt[k] = (cnt[k] || 0) + 1));
+    let top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+    if (!top) { const c2 = {}; C.filter(t => new Date(dateOf(t)) >= Date.now() - 30 * 864e5).forEach(t => keysOf(t).forEach(k => c2[k] = (c2[k] || 0) + 1)); top = Object.entries(c2).sort((a, b) => b[1] - a[1])[0]; }
+    const tk = todayKey();
+    // misión
+    let mis;
+    if (!top) mis = `<div class="tr-ms free"><span class="tr-k">Tu misión de esta semana</span><h2>Mantener todo como está.</h2><p class="tr-sub">No has roto ninguna norma en los últimos 30 días. Esta semana no hay nada que arreglar: solo repetir.</p></div>`;
+    else {
+      const k = top[0], days = [];
+      for (let i = 0; i < 5; i++) { const d = new Date(mon); d.setDate(d.getDate() + i); const dk = dayKey(d), T = C.filter(t => dayKey(dateOf(t)) === dk), br = T.some(t => keysOf(t).has(k));
+        days.push(`<div class="${dk > tk ? "fu" : br ? "no" : T.length ? "ok" : dk === tk ? "" : "nt"}${dk === tk ? " td" : ""}"><b>${dk > tk ? "" : br ? ico("x", 15, 2.6) : T.length ? ico("check", 16, 2.6) : dk === tk ? "Hoy" : "—"}</b>${d.toLocaleDateString("es-ES", { weekday: "short" }).replace(".", "")}</div>`); }
+      const okN = days.filter(x => x.startsWith('<div class="ok')).length;
+      mis = `<div class="tr-ms"><span class="tr-k hl">Tu misión de esta semana</span><h2>${MISS[k].replace("{mx}", mx)}</h2><p class="tr-sub">La has roto ${top[1]} ${top[1] === 1 ? "vez" : "veces"} en los últimos 30 días. Es la que más te cuesta.</p>
+        <div class="tr-wk">${days.join("")}</div><div class="tr-wl">${okN ? `${okN} ${okN === 1 ? "día cumplida" : "días cumplida"} esta semana` : "Cada día que operes y la cumplas, se marca aquí."}<span>· sin operar no cuenta ni suma</span></div>
+        <div class="tr-tip"><b>Truco para hoy:</b> ${TIPS[k]}</div></div>`;
+    }
+    // niveles
+    const rows = Object.keys(NLAB).map(k => { let s = 0; for (let i = C.length - 1; i >= 0; i--) { if (keysOf(C[i]).has(k)) break; s++; } const ever = C.some(t => keysOf(t).has(k)); const lv = LVL.filter(x => s >= x[0]).pop()[1], nx = LVL.find(x => x[1] === lv + 1); return { k, s, lv, nx, ever }; }).sort((a, b) => b.lv - a.lv || b.s - a.s);
+    const lvH = rows.map(r => `<div class="tr-l${top && r.k === top[0] ? " mis" : ""}"><b>${NLAB[r.k]}</b><span class="tr-lv">Nivel ${r.lv}${r.lv === 5 ? " · maestro" : top && r.k === top[0] ? " · en misión" : ""}</span>
+      <div class="tr-steps">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= r.lv ? "f" : ""}"></i>`).join("")}</div>
+      <small>${!r.ever ? `Nunca la has roto · ${r.s} ${r.s === 1 ? "operación" : "operaciones"}` : r.lv === 5 ? `${r.s} operaciones seguidas sin fallar` : `${r.s} seguidas · ${r.nx[0] - r.s} más para el nivel ${r.nx[1]}`}</small></div>`).join("");
+    return `<div class="tr-g">${mis}<div class="tr-lvl"><span class="tr-k">Tus niveles</span>${lvH}<p class="tr-how">Cada norma sube de nivel con operaciones seguidas sin romperla: 3, 8, 16 y 30. Si la rompes, vuelve al nivel 1.</p></div></div>`;
+  }
+  V.progreso = {
+    view() {
+      let h = ""; try { h = window.viewProgreso ? viewProgreso() : ""; } catch (e) { }
+      h = h.replace("<h1>Disciplina</h1>", "<h1>Tu entrenamiento <em>de disciplina</em></h1>").replace(/Cuánto cumples tu plan en ([^.<]*)\. Se juzga el proceso, no el resultado\./, "Una norma cada semana. Las demás suben de nivel solas cuando las cumples.");
+      const i = h.indexOf('<div class="dsc-top">');
+      return i < 0 ? training() + h : h.slice(0, i) + training() + `<div class="tn-sep"><span>Todo el detalle</span></div>` + h.slice(i);
+    },
+    bind() { }
+  };
+
   // ---------- Mi plan: las reglas de tu partida ----------
   V.plan = {
     view() {
