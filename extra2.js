@@ -550,8 +550,11 @@
       } catch (e) { }
       return "";
     };
-    const item = (k, col) => { const a = NAV_APPS.find(x => x[0] === k); if (!a) return ""; const [, l, items] = a, on = curApp && curApp[0] === k;
-      return `<div class="nv-it${on ? " on" : ""}" style="--gc:${col}"><a class="nv-a" href="#${MAINV[k] || items[0][0]}" ${on ? 'aria-current="page"' : ""}><span class="nv-ic">${ico(k, 17)}</span><span class="nv-n">${esc(l)}</span><span class="nv-mv">${mv(k)}</span></a>${on && items.length > 1 ? `<div class="nv-sub">${items.map(([ck, cl]) => `<a href="#${ck}" ${cur === ck ? 'aria-current="page"' : ""}>${esc(cl)}</a>`).join("")}</div>` : ""}</div>`; };
+    const SUBD = { hoy: "Tu sesión de hoy", noticias: "Calendario económico", backtest: "Tus sesiones de práctica", btanalisis: "Los números de tu práctica", btops: "Todas tus operaciones simuladas", btnotas: "Notas de cada sesión", rendimiento: "Tus números en dinero y en R", progreso: "Tu nota, racha y normas", emociones: "Cómo te afecta cada emoción", cuentas: "Fondeo, propias y demo", finanzas: "Cobros y gastos", historial: "Todas tus operaciones", calendario: "Tu mes día a día" };
+    const CHV = '<svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 5l5 5-5 5"/></svg>';
+    const item = (k, col) => { const a = NAV_APPS.find(x => x[0] === k); if (!a) return ""; const [, l, items] = a, on = curApp && curApp[0] === k, multi = items.length > 1;
+      const inner = `<span class="nv-ic">${ico(k, 17)}</span><span class="nv-n">${esc(l)}</span><span class="nv-mv">${mv(k)}</span>`;
+      return `<div class="nv-it${on ? " on" : ""}${multi && on ? " open" : ""}" style="--gc:${col}">${multi ? `<button type="button" class="nv-a" data-nvx aria-expanded="${on}">${inner}<span class="nv-cv">${CHV}</span></button>` : `<a class="nv-a" href="#${MAINV[k] || items[0][0]}" ${on ? 'aria-current="page"' : ""}>${inner}</a>`}${multi ? `<div class="nv-sub"><div>${items.map(([ck, cl]) => `<a href="#${ck}" ${cur === ck ? 'aria-current="page"' : ""}><i></i><span><b>${esc(cl)}</b>${SUBD[ck] ? `<small>${SUBD[ck]}</small>` : ""}</span>${CHV}</a>`).join("")}</div></div>` : ""}</div>`; };
     // tarjeta de la sesión
     let head = "";
     if (D) { const lv = X && X.sem ? ((X.sem.match(/hd-sem s-(\w)/) || [])[1] || "x") : "x", lt = X && X.sem ? ((X.sem.match(/<b>([^<]*)<\/b>/) || [])[1] || "") : "", ph = D.phase;
@@ -573,6 +576,8 @@
     const ek = e => { if (e.key === "Escape") close(); };
     box.addEventListener("click", e => {
       if (e.target === box || e.target.closest("[data-x]")) return close();
+      const nx = e.target.closest("[data-nvx]");
+      if (nx) { const it = nx.closest(".nv-it"), op = !it.classList.contains("open"); box.querySelectorAll(".nv-it.open").forEach(x => { x.classList.remove("open"); const bb = x.querySelector("[data-nvx]"); bb && bb.setAttribute("aria-expanded", "false"); }); if (op) { it.classList.add("open"); nx.setAttribute("aria-expanded", "true"); setTimeout(() => it.scrollIntoView({ block: "nearest", behavior: "smooth" }), 180); } return; }
       if (e.target.closest("[data-nvsearch]")) { box.remove(); document.removeEventListener("keydown", ek); palette(); return; }
       if (e.target.closest("[data-theme-toggle]")) { setTimeout(() => { const b = box.querySelector("[data-theme-toggle]"); b && b.blur(); }, 0); return; }
       if (e.target.closest("[data-goals]")) { box.remove(); document.removeEventListener("keydown", ek); return; }
@@ -580,7 +585,7 @@
     });
     document.addEventListener("keydown", ek); document.body.appendChild(box);
     const tt = box.querySelector("[data-theme-toggle]"); if (tt) tt.onclick = () => { const g = document.querySelector(".hbtop [data-theme-toggle]"); if (g) g.click(); };
-    requestAnimationFrame(() => box.classList.add("in")); setTimeout(() => { const a = box.querySelector('.nv-it.on .nv-a') || box.querySelector(".nv-a"); a && a.focus({ preventScroll: true }); }, 80);
+    requestAnimationFrame(() => box.classList.add("in")); setTimeout(() => { const a = box.querySelector('.nv-it.on [aria-current="page"]') || box.querySelector('.nv-it.on .nv-a') || box.querySelector(".nv-a"); a && a.focus({ preventScroll: true }); }, 80);
   }
   document.addEventListener("click", e => { if (e.target.closest("[data-navd]")) navDrawer(); });
 
