@@ -835,6 +835,82 @@
   const inPlan = ts => { const p = S.plan || {}, m = minOfDate(ts), a = minOf(p.start), b = minOf(p.end); return a != null && b != null && m >= a - 15 && m <= b; };
   const until = ts => { const m = Math.round((ts - Date.now()) / 6e4); if (m < 0) return "ya ha salido"; if (m < 60) return "en " + m + " min"; const h = Math.floor(m / 60); return h < 24 ? `en ${h} h ${m % 60} min` : `en ${Math.floor(h / 24)} d ${h % 24} h`; };
   const impBadge = i => { const x = IMP[i] || ["—", 0]; return `<span class="nimp i${x[1]}" title="Impacto ${x[0].toLowerCase()}"><span class="nbars"><i></i><i></i><i></i></span>${x[0]}</span>`; };
+  /* --- lo que nos diferencia: las noticias cruzadas contigo --- */
+  const EXPL = [
+    [/non-?farm|nfp/i, "Cuántos empleos nuevos se crearon en EE. UU. el mes pasado.", "Es de las que más mueve: dólar, oro e índices pueden saltar mucho en segundos."],
+    [/core pce|pce/i, "La inflación que más mira la Reserva Federal.", "Si sale más alta de lo esperado, suele subir el dólar y caer los índices."],
+    [/ppi/i, "Cuánto suben los precios para las empresas que producen.", "Adelanta la inflación; mueve la divisa del país, sobre todo si sorprende."],
+    [/cpi|inflation/i, "La inflación: cuánto suben los precios para la gente.", "Si sale más alta de lo esperado, el mercado espera tipos más altos: suele subir la divisa y caer los índices."],
+    [/minutes/i, "Las actas de la última reunión del banco central.", "Puede mover a golpes mientras el mercado las lee, durante varios minutos."],
+    [/fomc|rate decision|cash rate|interest rate|bank rate|refinancing|monetary policy/i, "La decisión de tipos de interés del banco central.", "Mueve todo y no solo en el minuto en que sale: la conferencia posterior puede dar más saltos."],
+    [/speaks|testifies|press conference|president|governor|chair/i, "Habla un responsable del banco central.", "No hay cifra: el movimiento depende de lo que diga y suele llegar a golpes."],
+    [/ism/i, "Encuesta a empresas de EE. UU.: por encima de 50 la actividad crece, por debajo se frena.", "Mueve el dólar y los índices, sobre todo si cruza el 50."],
+    [/pmi/i, "Encuesta a directores de compras: por encima de 50 la actividad crece, por debajo se frena.", "Suele mover la divisa del país; más si sorprende mucho."],
+    [/retail sales/i, "Cuánto gasta la gente en tiendas.", "Si sorprende, la divisa y los índices pueden dar un salto fuerte."],
+    [/gdp/i, "El crecimiento de la economía (PIB).", "Mueve la divisa del país; el primer dato (avance) es el que más."],
+    [/unemployment claims|jobless/i, "Cuántas personas pidieron el paro la última semana en EE. UU.", "Movimiento normalmente corto; más si coincide con otras noticias."],
+    [/unemployment rate|employment change|claimant/i, "Cómo va el empleo en el país.", "Mueve la divisa del país; puede ser fuerte si sorprende."],
+    [/crude|oil|natural gas/i, "Reservas de petróleo o gas en EE. UU.", "Mueve sobre todo el petróleo y el gas; al resto, poco."],
+    [/zew|ifo|sentiment|confidence/i, "Una encuesta de confianza o de ánimo.", "Suele mover menos; afecta a la divisa del país."],
+    [/housing|home|building|pending/i, "Datos de vivienda.", "Suele mover poco."],
+    [/trade balance|current account/i, "Lo que el país vende fuera frente a lo que compra.", "Suele mover poco, salvo sorpresas grandes."],
+    [/auction|bond/i, "Una subasta de deuda del Estado.", "Puede mover los tipos y, con ellos, la divisa."],
+    [/holiday/i, "Día festivo en ese país.", "Hay menos dinero moviéndose: el mercado puede ir lento o dar saltos raros."]
+  ];
+  const explain = e => { const x = EXPL.find(([r]) => r.test(e.title || "")); return x ? [x[1], x[2]] : [e.impact === "High" ? "Una noticia de impacto alto." : "Una noticia económica.", e.impact === "High" ? "Puede mover con fuerza la divisa del país y lo que se cruza con ella." : "Normalmente mueve poco."]; };
+  const IDX = { USD: /NAS|US30|US100|US500|SPX|SP500|USTEC|DJ|DOW|XAU|XAG|GOLD|SILVER|WTI|USOIL|OIL|BRENT|BTC|ETH|CRYPTO/, EUR: /GER|DE30|DE40|DAX|EU50|STOXX|FRA40|ESP35|IT40/, GBP: /UK100|FTSE/, JPY: /JP225|JPN225|NIK/, AUD: /AUS200/, CNY: /CHINA|HK50|CN50/, CHF: /SWI20|SMI/ };
+  const affects = (sym, cur) => { const s = String(sym || "").toUpperCase(); return !!cur && (s.includes(cur) || (IDX[cur] && IDX[cur].test(s))); };
+  const mySyms = () => { const c = {}; (S.trades || []).filter(t => new Date(t.open_time) >= Date.now() - 90 * 864e5).forEach(t => { const s = String(t.symbol || "").toUpperCase(); if (s) c[s] = (c[s] || 0) + 1; }); return Object.entries(c).sort((a, b) => b[1] - a[1]).map(x => x[0]); };
+  const mine = e => mySyms().filter(s => affects(s, e.country));
+  // historial propio de noticias fuertes (se va llenando solo)
+  function hist() {
+    let H = lsGet("tk-nhist", []); const E = ((S.news && S.news.events) || []).filter(e => e.impact === "High");
+    if (E.length) { const seen = new Set(H.map(h => h.ts + h.c + h.t)); E.forEach(e => { const k = e.ts + e.country + e.title; if (!seen.has(k)) { H.push({ ts: e.ts, c: e.country, t: e.title }); seen.add(k); } }); H = H.filter(h => h.ts > Date.now() - 200 * 864e5).sort((a, b) => a.ts - b.ts); lsSet("tk-nhist", H); }
+    return H;
+  }
+  function youVsNews() {
+    const H = hist(); if (!H.length) return null; const from = H[0].ts - 15 * 6e4;
+    const C = (S.trades || []).filter(t => t.status === "closed" && new Date(t.open_time) >= Math.max(from, Date.now() - 90 * 864e5));
+    const near = [], rest = []; C.forEach(t => { const o = new Date(t.open_time).getTime(); (H.some(h => Math.abs(o - h.ts) <= 15 * 6e4 && affects(t.symbol, h.c)) ? near : rest).push(t); });
+    const pct = L => L.length ? Math.round(L.filter(t => evaluate(t).good).length / L.length * 100) : null;
+    return { near: near.length, rest: rest.length, pn: pct(near), pr: pct(rest), since: H[0].ts };
+  }
+  function zonesToday() {
+    const p = S.plan || {}, a = minOf(p.start), b = minOf(p.end); if (a == null || b == null || b <= a) return null;
+    const today = dayKey(Date.now()), Z = [];
+    ((S.news && S.news.events) || []).filter(e => e.impact === "High" && dayKey(e.ts) === today).forEach(e => { const m = minOfDate(e.ts); if (m >= a - 15 && m <= b + 15) Z.push([Math.max(a, m - 15), Math.min(b, m + 15), e]); });
+    Z.sort((x, y) => x[0] - y[0]); const M = []; Z.forEach(z => { const l = M[M.length - 1]; if (l && z[0] <= l[1]) { l[1] = Math.max(l[1], z[1]); l[2].push(z[2]); } else M.push([z[0], z[1], [z[2]]]); });
+    const free = []; let c = a; M.forEach(z => { if (z[0] > c) free.push([c, z[0]]); c = Math.max(c, z[1]); }); if (c < b) free.push([c, b]);
+    return { a, b, M, free };
+  }
+  const mm = m => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+  function youCards() {
+    const E = (S.news && S.news.events) || [], Zt = zonesToday(), now = minOfDate(Date.now()), p = S.plan || {};
+    // 1. hoy en tu horario
+    let c1;
+    if (!Zt) c1 = `<div class="nyc"><span class="nyk">Hoy en tu horario</span><b>Sin horario</b><small>Pon tu horario en <a href="#plan">Mi plan</a> y te diré cuándo apartarte.</small></div>`;
+    else { const W = Zt.b - Zt.a, x = m => ((m - Zt.a) / W * 100).toFixed(2), freeMin = Zt.free.reduce((s, f) => s + f[1] - f[0], 0);
+      c1 = `<div class="nyc"><span class="nyk">Hoy en tu horario</span><b>${Zt.M.length ? (Zt.M.length === 1 ? "1 zona a evitar" : Zt.M.length + " zonas a evitar") : "Horario limpio"}</b>
+        <div class="nyb">${Zt.free.map(f => `<i class="f" style="left:${x(f[0])}%;width:${(x(f[1]) - x(f[0]))}%"></i>`).join("")}${Zt.M.map(z => `<i class="z" style="left:${x(z[0])}%;width:${(x(z[1]) - x(z[0]))}%" title="${esc(z[2].map(e => e.country + " " + e.title).join(" · "))}"></i>`).join("")}${now >= Zt.a && now <= Zt.b ? `<em style="left:${x(now)}%"></em>` : ""}</div>
+        <div class="nyt"><span>${esc(p.start)}</span><span>${esc(p.end)}</span></div>
+        <small>${Zt.M.length ? Zt.M.map(z => `No entres de <b>${mm(z[0])} a ${mm(z[1])}</b> (${esc(z[2].map(e => e.country).filter((v, i, s) => s.indexOf(v) === i).join(", "))})`).join(" · ") + ` · Te quedan ${Math.floor(freeMin / 60) ? Math.floor(freeMin / 60) + " h " : ""}${freeMin % 60} min limpios.` : "Ninguna noticia fuerte cae en tu horario hoy."}</small></div>`; }
+    // 2. tu semana
+    const t0 = new Date(); t0.setHours(12, 0, 0, 0); const wd = (t0.getDay() + 6) % 7; const days = [];
+    for (let i = 0; i < 5; i++) { const d = new Date(t0); d.setDate(d.getDate() - wd + i + (wd > 4 ? 7 : 0)); days.push(d); }
+    const dd = days.map(d => { const k = dayKey(d), L = E.filter(e => e.impact === "High" && dayKey(e.ts) === k); return { d, k, all: L.length, mineN: L.filter(e => inPlan(e.ts)).length }; });
+    const mx = Math.max(1, ...dd.map(x => x.all)), tk = dayKey(Date.now()), tot = dd.reduce((s, x) => s + x.mineN, 0);
+    const c2 = `<div class="nyc"><span class="nyk">${wd > 4 ? "La semana que viene" : "Tu semana"}</span><b>${tot ? tot + (tot === 1 ? " fuerte en tu horario" : " fuertes en tu horario") : "Semana limpia en tu horario"}</b>
+      <div class="nyw">${dd.map(x => `<div class="${x.k === tk ? "on" : ""}${x.k < tk ? " past" : ""}"><span class="c"><i style="height:${(x.all / mx * 100).toFixed(0)}%"></i><i class="m" style="height:${(x.mineN / mx * 100).toFixed(0)}%"></i></span><small>${x.d.toLocaleDateString("es-ES", { weekday: "short" }).replace(".", "")}</small><b>${x.mineN || ""}</b></div>`).join("")}</div>
+      <small><i class="nyl m"></i> en tu horario <i class="nyl"></i> fuera</small></div>`;
+    // 3. tú y las noticias
+    const Y = youVsNews(), mS = mySyms();
+    const c3 = Y && Y.near >= 3 ? `<div class="nyc"><span class="nyk">Tú y las noticias</span><b>${Y.pn < Y.pr - 5 ? "Las noticias te sacan del plan" : Y.pn > Y.pr + 5 ? "Con noticias te controlas bien" : "Igual con y sin noticias"}</b>
+        <div class="nyv"><span>Cerca de una noticia fuerte</span><span class="br n"><i style="width:${Y.pn}%"></i></span><em>${Y.pn} %</em></div>
+        <div class="nyv"><span>El resto del tiempo</span><span class="br"><i style="width:${Y.pr ?? 0}%"></i></span><em>${Y.pr ?? "—"} %</em></div>
+        <small>Operaciones dentro de tu plan · ${Y.near} cerca de noticias (±15 min) y ${Y.rest} sin ellas.</small></div>`
+      : `<div class="nyc"><span class="nyk">Tú y las noticias</span><b>Aprendiendo de ti</b><small>Tickora guarda cada noticia fuerte y la cruza con tus operaciones. Cuando tengas 3 o más cerca de una noticia (±15 min), verás si te sacan del plan.${Y ? ` Llevas ${Y.near}.` : ""}</small>${mS.length ? `<small class="nym">Tus mercados: ${mS.slice(0, 5).map(s => `<span>${esc(s)}</span>`).join("")}</small>` : ""}</div>`;
+    return `<div class="nyou">${c1}${c2}${c3}</div>`;
+  }
   function nf() { return S.nf || (S.nf = { q: "", imp: { High: true, Medium: true, Low: true, Holiday: false }, cur: [], day: "week", mine: false, page: 0, per: lsGet("tk-nper", 25) }); }
   function filtered() {
     const f = nf(), E = (S.news && S.news.events) || [], q = norm(f.q), today = dK(Date.now()), tomorrow = dK(Date.now() + 864e5), wk = wkOf(today);
@@ -849,8 +925,8 @@
       ${P.map(e => { const d = dK(e.ts), first = d !== lastDay; lastDay = d; const past = e.ts < now - 30 * 6e4, isNext = next && e === next;
         return `<tr class="${past ? "past" : ""} ${isNext ? "next" : ""} ${first ? "dayfirst" : ""}"><td>${first ? `<b>${new Date(e.ts).toLocaleDateString("es-ES", { weekday: "short", timeZone: tz() })}</b><div class="small muted">${new Date(e.ts).toLocaleDateString("es-ES", { day: "numeric", month: "short", timeZone: tz() })}</div>` : ""}</td>
           <td class="mono">${/T00:00:00/.test(e.date) && e.impact === "Holiday" ? "Todo el día" : hm(e.ts)}</td><td><span class="nflag">${FLAG[e.country] || "🏳️"}</span> ${esc(e.country)}</td><td>${impBadge(e.impact)}</td>
-          <td><b>${esc(e.title)}</b>${isNext ? ` <span class="xtag">Próxima · ${until(e.ts)}</span>` : ""}</td><td class="mono">${esc(e.actual || "—")}</td><td class="mono">${esc(e.forecast || "—")}</td><td class="mono">${esc(e.previous || "—")}</td><td class="mono">${esc(surprise(e))}</td><td class="small">${e.impact === "Holiday" ? "—" : sessionOf(e.ts)}</td>
-          <td>${inPlan(e.ts) ? `<span class="nmine" title="Cae dentro de tu horario de operativa">${I(IC.clock, 14)} Tu horario</span>` : ""}</td></tr>`; }).join("")}</tbody></table></div>
+          <td><button type="button" class="nxb" data-nx aria-expanded="false"><b>${esc(e.title)}</b><span class="nxc"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4l2.5 2.5L7.5 4"/></svg></span></button>${isNext ? ` <span class="xtag">Próxima · ${until(e.ts)}</span>` : ""}</td><td class="mono">${esc(e.actual || "—")}</td><td class="mono">${esc(e.forecast || "—")}</td><td class="mono">${esc(e.previous || "—")}</td><td class="mono">${esc(surprise(e))}</td><td class="small">${e.impact === "Holiday" ? "—" : sessionOf(e.ts)}</td>
+          <td>${(() => { const ms = e.impact === "High" || e.impact === "Medium" ? mine(e) : []; return ms.length ? `<span class="naff" title="Mueve mercados que operas">${ms.slice(0, 2).map(esc).join(" · ")}</span>` : ""; })()}${inPlan(e.ts) ? `<span class="nmine" title="Cae dentro de tu horario de operativa">${I(IC.clock, 14)} Tu horario</span>` : ""}</td></tr>${(() => { const [q, mv] = explain(e), ms = mine(e), z = e.impact === "High" && inPlan(e.ts) ? [Math.max(0, minOfDate(e.ts) - 15), minOfDate(e.ts) + 15] : null; return `<tr class="nxrow" hidden><td colspan="11"><div class="nxd"><div><span>Qué es</span><p>${q}</p></div><div><span>Qué suele pasar</span><p>${mv}</p></div><div><span>Tus mercados</span><p>${ms.length ? ms.slice(0, 4).map(x => `<em>${esc(x)}</em>`).join(" ") : "No afecta a lo que sueles operar."}</p></div>${z ? `<div class="z"><span>Tu zona sin operar</span><p><b>${mm(z[0])} – ${mm(z[1])}</b> · si ya estás dentro, no muevas el stop.</p></div>` : ""}</div></td></tr>`; })()}`; }).join("")}</tbody></table></div>
       <div class="xfoot"><span class="muted small">Mostrando ${L.length ? f.page * f.per + 1 : 0}–${Math.min(L.length, (f.page + 1) * f.per)} de ${L.length} eventos</span>
         <div class="xpager"><button type="button" class="xpb" data-npage="-1" ${f.page ? "" : "disabled"} aria-label="Página anterior">${I(IC.left, 16, 2)}</button><span class="xpn">${f.page + 1} / ${pages}</span><button type="button" class="xpb" data-npage="1" ${f.page < pages - 1 ? "" : "disabled"} aria-label="Página siguiente">${I(IC.right, 16, 2)}</button></div>
         <label class="small muted">Por página <select class="xsel" id="nPer">${[10, 25, 50, 100].map(n => `<option ${n === f.per ? "selected" : ""}>${n}</option>`).join("")}</select></label></div>`;
@@ -864,10 +940,7 @@
       return `<div class="stack" style="gap:18px">
         <div class="xhead"><div><h1>Calendario económico</h1><div class="small muted">Noticias de esta semana y la siguiente · horas en ${esc(tz() ? TZS.find(x => x[0] === tz())[1] : (TZ.split("/").pop() || "tu zona").replace("_", " "))}</div></div>
           <div class="row" style="gap:8px"><label class="xtz">${I(IC.clock, 15)}<select class="xsel" id="nTz" aria-label="Zona horaria">${TZS.map(([k, l]) => `<option value="${k}" ${(tz() || "") === k ? "selected" : ""}>${k ? "Horas de " + l : "Tu hora (" + esc((TZ.split("/").pop() || "local").replace("_", " ")) + ")"}</option>`).join("")}</select></label><button type="button" class="btn2" id="nRef" style="height:38px">Actualizar</button></div></div>
-        <div class="xkgrid">${statCard("Eventos esta semana", S.news ? E.length : "…", todayE.length + " hoy")}
-          ${statCard("Alto impacto hoy", S.news ? hiToday.length : "…", hiToday.length ? hiToday.map(e => hm(e.ts) + " " + e.country).slice(0, 3).join(" · ") : "Día tranquilo")}
-          ${statCard("Divisas", curs.length || "…", curs.slice(0, 6).join(" · "))}
-          ${statCard("Próximo evento importante", nextHi ? hm(nextHi.ts) : "—", nextHi ? `${FLAG[nextHi.country] || ""} ${esc(nextHi.country)} · ${esc(nextHi.title)} · ${until(nextHi.ts)}` : "Nada de alto impacto pendiente")}</div>
+        ${S.news ? youCards() : ""}
         ${hiToday.some(e => inPlan(e.ts) && e.ts > Date.now() - 30 * 6e4) ? `<div class="callout">${I(IC.clock, 18)}<div><b>Hay noticias de alto impacto dentro de tu horario.</b> Evita entrar 15 minutos antes y después: el precio puede saltar tu stop sin respetar el análisis.</div></div>` : ""}
         <div class="card xcard"><div class="xtools">
           <label class="xsearch">${I(IC.search, 16)}<input id="nQ" placeholder="Buscar eventos…" value="${esc(f.q)}" aria-label="Buscar eventos"></label>
@@ -883,7 +956,7 @@
     },
     bind() {
       const f = nf(), re = () => { S.lastView = null; render(); };
-      const bindT = () => { $$("[data-npage]").forEach(b => b.onclick = () => { f.page += +b.dataset.npage; $("#nTable").innerHTML = tableHtml(filtered()); bindT(); }); const pp = $("#nPer"); if (pp) pp.onchange = () => { f.per = +pp.value; f.page = 0; lsSet("tk-nper", f.per); $("#nTable").innerHTML = tableHtml(filtered()); bindT(); }; };
+      const bindT = () => { $$("[data-nx]").forEach(b => b.onclick = () => { const r = b.closest("tr").nextElementSibling; if (r && r.classList.contains("nxrow")) { r.hidden = !r.hidden; b.setAttribute("aria-expanded", String(!r.hidden)); b.closest("tr").classList.toggle("nxo", !r.hidden); } }); $$("[data-npage]").forEach(b => b.onclick = () => { f.page += +b.dataset.npage; $("#nTable").innerHTML = tableHtml(filtered()); bindT(); }); const pp = $("#nPer"); if (pp) pp.onchange = () => { f.per = +pp.value; f.page = 0; lsSet("tk-nper", f.per); $("#nTable").innerHTML = tableHtml(filtered()); bindT(); }; };
       bindT();
       $("#nTz").onchange = e => { lsSet("tk-ntz", e.target.value); re(); };
       const q = $("#nQ"); q.oninput = () => { f.q = q.value; f.page = 0; $("#nTable").innerHTML = tableHtml(filtered()); bindT(); };

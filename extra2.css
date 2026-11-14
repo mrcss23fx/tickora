@@ -1965,3 +1965,46 @@ button.mc-d:focus-visible{outline:2px solid var(--cobalto);outline-offset:1px}
 .hc .hc-rules{display:flex;flex-wrap:wrap}.hc .hc-r{flex:1 1 200px}
 @media (max-width:1200px){.hc .hc-g.res{grid-column:span 2}}
 @media (max-width:760px){.hc .hc-op{grid-template-columns:40px minmax(0,1fr) auto}.hc .hc-op .hc-tag{display:none}.hc .hc-r{flex-basis:140px}}
+/* =====================================================================
+   NOTICIAS — la lista de siempre, cruzada contigo
+   ===================================================================== */
+.nyou{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:14px}
+.nyc{display:flex;flex-direction:column;gap:8px;min-width:0;padding:18px 20px;border-radius:22px;border:1px solid var(--hb-line);background:var(--hb-t)}
+.nyk{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--hb-ink2)}
+.nyc>b{font-size:20px;font-weight:500;letter-spacing:-.02em;color:var(--hb-ink)}
+.nyc small{font-size:12px;line-height:1.45;color:var(--hb-ink2)}.nyc small b{color:var(--hb-ink);font-weight:600}
+.nyb{position:relative;height:14px;margin-top:4px;border-radius:9px;background:color-mix(in srgb,var(--hb-ink) 6%,transparent)}
+.nyb i{position:absolute;top:0;bottom:0;border-radius:9px}
+.nyb i.f{background:color-mix(in srgb,var(--pg) 55%,transparent);box-shadow:0 0 12px color-mix(in srgb,var(--pg) 40%,transparent)}
+.nyb i.z{background:repeating-linear-gradient(135deg,#c49dff 0 4px,color-mix(in srgb,#c49dff 35%,transparent) 4px 8px);box-shadow:0 0 12px rgba(196,157,255,.5)}
+.nyb em{position:absolute;top:-4px;bottom:-4px;width:2px;margin-left:-1px;background:var(--hb-ink);border-radius:2px}
+.nyt{display:flex;justify-content:space-between;font-size:11px;color:var(--hb-ink2);font-variant-numeric:tabular-nums;margin-top:-4px}
+.nyw{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:2px}
+.nyw>div{display:flex;flex-direction:column;align-items:center;gap:4px}
+.nyw .c{position:relative;width:100%;max-width:38px;height:56px;border-radius:10px;background:color-mix(in srgb,var(--hb-ink) 5%,transparent);overflow:hidden}
+.nyw .c i{position:absolute;left:0;right:0;bottom:0;background:color-mix(in srgb,var(--hb-ink) 18%,transparent)}
+.nyw .c i.m{background:#c49dff;box-shadow:0 0 10px rgba(196,157,255,.6)}
+.nyw small{font-size:11px;text-transform:capitalize}.nyw>div>b{font-size:12px;height:14px;color:#c49dff}
+.nyw .on .c{outline:1.5px solid var(--hb-ink);outline-offset:2px}.nyw .on small{color:var(--hb-ink);font-weight:700}
+.nyw .past{opacity:.45}
+.nyl{display:inline-block;width:8px;height:8px;border-radius:3px;background:color-mix(in srgb,var(--hb-ink) 18%,transparent);margin:0 3px 0 6px;vertical-align:0}.nyl.m{background:#c49dff;margin-left:0}
+.nyv{display:grid;grid-template-columns:150px 1fr 40px;align-items:center;gap:10px;font-size:12.5px;color:var(--hb-ink)}
+.nyv .br{height:8px;border-radius:9px;background:color-mix(in srgb,var(--hb-ink) 7%,transparent);overflow:hidden}.nyv .br i{display:block;height:100%;border-radius:9px;background:var(--hb-ink)}
+.nyv .br.n i{background:repeating-linear-gradient(135deg,#c49dff 0 4px,color-mix(in srgb,#c49dff 45%,transparent) 4px 8px)}
+.nyv em{font-style:normal;font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
+.nym{display:flex;flex-wrap:wrap;gap:5px;align-items:center}.nym span{padding:2px 8px;border-radius:99px;border:1px solid var(--hb-line);color:var(--hb-ink);font-size:11px}
+.nxb{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.nxb:focus-visible{outline:2px solid var(--pg);outline-offset:3px;border-radius:6px}
+.nxc{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:color-mix(in srgb,var(--hb-ink) 7%,transparent);color:var(--hb-ink2);transition:transform .2s}
+.nxb[aria-expanded="true"] .nxc{transform:rotate(180deg);background:var(--hb-ink);color:var(--hx-on)}
+.ntable tr.nxo td{background:color-mix(in srgb,var(--pg) 6%,transparent)}
+.nxrow td{padding:0!important;background:color-mix(in srgb,var(--pg) 6%,transparent)}
+.nxd{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;padding:14px 18px 18px}
+.nxd span{display:block;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--hb-ink2);margin-bottom:5px}
+.nxd p{margin:0;font-size:13px;line-height:1.5;color:var(--hb-ink);white-space:normal}
+.nxd em{font-style:normal;display:inline-block;padding:2px 9px;border-radius:99px;border:1px solid var(--hb-line);font-size:12px;margin:0 4px 4px 0}
+.nxd .z{padding:10px 12px;border-radius:14px;background:color-mix(in srgb,#c49dff 12%,transparent);border:1px solid color-mix(in srgb,#c49dff 40%,transparent)}
+.naff{display:inline-flex;margin-right:8px;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:600;color:var(--hb-ink);background:color-mix(in srgb,var(--pg) 16%,transparent);white-space:nowrap}
+@media (max-width:1100px){.nyou{grid-template-columns:1fr 1fr}.nyou .nyc:first-child{grid-column:1/-1}}
+@media (max-width:700px){.nyou{grid-template-columns:1fr}.nyv{grid-template-columns:120px 1fr 36px}}
+@media (max-width:760px){.nxd{position:sticky;left:0;width:calc(100vw - 72px);box-sizing:border-box;grid-template-columns:1fr}}
