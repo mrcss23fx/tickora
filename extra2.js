@@ -1610,6 +1610,7 @@
         <div class="row" style="gap:8px;flex-wrap:wrap">${src}${modeB}<div class="calnav"><button type="button" class="xpb" data-cnav="-1" aria-label="Año anterior">${I(IC.left, 16, 2)}</button><b>${st.y}</b><button type="button" class="xpb" data-cnav="1" aria-label="Año siguiente">${I(IC.right, 16, 2)}</button></div></div></div>
         <div class="calyear">${months.map(x => `<button type="button" class="calm ${x.st.n ? (x.st.tot < 0 ? "neg" : "pos") : ""}" style="--a:${x.st.n ? (.15 + Math.abs(x.st.tot) / mx * .55).toFixed(2) : 0}" data-cmonth="${x.m}"><b>${cap(x.ml)}</b><span class="mono">${x.st.n ? fmtV(x.st.tot, x.st.mt) : "—"}</span><small>${x.st.n ? x.st.n + " op. · " + num(x.st.win, 0) + " % acierto" : "sin operaciones"}</small></button>`).join("")}</div>${leg}</div>`;
     }
+    const rich = S.calSrc !== "bt" && !(opts && opts.plain);
     const first = new Date(st.y, st.m, 1), off = (first.getDay() + 6) % 7, days = new Date(st.y, st.m + 1, 0).getDate(), weeks = Math.ceil((off + days) / 7);
     const monthL = L.filter(t => { const d = new Date(dateOf(t)); return d.getFullYear() === st.y && d.getMonth() === st.m; }), mst = tradeStats(monthL);
     const inMonth = Object.entries(byDay).filter(([k]) => k.startsWith(st.y + "-" + String(st.m + 1).padStart(2, "0"))), mxAbs = Math.max(.5, ...inMonth.map(([, l]) => Math.abs(tradeStats(l).tot)));
@@ -1622,7 +1623,8 @@
         const dn = w * 7 + c - off + 1, dt = new Date(st.y, st.m, dn), k = dayKey(dt), inM = dn >= 1 && dn <= days, l = inM ? byDay[k] || [] : [], s = tradeStats(l);
         wl.push(...l);
         const a = s.n ? (.18 + Math.min(1, Math.abs(s.tot) / mxAbs) * .62).toFixed(2) : 0, cls = s.n ? (s.tot > 0 ? "pos" : s.tot < 0 ? "neg" : "zero") : "";
-        grid += `<${s.n ? `button type="button" data-cday="${k}" aria-label="${dt.getDate()}: ${fmtVt(s.tot, s.mt)}, ${s.n} operaciones. Ver informe"` : "div"} class="calc ${inM ? "" : "out"} ${cls} ${k === todayKey() ? "today" : ""} ${S.calSel === k ? "sel" : ""}" style="--a:${a}"><span class="cald">${dt.getDate()}</span>${s.n ? `<b class="mono">${fmtV(s.tot, s.mt)}</b><small>${s.n} op.${s.win != null ? " · " + num(s.win, 0) + " %" : ""}</small>` : ""}</${s.n ? "button" : "div"}>`;
+        const ric = rich && inM ? calRich(k, l) : "";
+        grid += `<${s.n ? `button type="button" data-cday="${k}" aria-label="${dt.getDate()}: ${fmtVt(s.tot, s.mt)}, ${s.n} operaciones. Ver informe"` : "div"} class="calc ${inM ? "" : "out"} ${cls} ${k === todayKey() ? "today" : ""} ${S.calSel === k ? "sel" : ""}" style="--a:${a}"><span class="cald">${dt.getDate()}</span>${s.n ? `<b class="mono">${fmtV(s.tot, s.mt)}</b><small>${s.n} op.${s.win != null ? " · " + num(s.win, 0) + " %" : ""}</small>` : ""}${ric}</${s.n ? "button" : "div"}>`;
       }
       const ws = tradeStats(wl); W.push({ w: w + 1, l: wl, st: ws });
       grid += `<div class="calc calw"><span class="cald">Semana ${w + 1}</span>${ws.n ? `${cR(ws.tot, ws.mt)}<small>${(n => n + (n === 1 ? " día" : " días"))(new Set(wl.map(t => dayKey(dateOf(t)))).size)} · ${ws.n} op.</small>` : `<small>—</small>`}</div>`;
@@ -1669,11 +1671,45 @@
     box.addEventListener("click", e => { if (e.target === box || e.target.closest("[data-x]")) return close(); if (e.target.closest("[data-full]")) S.repDay = k; if (e.target.closest("a")) { box.remove(); document.removeEventListener("keydown", ek); } });
     document.addEventListener("keydown", ek); document.body.appendChild(box); requestAnimationFrame(() => box.classList.add("in")); setTimeout(() => { const x = box.querySelector("[data-x]"); x && x.focus(); }, 60);
   }
+  // ---------- Calendario: lo que pasó cada día ----------
+  function calNewsHist() { let H = []; try { H = JSON.parse(localStorage.getItem("tk-nhist") || "[]"); } catch (e) { } const E = ((S.news && S.news.events) || []).filter(e => e.impact === "High").map(e => ({ ts: e.ts, c: e.country, t: e.title })); return H.concat(E); }
+  function calRich(k, l) {
+    const p = S.plan || {}, a = minOfS(p.start), b = minOfS(p.end), out = [];
+    const C = closed(l); if (C.length) out.push(C.every(t => evaluate(t).good) ? `<i class="ci pl" title="Todo dentro del plan"></i>` : `<i class="ci ev" title="Alguna operación evitable"></i>`);
+    if (!S._cnh || S._cnhT < Date.now() - 6e4) { S._cnh = calNewsHist(); S._cnhT = Date.now(); }
+    if (S._cnh.some(e => dayKey(e.ts) === k && (() => { const d = new Date(e.ts), m = d.getHours() * 60 + d.getMinutes(); return m >= a - 15 && m <= b; })())) out.push(`<i class="ci nw" title="Noticia fuerte en tu horario"></i>`);
+    if ((S.pages || []).some(pg => !pg.isTpl && pg.day === k)) out.push(`<i class="ci dy" title="Escribiste en el diario"></i>`);
+    const m = healthOk() ? (S.mente || {})[k] : null, mk = m && m.emo ? mkOf(EMOL[m.emo] || m.emo) : null;
+    return (out.length ? `<span class="cic">${out.join("")}</span>` : "") + (mk ? `<span class="cmind" title="Llegaste: ${esc(EMOL[m.emo] || m.emo)} · ${mk.n.toLowerCase()}">${glyph(mk, 34, 14)}</span>` : "");
+  }
+  function calSide(L) {
+    const st = S.calS || { y: new Date().getFullYear(), m: new Date().getMonth() }, pre = st.y + "-" + String(st.m + 1).padStart(2, "0");
+    const by = {}; L.filter(t => dayKey(dateOf(t)).startsWith(pre)).forEach(t => { const k = dayKey(dateOf(t)); (by[k] = by[k] || []).push(t); });
+    const D = Object.entries(by).map(([k, l]) => ({ k, st: tradeStats(l), ev: closed(l).some(t => !evaluate(t).good) })).filter(x => x.st.n);
+    const ml = cap(MESES_L[st.m]), tot = D.reduce((a, x) => a + x.st.tot, 0), mt = D.reduce((a, x) => a + (x.st.mt || 0), 0);
+    let ph;
+    if (!D.length) ph = `En ${ml.toLowerCase()} aún no has operado.`;
+    else {
+      ph = `${ml} ${st.y === new Date().getFullYear() && st.m === new Date().getMonth() ? "va" : "fue"} en ${tot >= 0 ? "positivo" : "negativo"}: ${fmtMs(tot, mt || null)}.`;
+      const calm = healthOk() ? D.filter(x => { const m = (S.mente || {})[x.k], mk = m && m.emo ? mkOf(EMOL[m.emo] || m.emo) : null; return mk && mk.lv === 0; }) : [];
+      const evd = D.filter(x => x.ev).length;
+      if (calm.length >= 2) { const g = calm.filter(x => x.st.tot > 0).length; ph += g === calm.length ? " Los días que llegaste tranquilo fueron todos verdes." : ` Los días que llegaste tranquilo: ${g} de ${calm.length} en verde.`; }
+      else if (evd) ph += ` ${evd === 1 ? "Un día tuvo" : evd + " días tuvieron"} alguna operación evitable.`;
+      else ph += " Todos los días dentro de tu plan.";
+    }
+    const best = D.slice().sort((a, b) => b.st.tot - a.st.tot)[0], worst = D.slice().sort((a, b) => a.st.tot - b.st.tot)[0];
+    const dl = k => cap(new Date(k + "T12:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric" }));
+    return `<aside class="cal-side"><div class="cs-c"><span class="cs-k">Tu mes en una frase</span><p class="cs-p">${ph}</p></div>
+      ${D.length ? `<div class="cs-c"><span class="cs-k">Mejor y peor día</span><div class="cs-r"><span>${dl(best.k)}</span><b>${fmtMs(best.st.tot, best.st.mt)}</b></div>${worst && worst.k !== best.k ? `<div class="cs-r"><span>${dl(worst.k)}${worst.ev ? " · evitable" : ""}</span><b>${fmtMs(worst.st.tot, worst.st.mt)}</b></div>` : ""}</div>` : ""}
+      <div class="cs-c cs-lg"><span class="cs-k">Lo que ves en cada día</span><div><i class="ci pl"></i>Todo dentro del plan</div><div><i class="ci ev"></i>Alguna evitable</div><div><i class="ci nw"></i>Noticia fuerte en tu horario</div><div><i class="ci dy"></i>Escribiste en el diario</div>${healthOk() ? `<div>${glyph(MK[0], 30, 12)}Cómo llegaste (tu mente)</div>` : ""}</div></aside>`;
+  }
   V.calendario = {
     view() {
       if (S.calSrc === "bt" && !S.btLoaded && BT()) BT().loadSessions().then(() => { if (location.hash.startsWith("#calendario")) re(); });
       if (!S.pagesLoaded && DI()) DI().loadPages();
-      return `<div class="stack" style="gap:18px"><div class="xhead"><div><h1>Calendario</h1><div class="small muted">${S.calSrc === "bt" ? "Tus operaciones de práctica (backtesting)" : "Tus operaciones reales"} · toca un día para ver su informe</div></div></div>${calendar("calS", calSrcL(), {})}</div>`;
+      let h = calendar("calS", calSrcL(), {}); const st = S.calS || {};
+      if (S.calSrc !== "bt" && st.mode !== "anio") { const i = h.indexOf('<div class="card stack" style="gap:10px"><h2 class="h2b">Resumen por semanas'); if (i > 0) h = `<div class="cal-2">${h.slice(0, i)}${calSide(calSrcL())}</div>` + h.slice(i); }
+      return `<div class="stack" style="gap:18px"><div class="xhead"><div><h1>Calendario</h1><div class="small muted">${S.calSrc === "bt" ? "Tus operaciones de práctica (backtesting)" : "Tus operaciones reales, con lo que pasó cada día"} · toca un día para ver su informe</div></div></div>${h}</div>`;
     },
     bind() { bindCal("calS", dayPanel); }
   };
