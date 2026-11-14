@@ -2454,3 +2454,42 @@ html[data-theme="light"] .dj-sp2{background:#fafafa}
 @media (max-width:640px){.cq{padding:18px}.pghelp{flex-direction:column;align-items:flex-start}}
 .tplc .tplc-m{padding:0 12px 12px}
 .slash{min-width:310px}
+/* Cuaderno: cada opción con su diseño */
+.cq-g2{display:flex;flex-direction:column;gap:26px;margin-top:22px}
+.cq-sh{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.cq-sh h3{margin:0;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--c)}
+.cq-sh h3:before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c);box-shadow:0 0 8px var(--c);margin-right:8px;vertical-align:1px}
+.cq-sh small{font-size:12.5px;color:var(--hb-ink2)}
+.cq-tg{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.cqt{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;border-radius:22px;border:1px solid var(--hb-line);background:var(--hb-t);overflow:hidden;transition:transform .2s ease,border-color .2s,box-shadow .2s}
+.cqt:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--c) 55%,var(--hb-line));box-shadow:0 14px 34px -14px color-mix(in srgb,var(--c) 55%,transparent)}
+.cqt:focus-visible{outline:2px solid var(--c);outline-offset:3px}
+.cqt-cv{position:relative;display:block;height:118px;background:radial-gradient(220px 120px at 85% 0%,color-mix(in srgb,var(--c) 30%,transparent),transparent 70%),linear-gradient(160deg,color-mix(in srgb,var(--c) 14%,var(--hb-t)),color-mix(in srgb,var(--c) 4%,var(--hb-t)));border-bottom:1px solid color-mix(in srgb,var(--c) 20%,var(--hb-line))}
+.cqi{position:absolute;inset:12px 20px;width:calc(100% - 40px);height:calc(100% - 24px);overflow:visible}
+.cqi *{fill:none;stroke:var(--c);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.cqi .d{stroke-opacity:.35;stroke-dasharray:3 5}
+.cqi .f{stroke-opacity:.5}
+.cqi .fl{fill:color-mix(in srgb,var(--c) 35%,transparent)}
+.cqi .s{fill:var(--c);fill-opacity:.9}
+.cqi .a{stroke-width:2.8;filter:drop-shadow(0 0 6px var(--c))}
+.cqi .h{fill:repeating-linear-gradient(0,#000,#000);stroke-dasharray:4 4;stroke-opacity:.5}
+.cqi .w{stroke:var(--hb-t);stroke-width:3}.cqi .w2{fill:var(--hb-t);stroke:none}
+.cqt-tm{position:absolute;right:12px;top:12px;font-style:normal;font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px;background:color-mix(in srgb,var(--hb-t) 70%,transparent);border:1px solid color-mix(in srgb,var(--c) 35%,transparent);color:var(--hb-ink);backdrop-filter:blur(6px)}
+.cqt-b{display:flex;flex-direction:column;gap:6px;padding:16px 18px 16px;flex:1}
+.cqt-b b{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:24px;line-height:1.1;color:var(--hb-ink)}
+.cqt-b>span{font-size:13px;line-height:1.5;color:var(--hb-ink2);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.cqt-b small{font-size:11.5px;font-weight:600;color:var(--c)}
+.cqt-go{margin-top:auto;padding-top:8px;display:inline-flex;align-items:center;gap:6px;font-style:normal;font-size:12.5px;font-weight:600;color:var(--hb-ink);opacity:.55;transition:opacity .2s,gap .2s}
+.cqt:hover .cqt-go{opacity:1;gap:9px;color:var(--c)}
+html[data-theme="light"] .cqi .w{stroke:#fff}html[data-theme="light"] .cqi .w2{fill:#fff}
+@media (prefers-reduced-motion:reduce){.cqt{transition:none}.cqt:hover{transform:none}}
+.cq-g2{display:grid;grid-template-columns:repeat(auto-fill,minmax(500px,1fr));gap:26px 28px}
+.cq-tg{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cqi .w{stroke:#0e0e11}.cqi .w2{fill:#0e0e11}
+.cqi path.w[d^="M117"]{stroke:var(--c)}
+@media (max-width:640px){.cq-g2{grid-template-columns:1fr}.cq-tg{grid-template-columns:1fr 1fr;gap:10px}.cqt-cv{height:92px}.cqt-b{padding:12px 14px}.cqt-b b{font-size:20px}.cqt-b>span{-webkit-line-clamp:4;font-size:12px}}
+@media (max-width:400px){.cq-tg{grid-template-columns:1fr}}
+html[data-theme="light"] .cqt,html[data-theme="light"] .cq-sh{--c2:color-mix(in srgb,var(--c) 60%,#1a1a1a)}
+html[data-theme="light"] .cqi *:not(.w):not(.w2){stroke:var(--c2)}
+html[data-theme="light"] .cqi .s{fill:var(--c2)}
+html[data-theme="light"] .cq-sh h3,html[data-theme="light"] .cqt-b small,html[data-theme="light"] .cqt:hover .cqt-go{color:var(--c2)}
