@@ -1269,6 +1269,74 @@
   const PERS = [["30", "30 días"], ["90", "90 días"], ["365", "1 año"], ["all", "Todo"]];
   const perFilter = (L, per, key) => per === "all" ? L : L.filter(t => new Date(t[key || "open_time"]) >= Date.now() - (+per) * 864e5);
 
+  // ---------- Mi plan: las reglas de tu partida ----------
+  V.plan = {
+    view() {
+      const D = hData(), base = S.basePlan || S.plan, p = D.p, pd = S.planDoc || {}, tk = todayKey(), ph = D.phase;
+      const mx = p.maxTrades || 3, used = D.today.length, L = p.dayLimitR || 2, dr = D.st.n ? D.st.tot : 0;
+      // estado de la partida de hoy
+      const badToday = D.today.filter(t => t.status === "closed" && !evaluate(t).good), over = used > mx, hitLim = dr <= -L;
+      const st = over || hitLim || badToday.length ? ["lost", "Partida perdida", over ? "Te pasaste del máximo de operaciones." : hitLim ? "Llegaste a tu límite del día." : "Una operación fuera de tu plan: " + esc((NLAB[NK((evaluate(badToday[0]).fail[0] || {}).fix || "")] || "una norma").toLowerCase()) + "."]
+        : ph === "despues" ? (used ? ["won", "Partida ganada", "Todo dentro de tu plan. Así se gana, aunque el dinero no acompañe."] : ["won", "Partida ganada sin jugar", "No operar también es jugar bien."])
+        : ph === "en" ? ["live", "Partida en juego", "Quedan " + durTxt(D.b - D.now) + ". Juega con tus reglas."] : ["wait", "La partida empieza a las " + esc(p.start), "Empieza en " + durTxt(D.a - D.now) + "."];
+      // vidas
+      const lives = Array.from({ length: Math.max(mx, used) }, (_, i) => { const t = D.today.slice().sort((a, b) => new Date(a.open_time) - new Date(b.open_time))[i]; const cls = i >= mx ? "x" : t ? (t.status !== "closed" ? "open" : evaluate(t).good ? "used" : "bad") : "";
+        return `<i class="${cls}" title="${t ? esc(t.symbol || "") + " · " + hhmm(t.open_time) : "Disponible"}">${i >= mx ? "!" : t && t.status === "closed" ? (evaluate(t).good ? ico("check", 16, 2.6) : ico("x", 15, 2.6)) : i + 1}</i>`; }).join("");
+      const en = Math.max(0, Math.min(1, (L + Math.min(0, dr)) / L));
+      const dur = Math.max(0, minOfS(p.end) - minOfS(p.start)), durS = (Math.floor(dur / 60) ? Math.floor(dur / 60) + " h" : "") + (dur % 60 ? " " + (dur % 60) + " min" : "");
+      const tPct = ph === "en" ? Math.min(100, (D.now - D.a) / Math.max(1, D.b - D.a) * 100) : ph === "despues" ? 100 : 0;
+      // historial de partidas (30 días)
+      const byDay = {}; closed(S.trades).forEach(t => { const k = dayKey(dateOf(t)); (byDay[k] = byDay[k] || []).push(t); });
+      const days = []; for (let i = 29; i >= 0; i--) { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - i); const wd = d.getDay(); if (wd === 0 || wd === 6) continue; const k = dayKey(d), L2 = byDay[k] || []; days.push({ k, d, s: !L2.length ? "none" : L2.every(t => evaluate(t).good) ? "won" : "lost", n: L2.length }); }
+      let streak = 0; for (const k of Object.keys(byDay).sort().reverse()) { if (k > tk) continue; if (byDay[k].every(t => evaluate(t).good)) streak++; else break; }
+      const mk = tk.slice(0, 7), mdays = Object.keys(byDay).filter(k => k.startsWith(mk)), mwon = mdays.filter(k => byDay[k].every(t => evaluate(t).good)).length;
+      const pctM = mdays.length ? Math.round(mwon / mdays.length * 100) : null;
+      // punto débil
+      const cnt = {}; closed(S.trades).filter(t => new Date(dateOf(t)) >= Date.now() - 30 * 864e5).forEach(t => evaluate(t).fail.forEach(f => { const k = NK(f.fix); if (k) cnt[k] = (cnt[k] || 0) + 1; }));
+      const weak = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+      // reglas especiales
+      const M = healthOk() ? (S.mente || {})[tk] : null;
+      const rules = (base.rules || []).filter(r => r.si || r.entonces);
+      const rl = (M && M.sit ? `<div class="pg-rc hoy"><span class="n">Hoy</span><p><b>Si</b> ${esc(M.sit)} <b>→</b> ${esc(M.then)}</p></div>` : "") + rules.map((r, i) => `<div class="pg-rc"><span class="n">${i + 1}</span><p><b>Si</b> ${esc(String(r.si || "").replace(/,$/, ""))} <b>→</b> ${esc(r.entonces || "")}</p></div>`).join("")
+        + `<a class="pg-rc add" href="#planForm" data-pgedit><span class="n">+</span><p>Añadir regla especial</p></a>`;
+      const pend = pd.pending && pd.pendingFrom > tk ? (() => { const n = pd.pending, o = base, ch = []; if (n.riskPct !== o.riskPct) ch.push(`riesgo ${num(o.riskPct, 2).replace(/,?0+$/, "")} % → <b>${num(n.riskPct, 2).replace(/,?0+$/, "")} %</b>`); if (n.maxTrades !== o.maxTrades) ch.push(`vidas ${o.maxTrades} → <b>${n.maxTrades}</b>`); if (n.dayLimitR !== o.dayLimitR) ch.push(`energía ${num(o.dayLimitR, 1)} R → <b>${num(n.dayLimitR, 1)} R</b>`); if (n.start !== o.start || n.end !== o.end) ch.push(`horario → <b>${esc(n.start)}–${esc(n.end)}</b>`); if (JSON.stringify(n.rules || []) !== JSON.stringify(o.rules || [])) ch.push("reglas especiales"); if ((n.strategy || "") !== (o.strategy || "")) ch.push("tu jugada");
+        return `<div class="pg-pend"><span class="pg-k">Cambios para mañana</span><p>${ch.length ? ch.join(" · ") : "Tienes cambios guardados"}. Entran en juego mañana: nunca se cambian las reglas a mitad de partida.</p></div>`; })() : "";
+      const acct = p.acct ? `<span class="pg-chip">Reglas de la cuenta ${esc(p.acct.name)}</span>` : "";
+      let form = ""; try { const h = window.viewPlan ? viewPlan("plan") : ""; const a = h.indexOf('<form class="card stack" id="planForm"'), b = h.indexOf("</form>", a); if (a >= 0) form = h.slice(a, b + 7).replace('style="max-width:900px"', "").replace("<h2>Tu plan de cada día</h2>", "<h2>Cambiar las reglas</h2>"); } catch (e) { }
+      return `<div class="stack pg">
+        <div class="xhead"><div><h1>Las reglas <em>de tu partida</em></h1><div class="small muted">Cada día es una partida. Ganas si la juegas con tus reglas, no si ganas dinero.</div></div>
+          <div class="row" style="gap:8px">${acct}<a class="x-ch" href="#planForm" id="planEdit">Cambiar las reglas</a></div></div>
+        ${pend}
+        <div class="pg-top">
+          <div class="pg-lv ${st[0]}">
+            <div class="pg-st"><span class="pg-dot"></span><div><b>${st[1]}</b><small>${st[2]}</small></div></div>
+            <div class="pg-hud">
+              <div><span class="pg-k">Vidas · operaciones</span><div class="pg-lives">${lives}</div><small>${used ? (used >= mx ? "Sin vidas: la partida de hoy está jugada." : `Te ${mx - used === 1 ? "queda 1" : "quedan " + (mx - used)} de ${mx}.`) : `${mx} vidas para hoy. Ninguna gastada.`}</small></div>
+              <div><span class="pg-k">Energía · límite del día</span><div class="pg-en"><i style="width:${(en * 100).toFixed(1)}%"></i></div><small>${en > 0 ? `Te quedan ${fmtVabs(L + Math.min(0, dr))} de ${fmtLim(L, 1)}. Si se agota, fin de la partida.` : "Energía agotada: fin de la partida."}</small></div>
+              <div><span class="pg-k">Tiempo de juego</span><div class="pg-big">${durS.trim() || "—"} <small>${esc(p.start)} – ${esc(p.end)}</small></div><div class="pg-tb"><i style="width:${tPct.toFixed(1)}%"></i></div></div>
+              <div><span class="pg-k">Cada vida arriesga</span><div class="pg-big">${fmtVabs(1)} <small>${num(p.riskPct, 2).replace(/,?0+$/, "")} %</small></div><small>${p.strategy ? "Tu jugada: " + esc(p.strategy) : `Escribe <a href="#planForm" data-pgedit>tu jugada</a> en una frase.`}</small></div>
+            </div>
+          </div>
+          <div class="pg-rl"><span class="pg-k">Reglas especiales</span>${rl}</div>
+        </div>
+        <div class="pg-win">
+          <div class="pg-how"><span class="pg-k">Cómo se gana la partida</span><b>Todo dentro del plan, aunque pierdas dinero.</b></div>
+          <div class="pg-n"><b>+2</b><small>puntos a tus objetivos<br>por partida ganada</small></div>
+          <div class="pg-n"><b>${streak}</b><small>${streak === 1 ? "partida ganada" : "partidas ganadas"}<br>seguidas</small></div>
+          <div class="pg-n"><b>${pctM == null ? "—" : pctM + " %"}</b><small>ganadas este mes<br>${mdays.length ? mwon + " de " + mdays.length : "sin partidas aún"}</small></div>
+          <div class="pg-n weak"><b>${weak ? NLAB[weak[0]] : "Ninguno"}</b><small>${weak ? `tu punto débil · ${weak[1]} ${weak[1] === 1 ? "vez" : "veces"} en 30 días` : "ninguna norma rota en 30 días"}</small></div>
+        </div>
+        <div class="pg-hist"><div class="pg-hh"><span class="pg-k">Tus últimas partidas</span><small><i class="won"></i>ganada <i class="lost"></i>perdida <i class="none"></i>sin jugar</small></div>
+          <div class="pg-days">${days.map(x => `<span class="${x.s}${x.k === tk ? " today" : ""}" title="${x.d.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "short" })} · ${x.s === "won" ? "ganada" : x.s === "lost" ? "perdida" : "sin jugar"}${x.n ? " · " + x.n + " op." : ""}"><small>${x.d.toLocaleDateString("es-ES", { weekday: "narrow" })}</small></span>`).join("")}</div></div>
+        <div class="pg-edit">${form}</div>
+      </div>`;
+    },
+    bind() {
+      const m = document.getElementById("main"); if (!m) return;
+      m.querySelectorAll("[data-pgedit]").forEach(a => a.onclick = e => { e.preventDefault(); const f = document.getElementById("planForm"); if (!f) return; f.scrollIntoView({ behavior: "smooth", block: "start" }); setTimeout(() => { const i = a.closest(".pg-rl") ? document.getElementById("addRule") : f.querySelector("[name=strategy]"); if (i) i.focus(); }, 450); });
+    }
+  };
+
   // ---------- Hoy · Mi día: cabina de la sesión ----------
   V.hoy = {
     view() {
