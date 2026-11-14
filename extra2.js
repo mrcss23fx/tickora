@@ -525,17 +525,62 @@
   function navDrawer() {
     const old = document.querySelector(".xdrawer.navd"); if (old) { old.remove(); return; }
     const cur = (location.hash || "#inicio").slice(1).split("/")[0] || "inicio", curApp = appOf(cur);
-    const box = document.createElement("div"); box.className = "xdrawer navd"; box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true"); box.setAttribute("aria-label", "Todas las categorías");
-    const apps = NAV_APPS.filter(a => a[0] !== "inicio");
-    box.innerHTML = `<div class="xdrawer-p navd-p"><div class="navd-h"><a class="navd-home${cur === "inicio" ? " on" : ""}" href="#inicio">${ico("inicio", 18)}Inicio</a><button type="button" class="xib" data-x aria-label="Cerrar">${I(IC.x, 18, 2)}</button></div>
-      <nav class="navd-l" aria-label="Categorías">${apps.map(([k, l, items]) => { const on = curApp && curApp[0] === k;
-        return `<div class="navd-g${on ? " on" : ""}"><a class="navd-a" href="#${MAINV[k] || items[0][0]}" ${items.length === 1 && on ? 'aria-current="page"' : ""}>${ico(k, 18)}<span>${esc(l)}</span></a>${items.length > 1 ? `<div class="navd-s">${items.map(([ck, cl]) => `<a href="#${ck}" ${cur === ck ? 'aria-current="page"' : ""}>${esc(cl)}</a>`).join("")}</div>` : ""}</div>`; }).join("")}</nav>
-      <div class="navd-f"><span>Ctrl/⌘ K para buscar cualquier cosa</span></div></div>`;
-    const close = () => { box.classList.remove("in"); setTimeout(() => box.remove(), 200); document.removeEventListener("keydown", ek); const b = document.querySelector("[data-navd]"); b && b.focus(); };
+    const box = document.createElement("div"); box.className = "xdrawer navd nv2"; box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true"); box.setAttribute("aria-label", "Todas las categorías");
+    let D = null, X = null; try { D = hData(); X = dayX(D); } catch (e) { }
+    const GRP = [["Operar", "#86a9ff", ["hoy", "analizar", "backtest", "plan"]], ["Revisar", "#c49dff", ["resultados", "calendario", "diario"]], ["Tú", "#5fd4c0", ["cartera", "asistente", "ajustes"]]];
+    const tk = todayKey();
+    // mini dibujos en vivo de cada apartado
+    const mv = k => {
+      try {
+        if (k === "hoy" && D) { const cl = closed(D.today).sort((a, b) => new Date(dateOf(a)) - new Date(dateOf(b))); let c = 0; const pts = [0].concat(cl.map(t => c += +t.r || 0)); const lo = Math.min(...pts), hi = Math.max(...pts), rg = (hi - lo) || 1;
+          const sp = pts.length > 1 ? `<svg viewBox="0 0 44 16" class="nv-sp"><polyline points="${pts.map((v, i) => `${(i / (pts.length - 1) * 44).toFixed(1)},${(14 - (v - lo) / rg * 12).toFixed(1)}`).join(" ")}"/></svg>` : "";
+          return `${sp}<em class="mono">${D.st.n ? fmtMs(D.st.tot, D.st.mt) : "—"}</em>`; }
+        if (k === "analizar") { const c = (S.hbBars || {})[chartSym() + "|" + lsGet("tk-tf", "5m")], b = (c && c.b || []).slice(-10);
+          const bars = b.length > 3 ? b : [[5, 8, 4, 7], [7, 9, 6, 6], [6, 7, 3, 4], [4, 6, 3, 5], [5, 9, 5, 8], [8, 10, 7, 9], [9, 9, 6, 7], [7, 11, 7, 10]].map(([o, h, l, cc]) => ({ open: o, high: h, low: l, close: cc }));
+          const lo = Math.min(...bars.map(x => x.low)), hi = Math.max(...bars.map(x => x.high)), rg = (hi - lo) || 1, y = v => (15 - (v - lo) / rg * 14).toFixed(1), w = 44 / bars.length;
+          return `<svg viewBox="0 0 44 16" class="nv-cd">${bars.map((x, i) => { const cx = (i + .5) * w, up = x.close >= x.open; return `<line x1="${cx}" x2="${cx}" y1="${y(x.high)}" y2="${y(x.low)}"/><rect class="${up ? "u" : "d"}" x="${(cx - w * .3).toFixed(1)}" width="${(w * .6).toFixed(1)}" y="${y(Math.max(x.open, x.close))}" height="${Math.max(1, Math.abs(y(x.open) - y(x.close))).toFixed(1)}"/>`; }).join("")}</svg>`; }
+        if (k === "backtest") { const n = (S.bts || []).length; return n ? `<span class="nv-dots">${Array.from({ length: Math.min(n, 5) }, () => "<i></i>").join("")}</span><em>${n}</em>` : `<em>Empezar</em>`; }
+        if (k === "plan") { const ok = S.planOk && S.planOk.day === tk; return `<span class="nv-ck${ok ? " on" : ""}">${ok ? I('<path d="M5 10.5l3.2 3.2L15 7"/>', 11, 2.6) : ""}</span><em>${ok ? "Comprometido" : "Sin compromiso"}</em>`; }
+        if (k === "resultados") { const m = (S.mente || {})[tk]; if (!mDone(m)) return `<em>Sin chequeo</em>`; const sc = mScore(m), C = 2 * Math.PI * 7; return `<svg viewBox="0 0 18 18" class="nv-rg"><circle cx="9" cy="9" r="7"/><circle cx="9" cy="9" r="7" class="f" style="stroke-dasharray:${(sc / 100 * C).toFixed(1)} ${C.toFixed(1)}"/></svg><em class="mono">${sc}</em>`; }
+        if (k === "calendario") { const by = {}; closed(S.trades || []).forEach(t => { const d = dayKey(t.open_time); by[d] = (by[d] || 0) + (+t.r || 0); }); const days = []; for (let n = 6; n >= 0; n--) { const d = new Date(); d.setDate(d.getDate() - n); days.push(dayKey(d)); }
+          return `<span class="nv-wk">${days.map(d => `<i class="${by[d] == null ? "" : by[d] > 0 ? "p" : by[d] < 0 ? "n" : "z"}${d === tk ? " t" : ""}"></i>`).join("")}</span>`; }
+        if (k === "diario" && D && D.pages[0]) { const u = D.pages[0].updated || D.pages[0].created, dd = Math.round((new Date(tk + "T12:00") - new Date(dayKey(u) + "T12:00")) / 864e5); return `<em>${dd <= 0 ? "hoy" : dd === 1 ? "ayer" : "hace " + dd + " d"}</em>`; }
+        if (k === "cartera") { const n = (S.accts || []).length || (typeof acctList === "function" ? acctList().length : 0); return n ? `<em>${n} ${n === 1 ? "cuenta" : "cuentas"}</em>` : ""; }
+        if (k === "asistente") return `<span class="nv-spk">${I('<path d="M10 3l1.6 4.4L16 9l-4.4 1.6L10 15l-1.6-4.4L4 9l4.4-1.6z"/>', 12, 1.8)}</span>`;
+      } catch (e) { }
+      return "";
+    };
+    const item = (k, col) => { const a = NAV_APPS.find(x => x[0] === k); if (!a) return ""; const [, l, items] = a, on = curApp && curApp[0] === k;
+      return `<div class="nv-it${on ? " on" : ""}" style="--gc:${col}"><a class="nv-a" href="#${MAINV[k] || items[0][0]}" ${on ? 'aria-current="page"' : ""}><span class="nv-ic">${ico(k, 17)}</span><span class="nv-n">${esc(l)}</span><span class="nv-mv">${mv(k)}</span></a>${on && items.length > 1 ? `<div class="nv-sub">${items.map(([ck, cl]) => `<a href="#${ck}" ${cur === ck ? 'aria-current="page"' : ""}>${esc(cl)}</a>`).join("")}</div>` : ""}</div>`; };
+    // tarjeta de la sesión
+    let head = "";
+    if (D) { const lv = X && X.sem ? ((X.sem.match(/hd-sem s-(\w)/) || [])[1] || "x") : "x", lt = X && X.sem ? ((X.sem.match(/<b>([^<]*)<\/b>/) || [])[1] || "") : "", ph = D.phase;
+      const tf = ph === "antes" ? 0 : ph === "despues" ? 1 : (D.now - D.a) / Math.max(1, D.b - D.a), chip = ph === "antes" ? `Empieza en ${durTxt(D.a - D.now)}` : ph === "en" ? `Quedan ${durTxt(D.b - D.now)}` : "Sesión terminada";
+      head = `<div class="nv-hd s-${lv}"><span class="nv-glow" aria-hidden="true"></span><small>${esc(typeof greet === "function" ? greet() : "Hola")},</small><b>${esc((S.name || "").split(" ")[0] || "trader")}</b>
+        <div class="nv-st"><span class="nv-dot"></span>${esc(lt || chip)}<em>${chip}</em></div>
+        <div class="nv-ses"><span>${esc(D.p.start)}</span><div><i style="width:${(tf * 100).toFixed(1)}%"></i></div><span>${esc(D.p.end)}</span></div></div>`; }
+    // pie: perfil, racha y objetivos
+    let gl = "", st = 0; try { if (gHas()) { const ix = gIx(); st = gStreak(ix); gl = GH.filter(h => S.goals[h.k]).map(h => { const pr = gProg(S.goals[h.k], ix); return `<i style="--gc:${h.c}"><b style="width:${(pr.pct * 100).toFixed(0)}%"></b></i>`; }).join(""); } } catch (e) { }
+    const ini = ((S.name || "T").trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2) || "T").toUpperCase();
+    box.innerHTML = `<div class="xdrawer-p navd-p nv-p">
+      <div class="nv-top"><a class="nv-home${cur === "inicio" ? " on" : ""}" href="#inicio">${ico("inicio", 17)}Inicio</a><button type="button" class="nv-x" data-x aria-label="Cerrar">${I(IC.x, 16, 2)}</button></div>
+      ${head}
+      <button type="button" class="nv-s" data-nvsearch>${I('<circle cx="9" cy="9" r="5.5"/><path d="M13 13l4 4"/>', 15, 1.8)}<span>Buscar en Tickora</span><kbd>⌘K</kbd></button>
+      <nav class="nv-l" aria-label="Categorías">${GRP.map(([g, col, ks]) => `<div class="nv-g" style="--gc:${col}"><div class="nv-gt"><i></i>${g}</div>${ks.map(k => item(k, col)).join("")}</div>`).join("")}</nav>
+      <div class="nv-me"><span class="nv-av">${esc(ini)}</span><span class="nv-mi"><b>${esc(S.name || "Tu perfil")}</b><small>${st ? `${I(IFL, 11, 1.8)}Racha de ${st} ${st === 1 ? "día" : "días"}` : "Tu cuenta"}</small>${gl ? `<span class="nv-gl" data-goals title="Tus objetivos">${gl}</span>` : ""}</span><button type="button" class="nv-x nv-th" data-theme-toggle aria-label="Cambiar claro u oscuro">${I('<path d="M15.5 12.5A6.5 6.5 0 0 1 7.5 4.5a6.5 6.5 0 1 0 8 8z"/>', 15, 1.8)}</button></div>
+    </div>`;
+    const close = () => { box.classList.remove("in"); setTimeout(() => box.remove(), 220); document.removeEventListener("keydown", ek); const b = document.querySelector("[data-navd]"); b && b.focus(); };
     const ek = e => { if (e.key === "Escape") close(); };
-    box.addEventListener("click", e => { if (e.target === box || e.target.closest("[data-x]")) return close(); if (e.target.closest("a")) { box.remove(); document.removeEventListener("keydown", ek); } });
+    box.addEventListener("click", e => {
+      if (e.target === box || e.target.closest("[data-x]")) return close();
+      if (e.target.closest("[data-nvsearch]")) { box.remove(); document.removeEventListener("keydown", ek); palette(); return; }
+      if (e.target.closest("[data-theme-toggle]")) { setTimeout(() => { const b = box.querySelector("[data-theme-toggle]"); b && b.blur(); }, 0); return; }
+      if (e.target.closest("[data-goals]")) { box.remove(); document.removeEventListener("keydown", ek); return; }
+      if (e.target.closest("a")) { box.remove(); document.removeEventListener("keydown", ek); }
+    });
     document.addEventListener("keydown", ek); document.body.appendChild(box);
-    requestAnimationFrame(() => box.classList.add("in")); setTimeout(() => { const a = box.querySelector('[aria-current="page"]') || box.querySelector(".navd-a"); a && a.focus(); }, 60);
+    const tt = box.querySelector("[data-theme-toggle]"); if (tt) tt.onclick = () => { const g = document.querySelector(".hbtop [data-theme-toggle]"); if (g) g.click(); };
+    requestAnimationFrame(() => box.classList.add("in")); setTimeout(() => { const a = box.querySelector('.nv-it.on .nv-a') || box.querySelector(".nv-a"); a && a.focus({ preventScroll: true }); }, 80);
   }
   document.addEventListener("click", e => { if (e.target.closest("[data-navd]")) navDrawer(); });
 
