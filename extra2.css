@@ -2008,3 +2008,6 @@ button.mc-d:focus-visible{outline:2px solid var(--cobalto);outline-offset:1px}
 @media (max-width:1100px){.nyou{grid-template-columns:1fr 1fr}.nyou .nyc:first-child{grid-column:1/-1}}
 @media (max-width:700px){.nyou{grid-template-columns:1fr}.nyv{grid-template-columns:120px 1fr 36px}}
 @media (max-width:760px){.nxd{position:sticky;left:0;width:calc(100vw - 72px);box-sizing:border-box;grid-template-columns:1fr}}
+/* Noticias: impacto alto en rojo (petición de Marcos) */
+.nimp.i3{color:#ff5a5f}.nimp.i3 .nbars i{background:#ff5a5f}
+html[data-theme="light"] .nimp.i3{color:#d6363c}html[data-theme="light"] .nimp.i3 .nbars i{background:#d6363c}
