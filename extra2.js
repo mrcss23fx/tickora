@@ -1269,6 +1269,72 @@
   const PERS = [["30", "30 días"], ["90", "90 días"], ["365", "1 año"], ["all", "Todo"]];
   const perFilter = (L, per, key) => per === "all" ? L : L.filter(t => new Date(t[key || "open_time"]) >= Date.now() - (+per) * 864e5);
 
+  // ---------- Backtesting · Sesiones: tu laboratorio ----------
+  const LABN = 50;
+  function labVerdict(st) { if (st.n < 20) return ["wt", "Sin conclusión aún"]; if ((st.exp || 0) > .1 && (st.pf == null || st.pf > 1.2)) return ["ok", "Prometedor"]; if ((st.exp || 0) < 0) return ["no", "No funciona"]; return ["wt", "Dudoso"]; }
+  function labRace(x, st) {
+    if (x.mode !== "fondeo") return "";
+    const rp = x.risk || .5, tg = (x.target || 10) / rp, ml = (x.max || 10) / rp, cur = st.tot || 0, span = tg + ml, pos = Math.max(0, Math.min(1, (cur + ml) / span));
+    const dd = Math.abs(st.dd || 0), lost = dd >= ml, won = !lost && cur >= tg;
+    return `<div class="lb-race"><div class="lb-rt"><span class="lim">−${num(x.max || 10, 0)} %</span><span class="ob">+${num(x.target || 10, 0)} % · objetivo</span></div>
+      <div class="lb-tr"><i class="z" style="left:${(ml / span * 100).toFixed(1)}%"></i><i class="f" style="left:${(Math.min(pos, ml / span) * 100).toFixed(1)}%;width:${(Math.abs(pos - ml / span) * 100).toFixed(1)}%"></i><b style="left:${(pos * 100).toFixed(1)}%"></b></div>
+      <small>${won ? "Reto superado en la práctica" : lost ? "Reto perdido: tocaste el límite" : `Llevas ${num(cur * rp, 1)} % · te falta ${num(Math.max(0, tg - cur) * rp, 1)} %`}</small></div>`;
+  }
+  function labCard(x) {
+    const B = BT(), T = B.sessTrades(x.id), st = tradeStats(T), [vc, vl] = labVerdict(st), smp = Math.min(1, st.n / LABN);
+    const from = new Date(x.from + "T00:00").getTime(), to = new Date(x.to + "T23:59").getTime();
+    const q = x.q || x.name || "Sesión";
+    return `<article class="lb-c"><div class="lb-h"><span class="lb-v ${vc}">${vl}</span><button type="button" class="xib" data-bsdel="${esc(x.id)}" aria-label="Borrar sesión" title="Borrar sesión">${I(IC.trash, 15)}</button></div>
+      <h3 class="lb-q">${esc(q)}</h3><div class="lb-m">${x.q && x.name ? esc(x.name) : esc((x.syms || []).join(" · "))} · ${x.mode === "fondeo" ? "reto " + B.k(x.size) : "clásico"} · ${fmtD(from)} – ${fmtD(to)}</div>
+      ${labRace(x, st)}
+      <div class="lb-s"><div class="lb-b"><i style="width:${(smp * 100).toFixed(1)}%"></i></div><small><span>${st.n} de ${LABN} operaciones</span><span>${st.n >= LABN ? "muestra completa" : st.n >= 20 ? "faltan " + (LABN - st.n) + " para fiarte" : "pocas para decidir"}</span></small></div>
+      <div class="lb-n"><div><b>${st.n ? fmtMs(st.tot, st.mt) : "—"}</b><small>resultado</small></div><div><b>${st.win == null ? "—" : num(st.win, 0) + " %"}</b><small>acierto</small></div><div><b>${st.exp == null ? "—" : (st.exp >= 0 ? "+" : "−") + num(Math.abs(st.exp), 2) + " R"}</b><small>por operación</small></div></div>
+      <div class="lb-a"><button type="button" class="x-ch pri" data-bsgo="${esc(x.id)}">${x.lastTs ? "Continuar" : "Empezar"}</button>${(x.syms || []).length > 1 ? `<select class="xsel" data-bssym="${esc(x.id)}" aria-label="Mercado">${x.syms.map(s => `<option>${esc(s)}</option>`).join("")}</select>` : ""}<a class="x-ch" href="#btanalisis">Ver análisis</a></div></article>`;
+  }
+  function labHero(L) {
+    const B = BT(), now = L.filter(x => { const to = new Date(x.to + "T23:59").getTime(); return !x.lastTs || x.lastTs < to - 864e5; }).sort((a, b) => (b.updated || b.created || 0) - (a.updated || a.created || 0))[0] || L[0];
+    if (!now) return `<div class="lb-hero empty"><div class="lb-ht"><span class="lb-k">Tu laboratorio</span><h2>Comprueba si tu estrategia funciona <em>antes de arriesgar dinero.</em></h2><p>Elige un mercado y unas fechas, avanza vela a vela con el futuro oculto y opera como si fuera en directo. Cada sesión es un experimento con su conclusión.</p>
+      <div class="lb-a"><button type="button" class="x-ch pri" data-bsnewm="clasico">${I(IC.plus, 14, 2)} Nueva sesión</button><button type="button" class="x-ch" data-bsnewm="fondeo">Practicar un reto de fondeo</button></div></div></div>`;
+    const T = B.sessTrades(now.id).slice().sort((a, b) => new Date(a.open_time) - new Date(b.open_time)), st = tradeStats(T);
+    const from = new Date(now.from + "T00:00").getTime(), to = new Date(now.to + "T23:59").getTime(), at = now.lastTs || from, prog = Math.max(0, Math.min(1, (at - from) / (to - from)));
+    let cum = 0; const cv = [[0, 0]]; T.forEach(t => { cum += +t.r || 0; cv.push([Math.max(0, Math.min(1, (new Date(t.open_time) - from) / (to - from))), cum]); });
+    const mn = Math.min(0, ...cv.map(p => p[1])), mx = Math.max(.5, ...cv.map(p => p[1])), rg = (mx - mn) || 1;
+    const pts = cv.map(([x, v]) => `${(x * 100).toFixed(2)},${(86 - (v - mn) / rg * 70).toFixed(2)}`).join(" ");
+    return `<div class="lb-hero"><div class="lb-scr"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><line x1="0" x2="100" y1="${(86 - (0 - mn) / rg * 70).toFixed(2)}" y2="${(86 - (0 - mn) / rg * 70).toFixed(2)}" class="z"/><polyline points="${pts}"/></svg>
+        <div class="lb-fut" style="left:${(prog * 100).toFixed(1)}%"><span>Futuro oculto</span></div>
+        <div class="lb-ctl"><button type="button" class="lb-play" data-bsgo="${esc(now.id)}" aria-label="${now.lastTs ? "Continuar" : "Empezar"} la sesión"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg></button><div class="lb-tb"><i style="width:${(prog * 100).toFixed(1)}%"></i></div><span>${new Date(at).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}</span></div></div>
+      <div class="lb-inf"><span class="lb-k">${now.lastTs ? "Sigue donde lo dejaste" : "Lista para empezar"}</span><h2>${esc(now.q || now.name || "Sesión")}</h2><div class="lb-m">${esc((now.syms || []).join(" · "))} · ${now.mode === "fondeo" ? "reto " + B.k(now.size) : "clásico"} · ${fmtD(from)} – ${fmtD(to)}</div>
+        <div class="lb-n"><div><b>${num(prog * 100, 0)} %</b><small>recorrido</small></div><div><b>${st.n ? fmtMs(st.tot, st.mt) : "—"}</b><small>${st.n} ${st.n === 1 ? "operación" : "operaciones"}</small></div><div><b>${B.hms(now.secs)}</b><small>practicando</small></div></div>
+        <div class="lb-a"><button type="button" class="x-ch pri" data-bsgo="${esc(now.id)}">${now.lastTs ? "Continuar" : "Empezar"}</button></div></div></div>`;
+  }
+  const BS0 = V.backtest;
+  if (BS0) V.backtest = {
+    view(r) {
+      const B = BT(); if (!B) return BS0.view(r);
+      if (!S.btLoaded) B.loadSessions().then(() => { if (location.hash.startsWith("#backtest")) re(); });
+      const f = S.bsF || "todas", all = (S.bts || []).slice().sort((a, b) => (b.updated || b.created || 0) - (a.updated || a.created || 0)), L = all.filter(x => f === "todas" || x.mode === f);
+      return `<div class="stack lb" style="gap:20px">
+        <div class="xhead"><div><h1>Tu laboratorio <em>de estrategias</em></h1><div class="small muted">Cada sesión es un experimento: una pregunta, una muestra y una conclusión</div></div>
+          <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="x-ch" data-bsnewm="fondeo">Reto de fondeo</button><button type="button" class="x-ch pri" data-bsnewm="clasico">${I(IC.plus, 14, 2)} Nueva sesión</button></div></div>
+        ${!S.btLoaded ? `<div class="lb-hero" aria-busy="true"><div class="lb-scr"></div><div class="lb-inf"><span class="lb-k">Cargando tus sesiones…</span></div></div>` : labHero(all)}
+        ${all.length ? `<div class="row" style="gap:14px;flex-wrap:wrap;align-items:center"><span class="lb-k" style="margin:0">Tus experimentos · ${all.length}</span><div class="pills" role="group" aria-label="Filtrar sesiones" style="margin-left:auto">${[["todas", "Todas"], ["clasico", "Clásico"], ["fondeo", "Reto de fondeo"]].map(([a, b]) => `<button type="button" data-bsf="${a}" aria-pressed="${f === a}">${b}</button>`).join("")}</div></div>
+        <div class="lb-g" id="bsList">${L.map(labCard).join("")}<button type="button" class="lb-c lb-new" data-bsnew2><b>+ Nueva pregunta</b><span>¿Qué quieres comprobar? Escríbelo y elige mercado y fechas.</span></button></div>` : ""}
+      </div>`;
+    },
+    bind() {
+      const B = BT(); if (!B) return;
+      $$("[data-bsf]").forEach(b => b.onclick = () => { S.bsF = b.dataset.bsf; re(); });
+      $$("[data-bsnewm]").forEach(b => b.onclick = () => B.drawer(b.dataset.bsnewm));
+      $$("[data-bsnew2]").forEach(b => b.onclick = () => B.drawer());
+      $$("[data-bsgo]").forEach(b => b.onclick = () => { const x = (S.bts || []).find(y => y.id === b.dataset.bsgo); if (!x) return; const sel = $(`[data-bssym="${x.id}"]`); B.run(x, sel ? sel.value : null); });
+      $$("[data-bsdel]").forEach(b => b.onclick = async () => {
+        if (!confirm("¿Borrar esta sesión? Sus operaciones simuladas dejarán de contar en ella.")) return;
+        const id = b.dataset.bsdel, { error } = await sb.from("docs").delete().eq("col", "bts").eq("id", id); if (error) { toast("No se pudo borrar"); return; }
+        S.bts = S.bts.filter(x => x.id !== id); re();
+      });
+    }
+  };
+
   // ---------- Emociones: la volatilidad de tu mente ----------
   const MK = [
     { re: /^(tranquilo)$/i, n: "Mercado en calma", lv: 0, g: "M2 16 C 12 14, 20 15, 30 14 S 48 13, 58 14" },

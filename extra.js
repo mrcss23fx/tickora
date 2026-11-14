@@ -722,7 +722,7 @@
   }
   /* -------- panel «Nueva sesión» -------- */
   function drawer(mode0) {
-    const d = { tab: "crear", mode: mode0 === "fondeo" ? "fondeo" : "clasico", chal: "100000", note: "", name: "", syms: [symList()[0] || "EURUSD"], range: "1m", from: "", to: "", balance: 10000, size: 100000, target: 10, daily: 5, max: 10, risk: S.plan && S.plan.riskPct || 0.5 };
+    const d = { tab: "crear", mode: mode0 === "fondeo" ? "fondeo" : "clasico", chal: "100000", note: "", name: "", q: "", syms: [symList()[0] || "EURUSD"], range: "1m", from: "", to: "", balance: 10000, size: 100000, target: 10, daily: 5, max: 10, risk: S.plan && S.plan.riskPct || 0.5 };
     const setRange = key => { const r = RANGES.find(x => x[0] === key); const end = new Date(); end.setDate(end.getDate() - 1); const st = new Date(end); st.setDate(st.getDate() - r[2] + 1); d.range = key; d.to = dayKey(end); d.from = dayKey(st); };
     setRange("1m"); if (d.mode === "fondeo") { d.size = 100000; d.target = 6; d.daily = 5; d.max = 10; }
     const box = document.createElement("div"); box.className = "xdrawer"; box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true"); box.setAttribute("aria-label", "Nueva sesión de backtesting");
@@ -742,6 +742,7 @@
           ${art(d.mode)}
           <div class="xsec">Identidad de la sesión</div>
           <label class="field"><span>Nombre</span><input class="input" data-k="name" value="${esc(d.name)}" placeholder="p. ej. NAS100 · apertura de Nueva York" maxlength="60"></label>
+          <label class="field"><span>Qué quieres comprobar (opcional)</span><input class="input" data-k="q" value="${esc(d.q)}" placeholder="p. ej. ¿Funciona mi retroceso tras ruptura a las 15:30?" maxlength="120"></label>
           <label class="field"><span>Mercado</span><select class="input" data-k="sym0">${syms.map(s => `<option ${s === d.syms[0] ? "selected" : ""}>${esc(s)}</option>`).join("")}</select></label>
           <div class="field"><span>Más mercados <small class="muted">(hasta 3; cambias entre ellos al continuar)</small></span><div class="row" style="gap:6px;flex-wrap:wrap">${d.syms.slice(1).map(s => `<span class="xchip">${esc(s)}<button type="button" data-rmsym="${esc(s)}" aria-label="Quitar ${esc(s)}">${I(IC.x, 12, 2)}</button></span>`).join("")}${d.syms.length < 4 ? `<select class="xsel" data-addsym aria-label="Añadir mercado"><option value="">+ Añadir</option>${syms.filter(s => !d.syms.includes(s)).map(s => `<option>${esc(s)}</option>`).join("")}</select>` : ""}</div></div>
           <div class="xsec">Periodo</div>
@@ -775,7 +776,7 @@
       if (b.hasAttribute("data-go")) {
         if (!d.from || !d.to || d.from > d.to) { toast("Revisa las fechas: la de inicio tiene que ser anterior a la final"); return; }
         if (!(d.risk > 0 && d.risk <= 10)) { toast("El riesgo por operación tiene que estar entre 0,01 % y 10 %"); return; }
-        const x = { id: "bs" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: d.name.trim() || d.syms[0] + " · " + new Date(d.from).toLocaleDateString("es-ES", { day: "numeric", month: "short" }), mode: d.mode, syms: d.syms, from: d.from, to: d.to, risk: d.risk, balance: d.mode === "fondeo" ? d.size : d.balance, size: d.size, target: d.target, daily: d.daily, max: d.max, created: Date.now(), updated: Date.now() };
+        const x = { id: "bs" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: d.name.trim() || d.syms[0] + " · " + new Date(d.from).toLocaleDateString("es-ES", { day: "numeric", month: "short" }), mode: d.mode, q: (d.q || "").trim(), syms: d.syms, from: d.from, to: d.to, risk: d.risk, balance: d.mode === "fondeo" ? d.size : d.balance, size: d.size, target: d.target, daily: d.daily, max: d.max, created: Date.now(), updated: Date.now() };
         b.disabled = true; const ok = await saveSession(x); b.disabled = false;
         if (!ok) { toast("No se pudo crear la sesión"); return; }
         S.bts = (S.bts || []).concat([x]); close(); run(x);
