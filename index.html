@@ -989,6 +989,7 @@ const ICON={
  btops:'<path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/>',
  btcal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M9 15l2 2 4-4"/>',
  btnotas:'<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h5"/>',
+ estrategias:'<path d="M4 19V5M4 19h16"/><path d="m7 14 4-4 3 3 5-6"/><circle cx="19" cy="7" r="1.5"/>',
  rendimiento:'<path d="M3 12a9 9 0 1 1 18 0"/><path d="M12 12l4-4"/><circle cx="12" cy="12" r="1.5"/><path d="M5 17h14"/>',
  calendario:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M7 14h2M11 14h2M15 14h2M7 17.5h2M11 17.5h2"/>',
  informe:'<path d="M6 3h12v18H6z"/><path d="M9 8h6M9 12h6"/><path d="M9 16l2-2 2 1.5 2-2.5"/>',
@@ -1003,9 +1004,9 @@ const NAV_APPS=[
  ["analizar","Gráfico",[["analizar","Gráfico"]]],
  ["backtest","Backtesting",[["backtest","Sesiones"],["btanalisis","Análisis"],["btops","Operaciones simuladas"],["btnotas","Cuaderno"]]],
  ["resultados","Psicología",[["rendimiento","Rendimiento"],["progreso","Disciplina"],["emociones","Emociones"]]],
- ["diario","Diario",[["diario","Páginas"]]],
+ ["diario","Diario",[["diario","Diario"]]],
  ["cartera","Cuentas y dinero",[["cuentas","Cuentas"],["finanzas","Finanzas"]]],
- ["plan","Mi plan",[["plan","Mi plan"]]],
+ ["plan","Mi plan",[["plan","Reglas"],["estrategias","Estrategias"]]],
  ["asistente","Asistente",[["asistente","Asistente"]]],
  ["calendario","Calendario",[["historial","Historial"],["calendario","Calendario"]]],
  ["ajustes","Ajustes",[["ajustes","Ajustes"]]]];
@@ -1788,6 +1789,7 @@ function paintAnalizar(){
   document.getElementById("anPacto").innerHTML=`<div class="between" style="align-items:center"><h2>Tu pacto revisa la entrada</h2><span class="badge" style="${okN===checks.length?"color:var(--verdeT);background:var(--verdeB)":"color:var(--ambarT);background:var(--ambarB)"}">${okN} de ${checks.length}</span></div>
     <div class="stack" style="gap:7px">${checks.map(c=>`<div class="check">${c.ok?ico("check",16,2.6,"var(--cobalto)"):ico("x",16,2.4,"var(--ambar)")}${c.raw?c.t:esc(c.t)}</div>`).join("")}</div>
     ${okN===checks.length?`<div class="small" style="color:var(--verdeT)">Todo en orden. Si entras, que sea con estos datos.</div>`:`<div class="small" style="color:var(--ambarT)">Hay cosas sin cumplir: mejor esperar a la próxima.</div>`}`;
+  {const UC=window.tkEntryCheck?tkEntryCheck():[];if(UC.length){a.uchk=a.uchk||{};const n=UC.filter((q,i)=>a.uchk[i]).length,rc=window.tkRecFor?tkRecFor("antes"):null;const bx=document.createElement("div");bx.className="an-uc";bx.innerHTML=`<div class="between" style="align-items:center"><b>Tus preguntas antes de entrar</b><span class="badge">${n} de ${UC.length}</span></div>`+UC.map((q,i)=>`<label class="check" style="cursor:pointer"><input type="checkbox" data-uc="${i}" ${a.uchk[i]?"checked":""} style="width:16px;height:16px;margin:0"> ${esc(q)}</label>`).join("")+(rc?`<div class="an-rc">«${esc(rc)}»</div>`:"")+`<a class="small muted" href="#plan">Editar tus preguntas en Mi plan</a>`;document.getElementById("anPacto").appendChild(bx);bx.querySelectorAll("[data-uc]").forEach(c=>c.onchange=()=>{a.uchk[c.dataset.uc]=c.checked;paintAnalizar()})}}
   const st=document.getElementById("anStrat");if(st)st.onchange=()=>{a.strategy=st.checked;paintAnalizar()};
   const cp=document.getElementById("anCopy");if(cp)cp.onclick=async()=>{const txt=`${a.sym} ${a.side==="buy"?"Compra":"Venta"} ${num(r.lots,2)} lotes · Entrada ${a.entry} · Stop ${a.stop}${a.tp?" · Objetivo "+a.tp:""}`;try{await navigator.clipboard.writeText(txt);toast("Copiado")}catch(e){toast(txt)}};
 }
@@ -2245,8 +2247,9 @@ if(SB_OK){
 window.viewPlan=viewPlan;window.viewProgreso=viewProgreso;window.TKAPP={S,sb,esc,SVG,fmtR,fmtV,fmtVt,fmtMoney,mOf,sumM,oneR,dispCur,moneyOn,prefU,CURS,fmtVabs,fmtLim,fmtMs,num,fmtPct,dayKey,todayKey,evaluate,tradeStats,toast,render,spark,MARKETS,symbolsInfo,lsGet,lsSet,acctName,selAcct,FEELS,greet,initials,minOf,minOfDate,money,inSession,MESES_L,NAV_APPS,appOf,ico,isDark,refreshWidgets,effectivePlan,applyAcct,thumb};
 })();
 </script>
-<link rel="stylesheet" href="extra2.css?v=79">
+<link rel="stylesheet" href="extra2.css?v=85">
 <script src="extra.js?v=11"></script>
-<script src="extra2.js?v=63"></script>
+<script src="extra2.js?v=65"></script>
+<script src="extra3.js?v=5"></script>
 </body>
 </html>
