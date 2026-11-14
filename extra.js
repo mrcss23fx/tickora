@@ -343,7 +343,7 @@
 /* ======================= DIARIO ======================= */
 (function () {
   "use strict";
-  const { S, sb, esc, SVG, fmtR, fmtV, fmtVt, fmtMoney, mOf, sumM, oneR, dispCur, moneyOn, prefU, num, fmtPct, dayKey, todayKey, evaluate, tradeStats, toast, render, spark, MARKETS, symbolsInfo, lsGet, lsSet, acctName, selAcct, FEELS, greet, initials, minOf, minOfDate } = window.TKAPP;
+  const { S, sb, esc, SVG, fmtR, fmtV, fmtVt, fmtMs, fmtMoney, mOf, sumM, oneR, dispCur, moneyOn, prefU, num, fmtPct, dayKey, todayKey, evaluate, tradeStats, toast, render, spark, MARKETS, symbolsInfo, lsGet, lsSet, acctName, selAcct, FEELS, greet, initials, minOf, minOfDate } = window.TKAPP;
   const V = window.TK_VIEWS, { $, $$, I, IC, norm, fmtD, empty } = window.TK_X;
   const COVERS = {
     cobalto: "linear-gradient(120deg,#1d3fd6 0%,#3b6bff 45%,#7fa0ff 100%)",
@@ -444,7 +444,8 @@
   }
   function newPage(tpl) {
     const id = "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    const p = { id, title: tpl ? tpl.title : "", cover: "tema", html: tpl ? tpl.html : "", tpl: tpl ? tpl.id : null, created: Date.now(), updated: Date.now() };
+    const p = { id, title: tpl ? tpl.title : "", cover: "tema", html: tpl ? tpl.html : "", tpl: tpl ? tpl.id : null, form: tpl && FORMS[tpl.id] ? formInit(tpl.id) : undefined, created: Date.now(), updated: Date.now() };
+    if (p.form) p.html = formHtml(p);
     S.pages = (S.pages || []).concat([p]); return p;
   }
   const txt = h => { const d = document.createElement("div"); d.innerHTML = h || ""; return d.textContent || ""; };
@@ -513,12 +514,122 @@
     document.addEventListener("keydown", esc_);
     paint(); document.body.appendChild(box); setTimeout(() => { const b = box.querySelector("[data-use]"); b && b.focus(); }, 30);
   }
+  /* -------- fichas: cada plantilla como un formulario para rellenar -------- */
+  const MOODS = ["Tranquilo", "Con ganas", "Nervioso", "Cansado", "Con prisa", "Frustrado", "Eufórico", "Con miedo"];
+  const WHY2 = ["Setup claro", "Esperé la confirmación", "Seguí mi plan", "Me aburría", "Quería recuperar", "Miedo a perderlo", "Impulso"];
+  const DIRS = ["Alcista", "Bajista", "Lateral", "No lo tengo claro"];
+  function planRules() { const p = S.plan || {}; return [`Riesgo por operación: ${p.riskPct != null ? String(p.riskPct).replace(".", ",") : "…"} %`, `Máximo ${p.maxTrades || "…"} operaciones`, `Horario: ${p.start || "…"} – ${p.end || "…"}`, "Stop puesto antes de entrar"]; }
+  function newsToday() { const k = todayKey(); return ((S.news && S.news.events) || []).filter(e => e.impact === "High" && dayKey(e.ts) === k).map(e => `${new Date(e.ts).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} ${e.country} · ${e.title}`).join(" · "); }
+  function daySummary() { const k = todayKey(), C = (S.trades || []).filter(t => t.status === "closed" && t.open_time && dayKey(t.open_time) === k), st = tradeStats(C), g = C.filter(t => evaluate(t).good).length; return C.length ? `${C.length} ${C.length === 1 ? "operación" : "operaciones"} · ${fmtMs(st.tot, st.mt)} · ${g} de ${C.length} dentro del plan` : "Hoy no has operado"; }
+  function weekSummary() { const mon = new Date(); mon.setHours(0, 0, 0, 0); mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7)); const C = (S.trades || []).filter(t => t.status === "closed" && new Date(t.open_time) >= mon), st = tradeStats(C), g = C.filter(t => evaluate(t).good).length; return C.length ? `${fmtMs(st.tot, st.mt)} · ${C.length} operaciones · ${st.win == null ? "—" : Math.round(st.win) + " %"} de acierto · ${g} de ${C.length} dentro del plan` : "Esta semana aún no has operado"; }
+  const recentTrades = () => (S.trades || []).filter(t => t.status === "closed").sort((a, b) => new Date(b.open_time) - new Date(a.open_time)).slice(0, 8);
+  const tLabel = t => `${new Date(t.open_time).toLocaleDateString("es-ES", { day: "numeric", month: "short" })} · ${t.symbol} ${t.side === "buy" ? "Compra" : "Venta"} · ${fmtMs(t.r, mOf(t))}`;
+  const FORMS = {
+    pre: () => [
+      { t: "Contexto del mercado", h: "Hacia dónde va el precio antes de mirar entradas.", f: [{ id: "d1", type: "choice", l: "En diario", o: DIRS }, { id: "h4", type: "choice", l: "En 4 horas", o: DIRS }, { id: "news", type: "text", l: "Noticias fuertes de hoy", ph: "Ej.: 14:30 USD · IPC", pre: newsToday() || "Ninguna fuerte hoy" }] },
+      { t: "Niveles clave", h: "Los precios donde puede pasar algo.", f: [{ id: "maxmin", type: "text", l: "Máximo y mínimo de ayer", ph: "Ej.: 18.420 / 18.250" }, { id: "up", type: "text", l: "Zona que te interesa arriba", ph: "Ej.: 18.480 – 18.500" }, { id: "dn", type: "text", l: "Zona que te interesa abajo", ph: "Ej.: 18.200" }] },
+      { t: "Escenarios", h: "Decide ahora, en frío, qué harás en cada caso.", f: [{ id: "si1", type: "area", l: "Si el precio sube…", ph: "Ej.: si rompe 18.420 y vuelve a tocarlo, compro con el stop bajo la vela de confirmación" }, { id: "si2", type: "area", l: "Si el precio baja…", ph: "Ej.: si pierde 18.250, espero un retroceso y vendo" }, { id: "si3", type: "text", l: "Si no pasa nada de esto", pre: "No opero." }] },
+      { t: "Mis reglas de hoy", h: "Márcalas al repasarlas.", f: [{ id: "rules", type: "checks", o: planRules() }] },
+      { t: "Cómo llego hoy", h: "Si llegas mal, opera menos o solo mira.", f: [{ id: "en", type: "scale", l: "Energía", lo: "Sin fuerzas", hi: "A tope" }, { id: "sleep", type: "choice", l: "Cómo dormí", o: ["Bien", "Regular", "Mal"] }, { id: "worry", type: "text", l: "Algo que me preocupa", ph: "Ej.: nada / el trabajo / la pérdida de ayer" }] }],
+    mente: () => [
+      { t: "Antes de abrir", h: "Marca solo lo que sea verdad.", f: [{ id: "c", type: "checks", o: ["He dormido lo suficiente", "No arrastro una pérdida de ayer", "Tengo claro mi plan de hoy", "Acepto perder 1 R si el mercado me lo quita"] }] },
+      { t: "Cómo me siento", h: "Sin juzgarte: solo mírate.", f: [{ id: "calm", type: "scale", l: "Calma", lo: "Muy nervioso", hi: "Muy tranquilo" }, { id: "mood", type: "choice", l: "Ahora mismo estoy", o: MOODS }, { id: "worry", type: "area", l: "Lo que me puede sacar de mi plan hoy", ph: "Ej.: tengo prisa por recuperar lo de ayer" }] },
+      { t: "Mi decisión", h: "Según lo anterior, ¿cómo vas a operar hoy?", f: [{ id: "dec", type: "choice", o: ["Opero normal", "Opero con medio riesgo", "Una operación menos", "Solo miro"] }] }],
+    sesion: () => [
+      { t: "Resumen", h: "Lo ha puesto Tickora con tus operaciones de hoy.", f: [{ id: "sum", type: "text", pre: daySummary() }] },
+      { t: "Lo que hice bien", h: "Hasta tres cosas, aunque hayas perdido dinero.", f: [{ id: "b1", type: "text", ph: "Ej.: respeté el stop", sug: ["Respeté el stop", "Esperé mi setup", "No pasé de mi máximo", "Paré a la hora", "Acepté la pérdida"] }, { id: "b2", type: "text", ph: "Otra cosa (opcional)" }, { id: "b3", type: "text", ph: "Otra cosa (opcional)" }] },
+      { t: "Una cosa a mejorar", h: "Solo una. Si pones muchas, no mejorarás ninguna.", f: [{ id: "m", type: "text", ph: "Ej.: esperar 10 minutos después de perder", sug: ["Esperar tras perder", "Entrar con menos prisa", "No mover el stop", "Operar menos"] }] },
+      { t: "Emoción dominante", h: "La que más pesó hoy.", f: [{ id: "emo", type: "choice", o: MOODS }] },
+      { t: "¿Repetiría el día?", h: "Mirando el proceso, no el dinero.", f: [{ id: "rep", type: "choice", o: ["Sí", "Casi", "No"] }, { id: "why", type: "area", l: "Por qué", ph: "Ej.: sí, porque esperé y solo entré en mi setup" }] }],
+    trade: () => [
+      { t: "La operación", h: "Elige una de tus últimas operaciones y se rellenan los datos.", f: [{ id: "op", type: "trade" }, { id: "dat", type: "text", l: "Datos", ph: "Mercado, dirección, entrada, stop, objetivo y resultado" }] },
+      { t: "Por qué entré", h: "Qué viste en el gráfico. Si fue por emoción, dilo.", f: [{ id: "why", type: "multi", o: WHY2 }, { id: "wtx", type: "area", ph: "Ej.: el precio rompió el máximo de la mañana y volvió a tocarlo" }] },
+      { t: "Captura", h: "Pega aquí la imagen del gráfico con Ctrl+V (⌘+V en Mac) o elígela.", f: [{ id: "img", type: "image" }] },
+      { t: "Gestión", h: "Qué hiciste mientras estaba abierta.", f: [{ id: "g", type: "multi", o: ["No toqué nada", "Moví el stop a favor", "Moví el stop en contra", "Cerré antes de tiempo", "Añadí más tamaño"] }, { id: "gtx", type: "area", ph: "Ej.: cerré la mitad en +1 R y dejé el resto" }] },
+      { t: "¿Cumplí el plan?", h: "Sí o no. Y qué aprendo.", f: [{ id: "ok", type: "choice", o: ["Sí", "No"] }, { id: "learn", type: "area", l: "Lo que aprendo", ph: "Ej.: cuando entro sin confirmación, suelo salir en pérdida" }] }],
+    semana: () => [
+      { t: "La semana en números", h: "Lo ha puesto Tickora.", f: [{ id: "n", type: "text", pre: weekSummary() }] },
+      { t: "Mejor y peor día", h: "Qué los hizo distintos.", f: [{ id: "best", type: "text", l: "Mi mejor día", ph: "Ej.: el jueves, esperé y solo entré dos veces" }, { id: "worst", type: "text", l: "Mi peor día", ph: "Ej.: el miércoles, entré con prisa tras perder" }] },
+      { t: "El patrón que se repite", h: "Lo que te pasó más de una vez, bueno o malo.", f: [{ id: "pat", type: "area", ph: "Ej.: después de las 17:00 me aburro y entro sin setup" }] },
+      { t: "Un objetivo de proceso", h: "Algo que dependa de ti, no del dinero.", f: [{ id: "goal", type: "text", ph: "Ej.: no paso de 3 operaciones", sug: ["No paso de mi máximo", "Paro a la hora", "Espero 10 min tras perder", "Solo mi setup"] }] }],
+    plan: () => [
+      { t: "Mercados", h: "Los que operas y conoces bien. Cuantos menos, mejor.", f: [{ id: "mk", type: "text", ph: "Ej.: NAS100 y EURUSD" }] },
+      { t: "Horario", h: "Viene de Mi plan.", f: [{ id: "hr", type: "text", pre: `${(S.plan || {}).start || "…"} – ${(S.plan || {}).end || "…"}` }] },
+      { t: "Mis setups", h: "Cómo entras. También puedes crearlos en Mi plan › Estrategias.", f: [{ id: "sa", type: "area", l: "Setup A", ph: "Ej.: ruptura del máximo de la mañana y retroceso al nivel" }, { id: "sb", type: "area", l: "Setup B (opcional)", ph: "Ej.: rechazo en zona de interés con vela grande" }] },
+      { t: "Gestión del riesgo", h: "Viene de Mi plan; ajústalo allí.", f: [{ id: "rk", type: "checks", o: planRules().slice(0, 3) }] },
+      { t: "Reglas si → entonces", h: "Qué haces cuando pasa algo concreto.", f: [{ id: "r1", type: "pair", ph: ["pierdo dos seguidas", "me levanto 15 minutos"] }, { id: "r2", type: "pair", ph: ["la entrada no está en mi estrategia", "no entro y lo apunto"] }, { id: "r3", type: "pair", ph: ["llego a mi objetivo del día", "cierro la plataforma"] }] }],
+    perdida: () => [
+      { t: "Para", h: "Hazlo de verdad y marca cada casilla.", f: [{ id: "c", type: "checks", o: ["Me he levantado de la silla", "He respirado diez veces despacio", "He mirado si la pérdida respetó el plan"] }] },
+      { t: "¿Fue una pérdida buena?", h: "Si cumpliste tu plan, sí. Escríbelo para que tu cabeza lo crea.", f: [{ id: "good", type: "choice", o: ["Sí, cumplí mi plan", "No, me salté algo", "No lo sé"] }, { id: "why", type: "area", ph: "Ej.: entré en mi setup, con stop, y el mercado fue en contra. Es parte del juego." }] },
+      { t: "Cómo me siento", h: "Ponle nombre: baja la intensidad.", f: [{ id: "mood", type: "choice", o: ["Tranquilo", "Molesto", "Frustrado", "Con ganas de recuperar", "Con miedo"] }] },
+      { t: "Antes de la siguiente", h: "Qué tiene que pasar para volver a entrar.", f: [{ id: "next", type: "text", ph: "Ej.: esperar 15 minutos y solo mi setup A", sug: ["Esperar 15 minutos", "Solo mi setup", "Hoy ya no opero", "Mitad de riesgo"] }] }],
+    reto: () => [
+      { t: "El reto", h: "Copia las reglas de la empresa.", f: [{ id: "co", type: "text", l: "Empresa y tamaño", ph: "Ej.: FTMO 100.000 $" }, { id: "tg", type: "text", l: "Objetivo", ph: "Ej.: 10 %" }, { id: "dl", type: "text", l: "Pérdida diaria máxima", ph: "Ej.: 5 %" }, { id: "ml", type: "text", l: "Pérdida total máxima", ph: "Ej.: 10 %" }, { id: "days", type: "text", l: "Días mínimos y plazo", ph: "Ej.: 4 días mínimos, sin plazo" }] },
+      { t: "En R, con mi riesgo", h: `Con tu riesgo de ${(S.plan || {}).riskPct != null ? String(S.plan.riskPct).replace(".", ",") : "…"} % por operación.`, f: [{ id: "inr", type: "area", ph: "Ej.: objetivo 20 R · pérdida diaria 10 R · total 20 R" }] },
+      { t: "Mi ritmo", h: "Sin prisa: el reto se pierde por correr.", f: [{ id: "pace", type: "choice", o: ["2 semanas", "1 mes", "2 meses", "Sin fecha"] }, { id: "ptx", type: "text", l: "Cuánto necesito al día", ph: "Ej.: 1 R al día, máximo 2 operaciones" }] }],
+    bt: () => [
+      { t: "Hipótesis", h: "La pregunta que quieres responder.", f: [{ id: "q", type: "area", ph: "Ej.: ¿funciona mi ruptura con retroceso en NAS100 a las 15:30?" }] },
+      { t: "Condiciones", h: "No las cambies a mitad de la prueba.", f: [{ id: "mk", type: "text", l: "Mercado y marco", ph: "Ej.: NAS100 · 5 minutos" }, { id: "per", type: "text", l: "Periodo", ph: "Ej.: enero a junio de 2025" }, { id: "in", type: "area", l: "Reglas de entrada", ph: "Ej.: ruptura clara + retroceso + vela de confirmación" }, { id: "out", type: "area", l: "Reglas de salida", ph: "Ej.: stop bajo la vela, objetivo 2 R" }] },
+      { t: "Resultados", h: "Cópialos de Backtesting › Análisis.", f: [{ id: "res", type: "text", ph: "Ej.: 50 operaciones · 54 % acierto · +18 R · peor racha −5 R" }] },
+      { t: "Conclusión", h: "Honesta, aunque no te guste.", f: [{ id: "con", type: "choice", o: ["Funciona", "No funciona", "Necesito más operaciones"] }, { id: "ctx", type: "area", ph: "Ej.: funciona, pero solo en la primera hora" }] }]
+  };
+  const useForm = p => !!(p && p.form && FORMS[p.tpl] && p.mode !== "doc" && !p.isTpl);
+  function formInit(tplId) { const S0 = FORMS[tplId](), v = {}; S0.forEach(s => s.f.forEach(f => { if (f.pre != null) v[f.id] = f.pre; })); return { v }; }
+  function formView(p) {
+    const sch = FORMS[p.tpl](), v = (p.form && p.form.v) || {}, ro = S.pgRead;
+    const fld = f => {
+      const val = v[f.id], lab = f.l ? `<label class="fm-l" for="fm-${f.id}">${esc(f.l)}</label>` : "";
+      const sugs = f.sug && !ro ? `<div class="fm-sg">${f.sug.map(x => `<button type="button" class="fm-chip sm" data-fsug="${f.id}" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div>` : "";
+      switch (f.type) {
+        case "text": return `<div class="fm-f">${lab}<input class="fm-in" id="fm-${f.id}" data-f="${f.id}" value="${esc(val || "")}" placeholder="${esc(f.ph || "Escribe aquí…")}" ${ro ? "readonly" : ""}>${sugs}</div>`;
+        case "area": return `<div class="fm-f">${lab}<textarea class="fm-in fm-ta" id="fm-${f.id}" data-f="${f.id}" rows="2" placeholder="${esc(f.ph || "Escribe aquí…")}" ${ro ? "readonly" : ""}>${esc(val || "")}</textarea>${sugs}</div>`;
+        case "choice": case "multi": { const on = f.type === "multi" ? new Set(val || []) : new Set(val ? [val] : []); return `<div class="fm-f">${lab}<div class="fm-ch" role="group">${f.o.map(o => `<button type="button" class="fm-chip${on.has(o) ? " on" : ""}" data-fc="${f.id}" data-m="${f.type === "multi" ? 1 : ""}" data-v="${esc(o)}" aria-pressed="${on.has(o)}" ${ro ? "disabled" : ""}>${esc(o)}</button>`).join("")}</div></div>`; }
+        case "checks": { const on = new Set(val || []); return `<div class="fm-f">${lab}<div class="fm-ck">${f.o.map((o, i) => `<button type="button" class="fm-cb${on.has(i) ? " on" : ""}" data-fk="${f.id}" data-i="${i}" aria-pressed="${on.has(i)}" ${ro ? "disabled" : ""}><i aria-hidden="true"></i>${esc(o)}</button>`).join("")}</div></div>`; }
+        case "scale": return `<div class="fm-f">${lab}<div class="fm-sc">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="fm-n${+val === n ? " on" : ""}" data-fs="${f.id}" data-v="${n}" aria-pressed="${+val === n}" ${ro ? "disabled" : ""}>${n}</button>`).join("")}</div><div class="fm-sl"><span>${esc(f.lo || "")}</span><span>${esc(f.hi || "")}</span></div></div>`;
+        case "pair": { const a = (val || ["", ""]); return `<div class="fm-f fm-pr"><span class="fm-si">Si</span><input class="fm-in" data-fp="${f.id}" data-i="0" value="${esc(a[0] || "")}" placeholder="${esc(f.ph[0])}" ${ro ? "readonly" : ""}><span class="fm-si">→</span><input class="fm-in" data-fp="${f.id}" data-i="1" value="${esc(a[1] || "")}" placeholder="${esc(f.ph[1])}" ${ro ? "readonly" : ""}></div>`; }
+        case "trade": { const L = recentTrades(); return L.length ? `<div class="fm-f"><div class="fm-ch">${L.map(t => `<button type="button" class="fm-chip${val === t.id ? " on" : ""}" data-ft="${f.id}" data-v="${esc(t.id)}" ${ro ? "disabled" : ""}>${esc(tLabel(t))}</button>`).join("")}</div></div>` : `<p class="fm-h">Aún no tienes operaciones cerradas: escribe los datos a mano.</p>`; }
+        case "image": return `<div class="fm-f">${val ? `<img class="fm-img" src="${esc(val)}" alt="Captura del gráfico">${ro ? "" : `<button type="button" class="fm-chip sm" data-fimgdel="${f.id}">Quitar imagen</button>`}` : ro ? `<p class="fm-h">Sin captura.</p>` : `<button type="button" class="fm-drop" data-fimg="${f.id}"><b>Pega la captura aquí</b><span>Ctrl+V (⌘+V en Mac) o toca para elegir una imagen</span></button>`}</div>`;
+      }
+      return "";
+    };
+    const done = sch.filter(s => s.f.some(f => { const x = v[f.id]; return Array.isArray(x) ? x.some(Boolean) : x != null && String(x).trim() !== "" && f.pre !== x; })).length;
+    return `<div class="fm" id="pgForm"><div class="fm-pg"><span>${done} de ${sch.length} apartados</span><i><b style="width:${Math.round(done / sch.length * 100)}%"></b></i>${ro ? "" : `<button type="button" class="fm-free" data-fdoc title="Pasa la ficha a una página libre que puedes escribir como quieras">Escribir libre</button>`}</div>
+      ${sch.map((s, i) => `<section class="fm-s"><div class="fm-sh"><span class="fm-no">${i + 1}</span><div><h3>${esc(s.t)}</h3>${s.h ? `<p class="fm-h">${esc(s.h)}</p>` : ""}</div></div>${s.f.map(fld).join("")}</section>`).join("")}</div>`;
+  }
+  function formHtml(p) {
+    const sch = FORMS[p.tpl](), v = (p.form && p.form.v) || {}, out = [];
+    sch.forEach(s => { out.push(`<h2>${esc(s.t)}</h2>`); s.f.forEach(f => { const x = v[f.id], lab = f.l ? `<b>${esc(f.l)}:</b> ` : "";
+      if (f.type === "checks") out.push(`<ul class="todo">${f.o.map((o, i) => `<li${(x || []).includes(i) ? ' class="done"' : ""}>${esc(o)}</li>`).join("")}</ul>`);
+      else if (f.type === "image") { if (x) out.push(`<p><img src="${x}" alt="Captura del gráfico"></p>`); }
+      else if (f.type === "pair") { if (x && (x[0] || x[1])) out.push(`<p>Si ${esc(x[0] || "…")} → ${esc(x[1] || "…")}</p>`); }
+      else if (f.type === "trade") { const t = (S.trades || []).find(y => y.id === x); if (t) out.push(`<p>${esc(tLabel(t))}</p>`); }
+      else if (f.type === "multi") { if (x && x.length) out.push(`<p>${lab}${esc(x.join(", "))}</p>`); }
+      else if (x != null && String(x).trim()) out.push(`<p>${lab}${esc(String(x)).replace(/\n/g, "<br>")}</p>`); }); });
+    return out.join("");
+  }
+  function bindForm(p, onChange) {
+    const box = $("#pgForm"); if (!box || S.pgRead) return;
+    const v = p.form.v, ch = (repaint) => { onChange(); if (repaint) { const y = scrollY; S.lastView = null; render(); scrollTo(0, y); } };
+    box.querySelectorAll(".fm-ta").forEach(ta => { const g = () => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; }; g(); ta.addEventListener("input", g); });
+    box.querySelectorAll("[data-f]").forEach(i => i.addEventListener("input", () => { v[i.dataset.f] = i.value; ch(); }));
+    box.querySelectorAll("[data-fp]").forEach(i => i.addEventListener("input", () => { const a = v[i.dataset.fp] || ["", ""]; a[+i.dataset.i] = i.value; v[i.dataset.fp] = a; ch(); }));
+    box.querySelectorAll("[data-fsug]").forEach(b => b.onclick = () => { const i = box.querySelector(`[data-f="${b.dataset.fsug}"]`); if (!i) return; i.value = i.value.trim() ? i.value.trim().replace(/\.?$/, ". ") + b.dataset.v : b.dataset.v; v[i.dataset.f] = i.value; ch(); });
+    box.querySelectorAll("[data-fc]").forEach(b => b.onclick = () => { const id = b.dataset.fc, o = b.dataset.v; if (b.dataset.m) { const a = new Set(v[id] || []); a.has(o) ? a.delete(o) : a.add(o); v[id] = [...a]; } else v[id] = v[id] === o ? "" : o; ch(true); });
+    box.querySelectorAll("[data-fk]").forEach(b => b.onclick = () => { const id = b.dataset.fk, i = +b.dataset.i, a = new Set(v[id] || []); a.has(i) ? a.delete(i) : a.add(i); v[id] = [...a]; ch(true); });
+    box.querySelectorAll("[data-fs]").forEach(b => b.onclick = () => { v[b.dataset.fs] = +b.dataset.v === +v[b.dataset.fs] ? null : +b.dataset.v; ch(true); });
+    box.querySelectorAll("[data-ft]").forEach(b => b.onclick = () => { const id = b.dataset.ft, t = (S.trades || []).find(y => y.id === b.dataset.v); v[id] = v[id] === b.dataset.v ? "" : b.dataset.v; if (t && v[id]) { v.dat = [t.symbol, t.side === "buy" ? "Compra" : "Venta", t.open_price != null ? "entrada " + t.open_price : "", t.sl != null ? "stop " + t.sl : "", t.tp != null ? "objetivo " + t.tp : "", fmtMs(t.r, mOf(t))].filter(Boolean).join(" · "); const ev = evaluate(t); v.ok = ev.good ? "Sí" : "No"; } ch(true); });
+    const setImg = async f => { if (!f) return; v.img = await compress(f); ch(true); };
+    box.querySelectorAll("[data-fimg]").forEach(b => b.onclick = () => { const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; inp.onchange = () => setImg(inp.files[0]); inp.click(); });
+    box.querySelectorAll("[data-fimgdel]").forEach(b => b.onclick = () => { v[b.dataset.fimgdel] = ""; ch(true); });
+    if (FORMS[p.tpl]().some(s => s.f.some(f => f.type === "image"))) box.addEventListener("paste", e => { const it = [...((e.clipboardData || {}).items || [])].find(x => x.type.startsWith("image/")); if (it) { e.preventDefault(); setImg(it.getAsFile()); } });
+    const fd = box.querySelector("[data-fdoc]"); if (fd) fd.onclick = () => { if (!confirm("La ficha se convertirá en una página libre con lo que has escrito. Podrás editarla como quieras, pero ya no como ficha. ¿Seguir?")) return; p.mode = "doc"; onChange(); setTimeout(() => { S.lastView = null; render(); }, 50); };
+  }
   /* -------- editor -------- */
   const SLASH = [["h1", "Título grande", "H1", "Para el título de una parte grande"], ["h2", "Título", "H2", "Para separar secciones"], ["p", "Texto", "¶", "Escribir normal"], ["ul", "Lista", "•", "Puntos sueltos"], ["ol", "Lista numerada", "1.", "Pasos en orden"], ["todo", "Casillas para marcar", "☐", "Tu checklist: márcalas al cumplirlas"], ["quote", "Cita", "❝", "Destacar una frase importante"], ["hr", "Separador", "—", "Una línea para dividir"], ["img", "Imagen", "▣", "Una captura del gráfico (o pégala con Ctrl+V)"]];
   function editorView(p) {
     const day = p.day || null;
     const th0 = themeOf(p) || themeOf(Object.assign({}, p, { coverSet: false }));
-    return `<div class="pged ${S.pgRead ? "reading" : ""} pg-acc" style="--c:${MCOL[th0.cat] || MCOL.libre}">
+    return `<div class="pged ${S.pgRead ? "reading" : ""} pg-acc${useForm(p) ? " fm-on" : ""}" style="--c:${MCOL[th0.cat] || MCOL.libre}">
       <div class="pgbar"><a href="#diario" class="row" style="gap:6px;text-decoration:none;font-weight:600;font-size:14px">${I(IC.left, 16, 2)} Diario</a><span class="muted small">/</span><span class="small" style="max-width:30vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.title || "Sin título")}</span>
         <span style="flex:1"></span><span class="small muted" id="pgSaved">${I(IC.check, 14, 2.2)} Guardado</span>
         ${p.isTpl ? "" : `<button type="button" class="chipb" id="pgDay" aria-pressed="${!!day}" title="Une esta página a un día: saldrá en el informe y en el calendario de ese día">${I(IC.check, 13, 2.4)} ${day ? "Unida al " + new Date(day + "T12:00").toLocaleDateString("es-ES", { day: "numeric", month: "short" }) : "Unir a hoy"}</button>`}
@@ -529,10 +640,10 @@
         return th ? `<div class="pgcoverbig pgtema-w" style="--c:${MCOL[th.cat]}">${temaCover(th, true)}${picker}</div>` : `<div class="pgcoverbig" style="background:${COVERS[p.cover] || COVERS.cobalto}">${picker}</div>`; })()}
       <div class="pgwho"><span class="pgav">${esc(initials())}</span><div><b>${esc(S.name || "")}</b><div class="small muted">Creada el ${fmtD(p.created)}${p.isTpl ? " · plantilla" : ""}</div></div><span style="flex:1"></span>
         <div class="row pgtools" style="gap:6px"><button type="button" class="btn2" id="pgTpl" style="height:34px" title="Añade al final las preguntas de una plantilla">${I('<rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14M8 8v9"/>', 15)} Añadir preguntas</button><button type="button" class="btn2" id="pgBlocks" style="height:34px" title="Añade listas, casillas, citas o imágenes">${I('<rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="11" y="3" width="6" height="6" rx="1.5"/><rect x="3" y="11" width="6" height="6" rx="1.5"/><path d="M14 11v6M11 14h6"/>', 15)} Insertar</button></div></div>
-      ${!S.pgRead && !lsGet("tk-edhelp", false) ? `<div class="pghelp"><div><b>Cómo funciona</b><span>Escribe como en cualquier documento. Pulsa <kbd>/</kbd> o «Insertar» para añadir listas, casillas o imágenes. Pega capturas con <kbd>Ctrl</kbd>+<kbd>V</kbd>. Se guarda solo.</span></div><button type="button" class="x-ch" id="pgHelpOk">Entendido</button></div>` : ""}
-      ${(() => { const m = meta(p.tpl); return !S.pgRead && m.guide ? `<details class="pgguide" ${txt(p.html).replace(/\s+/g, " ").length < (TPL().find(t => t.id === p.tpl) ? txt(TPL().find(t => t.id === p.tpl).html).length + 60 : 400) ? "open" : ""}><summary><span><b>Cómo rellenar esta página</b><small>${esc(m.time)} · ${esc(m.when)}</small></span></summary><p>${esc(m.why)}</p><ol>${m.guide.map(([a, b]) => `<li><b>${esc(a)}</b><span>${esc(b)}</span></li>`).join("")}</ol></details>` : ""; })()}
+      ${!S.pgRead && !useForm(p) && !lsGet("tk-edhelp", false) ? `<div class="pghelp"><div><b>Cómo funciona</b><span>Escribe como en cualquier documento. Pulsa <kbd>/</kbd> o «Insertar» para añadir listas, casillas o imágenes. Pega capturas con <kbd>Ctrl</kbd>+<kbd>V</kbd>. Se guarda solo.</span></div><button type="button" class="x-ch" id="pgHelpOk">Entendido</button></div>` : ""}
+      ${(() => { const m = meta(p.tpl); return !S.pgRead && m.guide && !useForm(p) ? `<details class="pgguide" ${txt(p.html).replace(/\s+/g, " ").length < (TPL().find(t => t.id === p.tpl) ? txt(TPL().find(t => t.id === p.tpl).html).length + 60 : 400) ? "open" : ""}><summary><span><b>Cómo rellenar esta página</b><small>${esc(m.time)} · ${esc(m.when)}</small></span></summary><p>${esc(m.why)}</p><ol>${m.guide.map(([a, b]) => `<li><b>${esc(a)}</b><span>${esc(b)}</span></li>`).join("")}</ol></details>` : ""; })()}
       <input class="pgtitle" id="pgTitle" placeholder="Sin título" value="${esc(p.title || "")}" aria-label="Título de la página" maxlength="120" ${S.pgRead ? "readonly" : ""}>
-      <div class="pgdoc" id="pgDoc" contenteditable="${S.pgRead ? "false" : "true"}" data-ph="Escribe, o pulsa «/» para comandos" spellcheck="true">${clean(p.html)}</div>
+      ${useForm(p) ? formView(p) + `<div class="pgdoc" id="pgDoc" hidden>${clean(p.html)}</div>` : `<div class="pgdoc" id="pgDoc" contenteditable="${S.pgRead ? "false" : "true"}" data-ph="Escribe, o pulsa «/» para comandos" spellcheck="true">${clean(p.html)}</div>`}
       <div class="slash" id="pgSlash" hidden role="listbox" aria-label="Comandos"></div>
       <div class="imgbar" id="pgImgBar" hidden role="toolbar" aria-label="Imagen">
         ${[["s", "Pequeña", "S"], ["m", "Mediana", "M"], ["l", "Grande", "L"], ["f", "Ancho completo", '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 7V3h4M17 7V3h-4M3 13v4h4M17 13v4h-4"/></svg>']].map(([k, l, t]) => `<button type="button" data-isz="${k}" title="${l}" aria-label="${l}">${t}</button>`).join("")}<span class="imgsep"></span>
@@ -555,6 +666,7 @@
     const mark = () => { dirty = true; saved.innerHTML = "Guardando…"; clearTimeout(t); t = setTimeout(flush, 700); };
     const flush = async () => { if (!dirty) return; dirty = false; p.title = title.value.trim(); p.html = clean(doc.innerHTML).replace(/ imgsel"/g, '"'); const ok = await savePage(p); saved.innerHTML = ok ? `${I(IC.check, 14, 2.2)} Guardado` : "No se pudo guardar"; };
     S.pgFlush = flush;
+    if (useForm(p)) bindForm(p, () => { doc.innerHTML = formHtml(p); mark(); });
     title.oninput = mark; title.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); doc.focus(); } };
     doc.addEventListener("input", () => { mark(); checkSlash(); });
     const exec = (c, v) => document.execCommand(c, false, v);
