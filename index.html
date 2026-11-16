@@ -984,6 +984,8 @@ const ICON={
  recursos:'<path d="M5 4h11a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5"/><path d="M8 9h7M8 13h7M8 17h4"/><path d="M4 8h-1v11a2 2 0 0 0 2 2"/>',
  ajustes:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
  resultados:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+ tu:'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>',
+ decis:'<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/>',
  tu:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
  btanalisis:'<path d="M4 19V9M10 19V5M16 19v-6M3 19h18"/><circle cx="18" cy="6" r="2.5"/>',
  btops:'<path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/>',
@@ -1003,21 +1005,18 @@ const NAV_APPS=[
  ["inicio","Inicio",[["inicio","Inicio"]]],
  ["hoy","Hoy",[["hoy","Mi día"],["noticias","Noticias"]]],
  ["analizar","Gráfico",[["analizar","Gráfico"]]],
- ["backtest","Backtesting",[["backtest","Sesiones"],["btanalisis","Análisis"],["btops","Operaciones simuladas"],["btnotas","Cuaderno"]]],
- ["resultados","Psicología",[["rendimiento","Rendimiento"],["progreso","Disciplina"],["emociones","Emociones"]]],
  ["diario","Diario",[["diario","Diario"]]],
- ["aprender","Aprender",[["aprender","Tus decisiones"],["errores","Tus errores"]]],
- ["cartera","Cuentas y dinero",[["cuentas","Cuentas"],["finanzas","Finanzas"]]],
- ["plan","Mi plan",[["plan","Reglas"],["estrategias","Estrategias"]]],
- ["asistente","Asistente",[["asistente","Asistente"]]],
- ["calendario","Calendario",[["historial","Historial"],["calendario","Calendario"]]],
- ["ajustes","Ajustes",[["ajustes","Ajustes"]]]];
-/* páginas que existen pero no salen en el menú (se llega desde otras) */
-const NAV_HIDDEN=["informe","btcal","grupo"];
+ ["resultados","Psicología",[["aprender","Tus decisiones"],["errores","Tus errores"],["rendimiento","Tus números"],["progreso","Disciplina"],["emociones","Emociones"]]],
+ ["calendario","Operaciones",[["historial","Historial"],["calendario","Calendario"]]],
+ ["backtest","Backtesting",[["backtest","Sesiones"],["btanalisis","Análisis"],["btops","Operaciones simuladas"]]],
+ ["tu","Tú",[["plan","Mi plan"],["estrategias","Estrategias"],["cuentas","Cuentas"],["finanzas","Finanzas"],["ajustes","Ajustes"]]]];
+/* páginas que existen pero no salen en el menú (se llega desde otras o desde el buscador) */
+const NAV_HIDDEN=["informe","btcal","grupo","asistente","btnotas"];
 const NAV_GROUPS=NAV_APPS.map(a=>[a[1],a[2]]);
 const appOf=v=>NAV_APPS.find(a=>a[2].some(x=>x[0]===v));
 const NAV_SIDE=NAV_GROUPS.flatMap(g=>g[1]).concat(NAV_HIDDEN.map(k=>[k,k]));
-const FEELS=["Tranquilo","Confiado","Paciente","Con prisa","Con miedo","Ansioso","Eufórico","Frustrado","Con ganas de recuperar","FOMO","Cansado","Aburrido"];
+/* (16-nov) UNA sola lista de emociones para toda la app (chequeo, operaciones, registro y Emociones). Las anotadas con la lista antigua se siguen viendo. */
+const FEELS=["Tranquilo","Con ganas","Nervioso","Con prisa","Con miedo","Frustrado","Eufórico","Cansado","Aburrido"];
 
 /* ---------- plan (los cambios valen desde mañana) ---------- */
 function effectivePlan(){
@@ -1206,9 +1205,9 @@ function bridgeChip(){
 
 /* ---------- pantallas ---------- */
 function initials(){const n=(S.name||"").trim().split(/\s+/);return ((n[0]||"?")[0]+(n[1]?n[1][0]:(n[0]||"?")[1]||"")).toUpperCase()}
-function pgEye(view){const G={hoy:["Operar","#86a9ff"],analizar:["Operar","#86a9ff"],backtest:["Operar","#86a9ff"],plan:["Operar","#86a9ff"],resultados:["Revisar","#c49dff"],calendario:["Revisar","#c49dff"],diario:["Revisar","#c49dff"],cartera:["Tú","#5fd4c0"],asistente:["Tú","#5fd4c0"],ajustes:["Tú","#5fd4c0"]};
+function pgEye(view){const G={hoy:["Operar","#86a9ff"],analizar:["Operar","#86a9ff"],backtest:["Operar","#86a9ff"],plan:["Operar","#86a9ff"],resultados:["Revisar","#c49dff"],calendario:["Revisar","#c49dff"],diario:["Revisar","#c49dff"],cartera:["Tú","#5fd4c0"],asistente:["Tú","#5fd4c0"],ajustes:["Tú","#5fd4c0"],tu:["Tú","#5fd4c0"]};
   const a=typeof appOf==="function"?appOf(view):null,k=a?a[0]:view,g=G[k]||["Tickora","#9a9aa3"],n=a?a[1]:"";
-  return ` data-grp="${k}" style="--pg:${g[1]};--pg-eye:'${(g[0]+(n?" · "+n:"")).replace(/'/g,"")}'"`}
+  return ` data-grp="${k}" style="--pg:${g[1]};--pg-eye:'${(g[0]+(n&&n!==g[0]?" · "+n:"")).replace(/'/g,"")}'"`}
 function homeShell(content,view){
   const cv=view||"inicio",nav=NAV.map(([k,l])=>`<a href="#${k}" ${cv===k||(k==="mas"&&!NAV.some(n=>n[0]===cv))?'aria-current="page"':""}>${ico(k)}${l}</a>`).join("");
   return `<div class="hbshell"><header class="hbtop"><div class="hbtop-l"><button type="button" class="hbtb navd-b" data-navd aria-label="Ver todas las categorías" title="Todas las categorías">${SVG('<path d="M3.5 6h13M3.5 10h13M3.5 14h9"/>',18)}</button><a class="brand2" href="#inicio" aria-label="Tickora, inicio"><svg class="tlogo" viewBox="0 0 28 24" aria-hidden="true"><path d="M2 3h24l-2.6 4.6H4.6z" fill="var(--cobalto)"/><path d="M11.2 9.4h6.2L13.6 21H7.4z" fill="var(--cobalto)"/><path d="M19 9.4h4.2L21.6 12H17.5z" fill="var(--cobalto2)" opacity=".8"/></svg><span>TICKORA</span></a></div>
@@ -1531,7 +1530,7 @@ function viewHoy(){
           ${k3("Aún puedes perder",`<div class="k3b">${fmtVabs(margin)}</div><div class="k3s">tu límite del día es ${fmtLim(p.dayLimitR)}</div>`,"")}
         </div>
         ${normas}
-        <div class="card" style="padding:12px 16px"><div class="between" style="padding-bottom:2px"><h2>Operaciones de hoy</h2><a class="small" href="#informe">Ver informe del día</a></div>${ops||`<div class="small muted" style="padding:10px 0">Aún no has operado hoy. Llegan solas desde MetaTrader.</div>`}</div>
+        <div class="card" style="padding:12px 16px"><div class="between" style="padding-bottom:2px"><h2>Operaciones de hoy</h2><a class="small" href="#informe">Ver el día en tu libro</a></div>${ops||`<div class="small muted" style="padding:10px 0">Aún no has operado hoy. Llegan solas desde MetaTrader.</div>`}</div>
       </div>
       <div class="stack hmid" style="gap:16px">
         ${ticketMini(today,dayR,p)}
@@ -1600,8 +1599,7 @@ function viewProgreso(){
   const perL=P==="1M"?"este mes":"los últimos "+nM+" meses";
   return `<div class="stack">
     <div class="ptop"><div class="stack" style="gap:4px"><h1>Disciplina</h1><div class="small muted">Cuánto cumples tu plan en ${perL}. Se juzga el proceso, no el resultado.</div></div><div class="pseg" role="group" aria-label="Periodo">${["1M","3M","6M"].map(k=>`<button type="button" data-per="${k}" aria-pressed="${P===k}">${k}</button>`).join("")}</div></div>
-    <div class="dsc-top">
-      <div class="card stack" style="gap:4px"><b style="font-size:15px">Nota de disciplina</b><div class="small muted">Stop, riesgo, horario, paciencia, objetivo y constancia</div>${radarHex(sc)}</div>
+    <div class="dsc-top one">
       <div class="dsc-k">
         <div class="pkc"><span>Dentro del plan</span><b>${pc==null?"—":pc+" %"}</b><span>${evs.length?good+" de "+evs.length+" operaciones":"sin operaciones en "+perL}</span><div class="k3v">${ring(pc)}</div></div>
         <div class="pkc"><span>Racha de días en plan</span><b>${info.cur} día${info.cur===1?"":"s"}</b><span>tu mejor racha: ${info.best}</span></div>
@@ -1611,18 +1609,12 @@ function viewProgreso(){
     <div class="grid2 even">
       <div class="card stack" style="gap:10px"><div class="between"><h2>Normas que más rompes</h2><span class="small muted">${perL}</span></div>
         ${FL.length?FL.slice(0,6).map(([k,n])=>`<div class="dsc-f"><div class="between small"><span>${esc(k)}</span><b class="mono">${n} ${n===1?"vez":"veces"}</b></div><div class="dsc-b"><i style="width:${(n/fmx*100).toFixed(1)}%"></i></div></div>`).join(""):`<div class="small muted" style="padding:8px 0">No has roto ninguna norma en ${perL}.</div>`}
-        ${FL.length?`<div class="small" style="color:var(--tinta2);padding-top:6px;border-top:1px dashed var(--borde)">Trabaja solo la primera esta semana.</div>`:""}</div>
+        ${FL.length?`<div class="small" style="color:var(--tinta2);padding-top:6px;border-top:1px dashed var(--borde)">Tu foco de la semana sale de aquí: la que más rompiste.</div>`:""}</div>
       <div class="card stack" style="gap:12px"><div class="between"><h2>Días en plan</h2><span class="small muted">últimas 10 semanas</span></div>
         <div class="hleg"><span><i class="hg"></i>Todo dentro del plan</span><span><i class="hbad"></i>Alguna fuera del plan</span></div>
         ${heat7(info,10)}
         <div class="small" style="color:var(--suave)">${info.days.length} días operados &nbsp;|&nbsp; Racha actual: ${info.cur} &nbsp;|&nbsp; Máx: ${info.best}</div></div>
     </div>
-    <div class="card stack">
-      <div class="between"><h2>Tus operaciones: buenas y evitables</h2><span class="small muted">rellena = buena · rayada = evitable</span></div>
-      ${evs.length?`<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;border-bottom:1px solid var(--linea);background:linear-gradient(var(--gris),var(--gris)) 0 64px/100% 1px no-repeat">${bars}</div>`:`<div class="muted small">Todavía no hay operaciones cerradas en ${perL}.</div>`}
-      <div class="row" style="gap:24px"><div><div class="mono" style="font-weight:700;font-size:22px">${good}</div><div class="small muted">buenas, ganando o perdiendo</div></div><div><div class="mono" style="font-weight:700;font-size:22px">${bad}</div><div class="small muted">evitables</div></div></div>
-    </div>
-    <div class="card" style="padding:12px 16px"><div class="between"><h2>Repaso de tus operaciones</h2><a class="small" href="#historial">Ver todas</a></div>${list||`<div class="muted small" style="padding:10px 0">Aquí verás cada operación con lo que hiciste bien y lo que puedes mejorar.</div>`}</div>
   </div>`;
 }
 
@@ -1750,7 +1742,7 @@ function viewAnalizar(){
       <div class="card stack" style="gap:8px" id="anPacto"></div>
       <div class="stack">
         ${p.strategy?`<div class="card small" style="color:var(--tinta2)"><span class="lbl" style="display:block;margin-bottom:4px">Tu estrategia</span>${esc(p.strategy)}</div>`:""}
-        <div class="banner" style="font-size:15px">${SVG(IC2.trophy,22,1.8)}Disciplina antes que dinero.</div>
+
       </div>
     </div>
   </div>`;
@@ -1787,11 +1779,19 @@ function paintAnalizar(){
     {ok:today.length<p.maxTrades,t:today.length<p.maxTrades?`Te quedan ${p.maxTrades-today.length} de ${p.maxTrades} operaciones hoy`:"Ya hiciste tus "+p.maxTrades+" operaciones de hoy"},
     {ok:dayR>-p.dayLimitR,t:dayR>-p.dayLimitR?"Margen del día: "+num(p.dayLimitR+dayR,1)+" R":"Llegaste a tu límite del día"}
   ];
-  const okN=checks.filter(c=>c.ok).length;
-  document.getElementById("anPacto").innerHTML=`<div class="between" style="align-items:center"><h2>Tu pacto revisa la entrada</h2><span class="badge" style="${okN===checks.length?"color:var(--verdeT);background:var(--verdeB)":"color:var(--ambarT);background:var(--ambarB)"}">${okN} de ${checks.length}</span></div>
+  /* (16-nov) una sola lista antes de entrar: lo que Tickora comprueba + tus preguntas (sin repetir las que ya se comprueban solas) */
+  const DUP=/estrategia|stop|objetivo|riesgo|tamaño|sí a todo/i;
+  const UC=(window.tkEntryCheck?tkEntryCheck():[]).map((q,i)=>({q,i})).filter(x=>!DUP.test(x.q));a.uchk=a.uchk||{};
+  const ucOk=UC.filter(x=>a.uchk[x.i]).length, rc=window.tkRecFor?tkRecFor("antes"):null;
+  const okN=checks.filter(c=>c.ok).length+ucOk, totN=checks.length+UC.length;
+  document.getElementById("anPacto").innerHTML=`<div class="between" style="align-items:center"><h2>Antes de entrar</h2><span class="badge" style="${okN===totN?"color:var(--verdeT);background:var(--verdeB)":"color:var(--ambarT);background:var(--ambarB)"}">${okN} de ${totN}</span></div>
+    <div class="an-k">Tickora lo comprueba</div>
     <div class="stack" style="gap:7px">${checks.map(c=>`<div class="check">${c.ok?ico("check",16,2.6,"var(--cobalto)"):ico("x",16,2.4,"var(--ambar)")}${c.raw?c.t:esc(c.t)}</div>`).join("")}</div>
-    ${okN===checks.length?`<div class="small" style="color:var(--verdeT)">Todo en orden. Si entras, que sea con estos datos.</div>`:`<div class="small" style="color:var(--ambarT)">Hay cosas sin cumplir: mejor esperar a la próxima.</div>`}`;
-  {const UC=window.tkEntryCheck?tkEntryCheck():[];if(UC.length){a.uchk=a.uchk||{};const n=UC.filter((q,i)=>a.uchk[i]).length,rc=window.tkRecFor?tkRecFor("antes"):null;const bx=document.createElement("div");bx.className="an-uc";bx.innerHTML=`<div class="between" style="align-items:center"><b>Tus preguntas antes de entrar</b><span class="badge">${n} de ${UC.length}</span></div>`+UC.map((q,i)=>`<label class="check" style="cursor:pointer"><input type="checkbox" data-uc="${i}" ${a.uchk[i]?"checked":""} style="width:16px;height:16px;margin:0"> ${esc(q)}</label>`).join("")+(rc?`<div class="an-rc">«${esc(rc)}»</div>`:"")+`<a class="small muted" href="#plan">Editar tus preguntas en Mi plan</a>`;document.getElementById("anPacto").appendChild(bx);bx.querySelectorAll("[data-uc]").forEach(c=>c.onchange=()=>{a.uchk[c.dataset.uc]=c.checked;paintAnalizar()})}}
+    ${UC.length?`<div class="an-k">Tú respondes</div><div class="stack" style="gap:7px">${UC.map(x=>`<label class="check" style="cursor:pointer"><input type="checkbox" data-uc="${x.i}" ${a.uchk[x.i]?"checked":""} style="width:16px;height:16px;margin:0"> ${esc(x.q)}</label>`).join("")}</div>`:""}
+    ${rc?`<div class="an-rc">«${esc(rc)}»</div>`:""}
+    ${okN===totN?`<div class="small" style="color:var(--verdeT)">Todo en orden. Si entras, que sea con estos datos.</div>`:`<div class="small" style="color:var(--ambarT)">Hay cosas sin cumplir: mejor esperar a la próxima.</div>`}
+    <a class="small muted" href="#plan">Editar tus preguntas en Mi plan</a>`;
+  document.querySelectorAll("#anPacto [data-uc]").forEach(c=>c.onchange=()=>{a.uchk[c.dataset.uc]=c.checked;paintAnalizar()});
   const st=document.getElementById("anStrat");if(st)st.onchange=()=>{a.strategy=st.checked;paintAnalizar()};
   const cp=document.getElementById("anCopy");if(cp)cp.onclick=async()=>{const txt=`${a.sym} ${a.side==="buy"?"Compra":"Venta"} ${num(r.lots,2)} lotes · Entrada ${a.entry} · Stop ${a.stop}${a.tp?" · Objetivo "+a.tp:""}`;try{await navigator.clipboard.writeText(txt);toast("Copiado")}catch(e){toast(txt)}};
 }
@@ -2249,10 +2249,10 @@ if(SB_OK){
 window.viewPlan=viewPlan;window.viewProgreso=viewProgreso;window.TKAPP={S,sb,esc,SVG,fmtR,fmtV,fmtVt,fmtMoney,mOf,sumM,oneR,dispCur,moneyOn,prefU,CURS,fmtVabs,fmtLim,fmtMs,num,fmtPct,dayKey,todayKey,evaluate,tradeStats,toast,render,spark,MARKETS,symbolsInfo,lsGet,lsSet,acctName,selAcct,FEELS,greet,initials,minOf,minOfDate,money,inSession,MESES_L,NAV_APPS,appOf,ico,isDark,refreshWidgets,effectivePlan,applyAcct,thumb};
 })();
 </script>
-<link rel="stylesheet" href="extra2.css?v=94">
-<script src="extra.js?v=18"></script>
-<script src="extra2.js?v=66"></script>
-<script src="extra3.js?v=6"></script>
-<script src="extra4.js?v=1"></script>
+<link rel="stylesheet" href="extra2.css?v=95">
+<script src="extra.js?v=19"></script>
+<script src="extra2.js?v=67"></script>
+<script src="extra3.js?v=7"></script>
+<script src="extra4.js?v=2"></script>
 </body>
 </html>

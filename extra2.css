@@ -2693,3 +2693,26 @@ html[data-theme="light"] .bk-book:after{background:linear-gradient(90deg,transpa
 @media (max-width:900px){.bk-g{grid-template-columns:1fr}.bk-rail{position:static;max-height:none;display:flex;gap:14px;overflow-x:auto;padding:12px}.bk-ch{margin:0;display:flex;align-items:center;gap:6px;flex:none}.bk-ch>b,.bk-ch .dj-k{display:none}.bk-d{width:auto;white-space:nowrap;border:1px solid var(--hb-line)}.bk-d small{display:none}
   .bk-book{grid-template-columns:1fr}.bk-book:after{display:none}.bk-pg+.bk-pg{border-left:0;border-top:1px solid var(--hb-line)}.bk-pg{padding:20px}}
 @media (max-width:700px){.ap-mx{grid-template-columns:1fr}.ap-ax{display:none}.ap-q{min-height:0}.er-hero{grid-template-columns:1fr;padding:20px}.er-rb{grid-template-columns:36px minmax(0,1fr) 90px;padding:12px 14px}.er-sp{display:none}.er-more{padding:0 14px 14px}}
+
+/* ===== Limpieza (16-nov): cuadro «Tus decisiones» en la portada ===== */
+.hbshell .hb-full .hb-grid.g9>.t-decis{grid-area:asis!important;justify-content:center}
+.hb-full .hb-grid.g9>.t-decis.sel{z-index:6;overflow:visible}
+.hx-c.t-decis{justify-content:center}
+.hb-t.t-decis{gap:10px;justify-content:flex-start}
+.dc-g{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.dc-g a{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:12px;background:color-mix(in srgb,var(--c) 9%,transparent);border:1px solid color-mix(in srgb,var(--c) 22%,transparent);text-decoration:none;color:var(--hb-ink);font-size:12px;min-width:0}
+.dc-g a b{margin-left:auto;font-size:18px;font-weight:500;color:var(--c);letter-spacing:-.02em}
+.dc-g a span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dc-g{--t-ok:#86a9ff;--t-bp:#5fd4c0;--t-su:#e6d38a;--t-er:#ff6b6b}
+html[data-theme="light"] .dc-g{--t-ok:#4f74d9;--t-bp:#13917c;--t-su:#9a7d0c;--t-er:#d43f3f}
+.hb-full .hb-grid.g9>.t-decis .dc-g a{padding:6px 9px}
+.hd-gohoy{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;margin-top:4px;padding:11px 18px;border-radius:99px;border:1px solid var(--hb-line);background:var(--hb-t);color:var(--hb-ink);font-size:13.5px;font-weight:600;text-decoration:none}
+.hd-gohoy:hover{background:var(--hb-t2)}
+.ap-learn{display:flex;flex-direction:column;gap:14px;margin-top:10px}
+.ap-lh{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 14px;margin-top:8px}.ap-lh h2{margin:0;font-size:22px;font-weight:500;letter-spacing:-.01em}.ap-lh span{font-size:13px;color:var(--hb-ink2)}
+.an-k{margin-top:6px;font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--suave)}
+.dsc-top.one{display:block}.dsc-top.one .dsc-k{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media (max-width:700px){.dsc-top.one .dsc-k{grid-template-columns:1fr}}
+.sem.s-n{--sc:#9a9aa3}.nv-hd.s-n{--sc:#9a9aa3}
+@media (max-width:600px){.hc-g b.mono{white-space:normal;overflow:visible;text-overflow:clip;font-size:19px}.hc-g b.mono tk-r{display:none}}
+.nv2 .nv-l{overflow-y:auto;min-height:0;flex:1 1 auto;scrollbar-width:thin}

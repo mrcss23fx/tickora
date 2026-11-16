@@ -304,7 +304,7 @@
   };
 
   /* ---------------- recordatorios y lista antes de cada entrada (en Mi plan) ---------------- */
-  const CHK_DEF = ["¿Encaja con una de mis estrategias?", "¿Tengo entrada, stop y objetivo claros?", "¿El riesgo es el de mi plan?", "¿Estoy tranquilo y con la cabeza aquí?", "¿Hay una noticia fuerte cerca?", "Si es que sí a todo, entro. Si no, espero."];
+  const CHK_DEF = ["¿Estoy tranquilo y con la cabeza aquí?", "¿Hay una noticia fuerte cerca? Si la hay, espero.", "¿Es la operación que buscaba, o la estoy forzando?"];
   const chkList = () => ((S.recs || {}).check || {}).items || CHK_DEF;
   window.tkEntryCheck = chkList;
   function recBlock() {

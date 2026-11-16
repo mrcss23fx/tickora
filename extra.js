@@ -40,7 +40,7 @@
   const HGROUPS = [["Información", ["open_time", "symbol", "account", "side", "status"]], ["Rendimiento", ["r", "risk_pct", "plan", "feel"]], ["Precios", ["open_price", "close_price", "sl", "tp"]], ["Fechas", ["close_time", "dur"]]];
   const HLABEL = { open_time: "Fecha de entrada", symbol: "Símbolo", account: "Cuenta", side: "Dirección", status: "Estado", r: "Resultado", risk_pct: "Riesgo", plan: "Plan", feel: "Emoción", open_price: "Entrada", close_price: "Salida", sl: "Stop", tp: "Objetivo", close_time: "Fecha de salida", dur: "Duración" };
   function histState() { return S.hist || (S.hist = { q: "", from: "", to: "", side: "", st: "", plan: "", sort: "open_time", dir: -1, page: 0, per: lsGet("tk-hist-per", 25), sel: new Set(), hide: lsGet("tk-hcols-off", []), quick: "" }); }
-  const HARD = ["Con prisa", "Con miedo", "Ansioso", "Eufórico", "Frustrado", "Con ganas de recuperar", "FOMO", "Cansado"];
+  const HARD = ["Con prisa", "Con miedo", "Nervioso", "Ansioso", "Eufórico", "Frustrado", "Con ganas de recuperar", "FOMO", "Cansado"];
   const quickOk = (t, k) => k === "ev" ? t.status === "closed" && !evaluate(t).good : k === "gl" ? t.status === "closed" && evaluate(t).good && t.r < 0 : k === "hard" ? HARD.includes((t.review || {}).feel) : k === "in" ? t.status === "closed" && evaluate(t).good : true;
   function histRows(noQuick) {
     const h = histState(), q = norm(h.q);
@@ -318,10 +318,11 @@
         <div class="card stack" style="gap:10px"><div class="between"><h2 class="h2b">Registro de emociones</h2><span class="small muted">${log.length} chequeo${log.length === 1 ? "" : "s"}</span></div>
           ${log.length ? `<div class="elog">${log.slice(0, 12).map(x => `<div class="elogi"><span class="elogd">${new Date(x.ts).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span><b>${esc(x.feel)}</b><span class="xtag">${x.int}/5</span><span class="small muted">${(MOMENTS.find(m => m[0] === x.when) || ["", ""])[1]}</span>${x.note ? `<span class="small elogn">${esc(x.note)}</span>` : ""}<button type="button" class="xib" data-edel="${esc(x.id)}" aria-label="Borrar" title="Borrar">${I(IC.trash, 15)}</button></div>`).join("")}</div>` : `<div class="small muted">Registra cómo te sientes antes, durante o después de operar, aunque no abras ninguna operación. Con el tiempo verás qué estados se repiten.</div>`}</div>
         ${untag.length ? `<div class="card stack" style="gap:12px"><div class="between"><h2 class="h2b">Sin anotar</h2><span class="small muted">toca cómo te sentías al entrar</span></div>
-          ${untag.map(t => `<div class="xtagrow" data-tid="${esc(t.id)}"><div class="xtagrow-h"><b>${esc(t.symbol)}</b> · ${t.side === "buy" ? "Compra" : "Venta"} · ${fmtDT(t.open_time)} · <span class="mono">${fmtV(t.r, mOf(t))}</span></div><div class="row" style="gap:6px;flex-wrap:wrap">${FEELS.map(f => `<button type="button" class="chip" data-qfeel="${esc(f)}">${esc(f)}</button>`).join("")}</div></div>`).join("")}</div>` : ""}
+          ${untag.slice(0, S.untagAll ? 999 : 3).map(t => `<div class="xtagrow" data-tid="${esc(t.id)}"><div class="xtagrow-h"><b>${esc(t.symbol)}</b> · ${t.side === "buy" ? "Compra" : "Venta"} · ${fmtDT(t.open_time)} · <span class="mono">${fmtV(t.r, mOf(t))}</span></div><div class="row" style="gap:6px;flex-wrap:wrap">${FEELS.map(f => `<button type="button" class="chip" data-qfeel="${esc(f)}">${esc(f)}</button>`).join("")}</div></div>`).join("")}${untag.length > 3 && !S.untagAll ? `<button type="button" class="x-ch" data-untagall style="align-self:flex-start">Ver las ${untag.length} sin anotar</button>` : ""}</div>` : ""}
       </div>`;
     },
     bind() {
+      const ua = document.querySelector("[data-untagall]"); if (ua) ua.onclick = () => { S.untagAll = true; S.lastView = null; render(); };
       if (!healthOk()) return;
       const re = () => { S.lastView = null; render(); };
       $("#ePer").onchange = e => { S.emoPer = e.target.value; re(); };
