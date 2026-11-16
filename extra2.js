@@ -865,7 +865,7 @@
       : `<div class="ht-head"><b class="ht-st">${HL[lvl][0]}</b><span class="ht-tx">${HL[lvl][1]}</span></div>
       <div class="ht-gauge" role="meter" aria-label="Nivel de calentón" aria-valuemin="0" aria-valuemax="2" aria-valuenow="${lvl}" aria-valuetext="${HL[lvl][0]}"><span class="ht-track"></span><span class="ht-mk" style="left:${mpos}%"></span><span class="ht-lb"><i>Tranquilo</i><i>Atento</i><i>Caliente</i></span></div>
       <div class="ht-sens"><span class="${lossRun >= 2 ? "on" : lossRun ? "mid" : ""}"><small>Pérdidas seguidas</small><b class="mono">${lossRun}<em> de 2</em></b></span><span class="${fastBack ? "on" : ""}"><small>Desde tu última pérdida</small><b class="mono">${sinceL == null ? "—" : mins(sinceL)}</b></span></div>
-      ${hot && ph === "en" ? `<button type="button" class="x-ch pri" data-hx="pause">Empezar pausa de 10 min</button>` : ""}`}</div>`;
+      ${hot && ph === "en" ? `<button type="button" class="x-ch pri" data-hx="pause">${window.tkPauseLabel ? window.tkPauseLabel() : "Empezar pausa de 10 min"}</button>` : ""}`}</div>`;
     /* 6 · tu franja buena y tu franja mala */
     const C90 = C.filter(t => new Date(dateOf(t)) >= now - 90 * 864e5), byH = {};
     C90.forEach(t => { const h = new Date(t.open_time).getHours(); (byH[h] = byH[h] || [0, 0]); byH[h][1]++; if (evaluate(t).good) byH[h][0]++; });
@@ -1036,7 +1036,7 @@
   }
   function bindDay() {
     if (window.__tkHdB) return; window.__tkHdB = true;
-    document.addEventListener("click", e => { const b = e.target.closest("[data-hx]"); if (!b) return; if (b.dataset.hx === "pause") { S.pauseUntil = Date.now() + 10 * 6e4; toast("Pausa de 10 minutos. Aléjate de la pantalla"); } else S.pauseUntil = 0; paintDay(); });
+    document.addEventListener("click", e => { const b = e.target.closest("[data-hx]"); if (!b) return; if (b.dataset.hx === "pause" && window.tkPause) { window.tkPause(); } else if (b.dataset.hx === "pause") { S.pauseUntil = Date.now() + 10 * 6e4; toast("Pausa de 10 minutos. Aléjate de la pantalla"); } else S.pauseUntil = 0; paintDay(); });
     setInterval(() => { if (document.visibilityState === "visible" && document.getElementById("hday")) paintDay(); }, 60000);
     document.addEventListener("click", async e => {
       const b = e.target.closest("[data-hd]"); if (!b) return; const k = b.dataset.hd;
@@ -1573,14 +1573,14 @@
       const live = ph === "en" ? `<span class="hc-live on"><i></i>En sesión · quedan ${durTxt(D.b - now)}</span>` : ph === "antes" ? `<span class="hc-live"><i></i>Empieza en ${durTxt(D.a - now)}</span>` : `<span class="hc-live"><i></i>Sesión terminada</span>`;
       return `<div class="stack hc">
         <div class="xhead"><div><h1>${title}</h1><div class="small muted">${cap(new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" }))} · ${esc(p.start)}–${esc(p.end)}</div></div>
-          <div class="hc-acts">${live}<button type="button" class="x-ch" data-act="emo">Registrar emoción</button>${ph === "en" ? `<button type="button" class="x-ch" data-hcpause>${pu ? "Terminar pausa" : "Pausa 10 min"}</button>` : ""}<button type="button" class="x-ch pri" data-act="addop">+ Operación</button></div></div>
+          <div class="hc-acts">${live}<button type="button" class="x-ch" data-act="emo">Registrar emoción</button>${ph === "en" ? `<button type="button" class="x-ch" data-hcpause>${pu ? "Terminar pausa" : window.tkPauseLabel ? window.tkPauseLabel() : "Pausa 10 min"}</button>` : ""}<button type="button" class="x-ch pri" data-act="addop">+ Operación</button></div></div>
         ${tl}${ins}${rules}
         <div class="hc-low"><div class="hc-c hc-ops"><div class="hc-ch"><span class="hc-k">Operaciones de hoy</span><a href="#informe/${tk}" class="hc-lk">Informe del día →</a></div>${ops}</div>${regla}${prep}</div>
       </div>`;
     },
     bind() {
       const m = document.getElementById("main"); if (!m) return; bindWidgets(m);
-      m.querySelectorAll("[data-hcpause]").forEach(b => b.onclick = () => { S.pauseUntil = S.pauseUntil && S.pauseUntil > Date.now() ? 0 : Date.now() + 10 * 6e4; re(); });
+      m.querySelectorAll("[data-hcpause]").forEach(b => b.onclick = () => { if (S.pauseUntil && S.pauseUntil > Date.now()) S.pauseUntil = 0; else if (window.tkPause) window.tkPause(); else S.pauseUntil = Date.now() + 10 * 6e4; re(); });
       m.querySelectorAll("[data-hcnv]").forEach(a => a.addEventListener("click", () => { try { localStorage.setItem("tk-nv", todayKey()); } catch (e) { } }));
       clearInterval(S.hcT); S.hcT = setInterval(() => { if ((location.hash || "").replace("#", "") === "hoy" && !document.hidden) re(); else if ((location.hash || "").replace("#", "") !== "hoy") clearInterval(S.hcT); }, 60000);
     }
