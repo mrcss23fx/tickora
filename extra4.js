@@ -161,14 +161,7 @@
       <aside class="ap-side"><div class="dj-c"><span class="dj-k">Lo que dicen tus números</span><p class="ap-big">${head}</p>
         ${n ? `<div class="ap-bar" role="img" aria-label="${TK.map(k => TYPES[k].l + " " + G[k].length).join(", ")}">${TK.map(k => G[k].length ? `<i class="t-${k}" style="flex:${G[k].length}"></i>` : "").join("")}</div><div class="ap-lg">${TK.map(k => `<span class="t-${k}">${TYPES[k].l} ${G[k].length}</span>`).join("")}</div>` : ""}</div>
         <div class="dj-c"><span class="dj-k">Semana a semana</span><div class="ap-wk">${W.map((w, i) => `<div title="${w.n} operaciones"><span style="height:${Math.round(w.n / wmax * 100)}%">${["er", "su", "bp", "ok"].map(k => w[k] ? `<i class="t-${k}" style="flex:${w[k]}"></i>` : "").join("")}</span><small>${i === 5 ? "Esta" : "−" + (5 - i)}</small></div>`).join("")}</div><p class="ap-sm">${wtxt}</p></div>
-        <div class="dj-c"><span class="dj-k">Las dos preguntas</span><p class="ap-sm">Cada operación responde a dos cosas: <b>¿seguiste el plan?</b> y <b>¿ganaste?</b> Solo la primera depende de ti. Por eso una pérdida dentro del plan cuenta como bien hecha, y una ganancia fuera de él, no.</p></div></aside></div>${learnRow()}</div>`;
-  }
-
-  /* «Para aprender más rápido» (antes al pie de la portada) */
-  function learnRow() {
-    let X = null; try { X = X2.dayX(X2.hData()); } catch (e) { return ""; }
-    if (!X) return "";
-    return `<div class="ap-learn"><div class="ap-lh"><h2>Para aprender más rápido</h2><span>Lo que tus operaciones te están enseñando ahora</span></div><div class="hd-g">${X.learn || ""}${X.disc || ""}${X.cost || ""}</div><div class="hd-g ${X.reto ? "" : "two"}">${X.vs || ""}${X.reto || ""}</div></div>`;
+        <div class="dj-c"><span class="dj-k">Las dos preguntas</span><p class="ap-sm">Cada operación responde a dos cosas: <b>¿seguiste el plan?</b> y <b>¿ganaste?</b> Solo la primera depende de ti. Por eso una pérdida dentro del plan cuenta como bien hecha, y una ganancia fuera de él, no.</p></div></aside></div></div>`;
   }
 
   /* ---------------- vista · Tus errores ---------------- */
@@ -176,10 +169,6 @@
     const now = Date.now(), O = occ(0), M = {};
     O.forEach(o => { const m = M[o.id] || (M[o.id] = { id: o.id, n30: 0, tot: 0, last: 0, first: Infinity, w: Array(8).fill(0), r14: 0, p14: 0, why: {} }); m.tot++; m.last = Math.max(m.last, o.ts); m.first = Math.min(m.first, o.ts); const age = (now - o.ts) / DAY; if (age <= 30) m.n30++; if (age <= 14) m.r14++; else if (age <= 28) m.p14++; const wi = 7 - Math.floor(age / 7); if (wi >= 0 && wi < 8) m.w[wi]++; const e = (o.t.review || {}).err; if (e && e.id === o.id && e.why) m.why[e.why] = (m.why[e.why] || 0) + 1; });
     return M;
-  }
-  function focusBox(WF) {
-    if (!WF) return `<div class="er-goal"><span class="dj-k">Tu foco de la semana</span><p>No has roto ninguna norma en 30 días. Esta semana, solo repetir.</p></div>`;
-    return `<div class="er-goal"><span class="dj-k">Tu foco de la semana</span><p>${esc(WF.title)}</p><div class="er-days">${WF.days.map((d, i) => `<i class="${d.st === "ok" ? "on" : d.st === "no" ? "bad" : d.st === "nt" ? "rest" : ""}" title="${"LMXJV"[i]}"></i>`).join("")}</div><small>${WF.played ? `${WF.ok} de ${WF.played} ${WF.played === 1 ? "día cumplida" : "días cumplida"}` : "Aún no has operado esta semana"} · <a href="#progreso">ver en Disciplina</a></small></div>`;
   }
   function errores() {
     const now = Date.now(), M = errStats(), list = Object.values(M).filter(m => m.n30 > 0).sort((a, b) => b.n30 - a.n30 || b.last - a.last), top = list[0];
@@ -191,9 +180,11 @@
     let hero;
     if (top) {
       const e = ERRK[top.id], wy = Object.entries(top.why).sort((a, b) => b[1] - a[1])[0];
-      const WF = window.tkFocus ? window.tkFocus() : null;
+      const mon = new Date(); mon.setHours(0, 0, 0, 0); mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
+      const days = Array.from({ length: 5 }, (_, i) => { const d = new Date(mon.getTime() + i * DAY), k = dayKey(d), T = allClosed().filter(t => dayKey(dateOf(t)) === k); return k > todayKey() ? "fu" : !T.length ? "rest" : T.some(t => errorsOf(t).includes(top.id)) ? "bad" : "on"; });
+      const ok = days.filter(d => d === "on").length, tr = days.filter(d => d === "on" || d === "bad").length;
       hero = `<div class="er-hero"><div><span class="dj-k">Tu error número 1 este mes</span><h2>${esc(e.name)}</h2><p>${top.n30} ${top.n30 === 1 ? "vez" : "veces"} en 30 días.${wy ? ` ${wy[1] === top.n30 ? "Todas" : wy[1] + " de ellas"} dijiste «${esc(WHYK[wy[0]][1].toLowerCase())}».` : ""} ${esc(e.les)}</p></div>
-        ${focusBox(WF)}</div>`;
+        <div class="er-goal"><span class="dj-k">Reto de esta semana</span><p>Ni una vez «${esc(e.name.toLowerCase())}». Tickora lo comprueba con tus operaciones.</p><div class="er-days">${days.map((d, i) => `<i class="${d}" title="${"LMXJV"[i]}"></i>`).join("")}</div><small>${tr ? `${ok} de ${tr} ${tr === 1 ? "día" : "días"} cumplidos` : "Aún no has operado esta semana"}</small></div></div>`;
     } else hero = `<div class="er-hero empty"><div><span class="dj-k">Tu catálogo está vacío</span><h2>${allClosed().length ? "Ningún error en 30 días" : "Aún no hay errores"}</h2><p>Los errores llegan aquí de dos formas: Tickora detecta solo los que rompen tus reglas (stop, riesgo, horario, máximo, límite) y tú añades los demás con el <b>detective del error</b> después de cada operación fuera del plan.</p></div></div>`;
     const rows = list.map(m => { const e = ERRK[m.id], [sc, sl] = status(m), mx = Math.max(1, ...m.w), open = S.erOpen === m.id;
       return `<div class="er-row${open ? " open" : ""}"><button type="button" class="er-rb" data-eropen="${m.id}" aria-expanded="${open}"><span class="er-n mono">${m.n30}</span><span class="er-t"><b>${esc(e.name)}</b><small>${AREA[e.a][1]}${Object.keys(m.why).length ? " · " + esc(WHYK[Object.entries(m.why).sort((a, b) => b[1] - a[1])[0][0]][1].toLowerCase()) : ""}</small></span><span class="er-sp" aria-hidden="true">${m.w.map((v, i) => `<i class="${i === 7 ? "l" : ""}" style="height:${v ? Math.max(12, Math.round(v / mx * 100)) : 4}%"></i>`).join("")}</span><span class="er-st ${sc}">${sl}</span><span class="er-ev"><b>${m.n30} ${m.n30 === 1 ? "evitable" : "evitables"}</b>última: ${ago(m.last)}</span></button>
@@ -214,14 +205,6 @@
   const ensure = () => { if (!S.d3Loaded) X3.loadAllD().then(() => { if (/^#(aprender|errores)/.test(location.hash)) re(); }); };
   V.aprender = { view() { ensure(); return decisiones(); }, bind: bindAp };
   V.errores = { view() { ensure(); return errores(); }, bind: bindAp };
-  /* el Informe diario ya no existe: cada día se ve en Diario › Tu libro */
-  V.informe = { view(r) { const d = r && r.id && /^\d{4}-\d\d-\d\d$/.test(r.id) ? r.id : (S.repDay || todayKey()); S.djTab = "libro"; S.bkDay = d; setTimeout(() => location.replace("#diario"), 0); return `<div class="dj-c" aria-busy="true">Abriendo este día en tu libro…</div>`; }, bind() { } };
-  /* cuadro de la portada: los cuatro tipos de este mes */
-  window.tkDecisTile = (name, href, tFoot) => {
-    const G = { ok: 0, bp: 0, su: 0, er: 0 }; allClosed().filter(t => tsOf(t) >= Date.now() - 30 * DAY).forEach(t => G[typeOf(t)]++);
-    const pend = allClosed().filter(t => tsOf(t) >= Date.now() - 30 * DAY && ["er", "su"].includes(typeOf(t)) && !(t.review || {}).err).length;
-    return `<div class="dc-g">${TK.map(k => `<a class="t-${k}" href="#aprender" data-stop><span>${TYPES[k].l}</span><b class="mono">${G[k]}</b></a>`).join("")}</div>${tFoot(name, pend ? pend + (pend === 1 ? " operación por revisar" : " operaciones por revisar") : "Este mes", href)}`;
-  };
   window.tkApTile = k => { const C = allClosed().filter(t => tsOf(t) >= Date.now() - 30 * DAY); if (k === "aprender") { const g = C.filter(t => evaluate(t).good).length; return [C.length ? g + "/" + C.length : "—", "bien hechas este mes", null]; } const o = occ(Date.now() - 30 * DAY); return [String(o.length), o.length === 1 ? "error este mes" : "errores este mes", null]; };
 
   /* ---------------- Tu libro ---------------- */
