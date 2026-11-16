@@ -1013,7 +1013,7 @@ const NAV_APPS=[
  ["calendario","Calendario",[["historial","Historial"],["calendario","Calendario"]]],
  ["ajustes","Ajustes",[["ajustes","Ajustes"]]]];
 /* páginas que existen pero no salen en el menú (se llega desde otras) */
-const NAV_HIDDEN=["informe","btcal","grupo"];
+const NAV_HIDDEN=["informe","btcal","grupo","conocete"];
 const NAV_GROUPS=NAV_APPS.map(a=>[a[1],a[2]]);
 const appOf=v=>NAV_APPS.find(a=>a[2].some(x=>x[0]===v));
 const NAV_SIDE=NAV_GROUPS.flatMap(g=>g[1]).concat(NAV_HIDDEN.map(k=>[k,k]));
@@ -2249,10 +2249,11 @@ if(SB_OK){
 window.viewPlan=viewPlan;window.viewProgreso=viewProgreso;window.TKAPP={S,sb,esc,SVG,fmtR,fmtV,fmtVt,fmtMoney,mOf,sumM,oneR,dispCur,moneyOn,prefU,CURS,fmtVabs,fmtLim,fmtMs,num,fmtPct,dayKey,todayKey,evaluate,tradeStats,toast,render,spark,MARKETS,symbolsInfo,lsGet,lsSet,acctName,selAcct,FEELS,greet,initials,minOf,minOfDate,money,inSession,MESES_L,NAV_APPS,appOf,ico,isDark,refreshWidgets,effectivePlan,applyAcct,thumb};
 })();
 </script>
-<link rel="stylesheet" href="extra2.css?v=94">
+<link rel="stylesheet" href="extra2.css?v=96">
 <script src="extra.js?v=18"></script>
-<script src="extra2.js?v=66"></script>
+<script src="extra2.js?v=68"></script>
 <script src="extra3.js?v=6"></script>
 <script src="extra4.js?v=1"></script>
+<script src="extra5.js?v=1"></script>
 </body>
 </html>

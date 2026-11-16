@@ -366,6 +366,7 @@
     const save = (id, data) => sb.from("docs").upsert({ user_id: S.user.id, col: "mente", id, data, updated_at: new Date().toISOString() }).then(({ error }) => { if (error) toast("No se pudo guardar"); });
     function body() {
       if (step === "permiso") return { t: "Psicología", s: "Antes de empezar", b: `<p class="pz-p">Para darte consejos según cómo llegas cada día, Tickora tiene que guardar cómo te sientes. Es información sobre tu salud: necesita tu permiso y solo la ves tú.</p>`, f: `<a class="btn" href="#ajustes" data-close>Activar en Ajustes</a>` };
+      if (step === "perfil" && !(S.menteP && S.menteP.v === 2)) return { t: "Conócete", s: "2 minutos, solo la primera vez. Así los consejos serán tuyos.", b: `<p class="pz-p">Te pondré en 6 situaciones reales de trading y te haré 4 preguntas directas. Con tus respuestas, Tickora sabrá qué te saca del plan, qué te calma y cómo quieres que te hable.</p>`, f: `<a class="btn" href="#conocete" data-close>Empezar · 2 minutos</a><button type="button" class="pz-l" data-go="hoy">Ahora no, solo el chequeo</button>` };
       if (step === "perfil") return { t: "Conócete", s: "Tres preguntas, solo la primera vez. Así los consejos serán tuyos.", b: `<div class="pz-q"><b>¿Qué es lo que más te saca de tu plan?</b><small>Elige hasta tres</small>${chips("trig", PTRIG, P.trig, 1)}</div><div class="pz-q"><b>¿Qué te ayuda a volver a la calma?</b><small>Elige las que te funcionen; la primera será la que te proponga</small>${chips("calm", PCALM, P.calm, 1)}</div><div class="pz-q"><b>¿Cómo quieres que te hable?</b>${chips("tone", PTONE, [P.tone], 0)}</div>`, f: `<button type="button" class="btn" data-go="perfil-ok" ${P.trig.length && P.calm.length ? "" : "disabled"}>Guardar y seguir</button>` };
       if (step === "hoy") return { t: "¿Cómo llegas hoy?", s: "20 segundos. Contesta con lo primero que te salga.", b: HQ2.map(Q => `<div class="pz-q"><b>${Q.q}</b>${Q.multi ? "<small>Puedes marcar varias</small>" : ""}${chips("q-" + Q.k, Q.o, mVal(M, Q.k), Q.multi)}</div>`).join(""), f: `<button type="button" class="btn" data-go="hoy-ok" ${hqOk(M) ? "" : "disabled"}>Ver mi consejo</button>` };
       const D = hData(), a = psyAdvice(M, D), sc = mScore(M), tone = P.tone || "cercano", tip = a.tip, tl = (PTRIG.find(x => x[0] === a.main) || [])[1];
@@ -376,7 +377,7 @@
         <div class="pz-tip"><small>Para ti, hoy</small><b>${esc(tip[0])}</b>${pers ? `<p class="pz-pers">${esc(pers)}</p>` : ""}<p>${esc(tone === "directo" ? tip[1] : tip[2])}</p>${tip[3] && tone !== "directo" ? `<em>Estudio: ${esc(tip[3])}</em>` : ""}</div>
         <div class="pz-si"><small>Tu regla de hoy</small><p><b>Si</b> ${esc(a.sit)} <b>→</b> ${esc(a.then)}</p>${added ? `<span class="pz-ok">${ico("check", 14, 2.6)} Está en tu cuadro de Mi plan</span>` : `<button type="button" class="btn2" data-go="si-add">Llevarla a Mi plan hoy</button>`}</div>
         <div class="pz-data"><small>Lo que dicen tus datos</small><p>${esc(mPattern())}</p></div>
-        <div class="pz-links"><button type="button" class="pz-l" data-go="hoy">Cambiar mis respuestas de hoy</button><button type="button" class="pz-l" data-go="perfil">Editar lo que me saca del plan</button></div>`,
+        <div class="pz-links"><button type="button" class="pz-l" data-go="hoy">Cambiar mis respuestas de hoy</button><a class="pz-l" href="#conocete" data-close>Ver o cambiar mi ficha de trader</a></div>`,
         f: `<span class="pz-more">Ver más:</span><a class="pz-l" href="#rendimiento" data-close>Rendimiento</a><a class="pz-l" href="#progreso" data-close>Disciplina</a><a class="pz-l" href="#emociones" data-close>Emociones</a>` };
     }
     function paint() {
@@ -759,6 +760,8 @@
   function heroQ(D) {
     if (!healthOk()) return `<p class="hx-sub">Cada día te preguntaré cómo llegas, para ayudarte a operar con la cabeza en su sitio. Necesita tu permiso y solo lo ves tú.</p><div class="hx-ans"><a class="hx-a pri" href="#ajustes">Activar en Ajustes</a></div>`;
     const day = todayKey(), m = (S.mente || {})[day];
+    /* (16-nov) primero, que Tickora te conozca: el «Conócete» de 2 minutos */
+    if (window.tkConoPending && window.tkConoPending() && !mDone(m)) return `<p class="hx-qt">Primero, deja que Tickora te conozca: 6 situaciones y 4 preguntas</p><div class="hx-ans"><a class="hx-a pri" href="#conocete">Empezar · 2 minutos</a><button type="button" class="hx-a" data-cono-skip>Ahora no</button></div>`;
     if (mDone(m) && !S.hqEdit) {
       const a = psyAdvice(m, D), sc = mScore(m);
       return `<p class="hx-sub">${sc >= 70 ? "Llegas <b>en buen estado</b>" : sc >= 45 ? "Llegas <b>con cuidado</b>" : "Hoy es <b>un día delicado</b>"} <span class="hx-sc mono">${sc}</span> · Para hoy: <b>${esc(a.tip[0].toLowerCase())}</b></p><div class="hx-ans"><button type="button" class="hx-a pri" data-hq="panel">Ver mi consejo</button><button type="button" class="hx-a" data-hq="redo">Cambiar respuestas</button>${S.menteP ? "" : `<button type="button" class="hx-a" data-hq="perfil">Conócete · 1 minuto</button>`}</div>`;
@@ -1973,7 +1976,7 @@
       $$("[data-fdel]").forEach(b => b.onclick = async () => { if (!confirm("¿Borrar este movimiento?")) return; const { error } = await sb.from("docs").delete().eq("col", "fin").eq("id", b.dataset.fdel); if (error) { toast("No se pudo borrar"); return; } S.fin = S.fin.filter(x => x.id !== b.dataset.fdel); re(); });
     }
   };
-  window.TK_X2 = { hData, dayX, mkOf, glyph, EMOL, MK, NK, NLAB, dateOf, re, gRefresh, healthOk };
+  window.TK_X2 = { hData, dayX, mkOf, glyph, EMOL, MK, NK, NLAB, dateOf, re, gRefresh, healthOk, loadMente, PTRIG, PCALM, PTONE };
 })();
 
 /* si la página ya se pintó antes de cargar estos archivos, la repinto */
