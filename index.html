@@ -691,9 +691,10 @@ textarea.input{height:auto;padding:9px 11px;resize:vertical;line-height:1.5}
 .gx-canvas{position:relative;flex:1;min-width:0;min-height:0}
 .gx-chart{position:absolute;inset:0}
 .gx-msg,.gx-hint{position:absolute;left:50%;transform:translateX(-50%);z-index:5;background:var(--tinta);color:var(--card);font-size:13px;padding:8px 14px;border-radius:10px;max-width:calc(100% - 32px);text-align:center;pointer-events:none}
-.gx-msg{top:40%}.gx-hint{top:12px;background:var(--cobalto);color:var(--onAccent)}
-.gx-float{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:8;display:flex;align-items:center;gap:4px;padding:5px 6px;background:var(--card);border:1px solid var(--linea);border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.14);flex-wrap:wrap;max-width:calc(100% - 16px)}
+.gx-msg{top:40%}.gx-hint{top:12px;z-index:12;background:var(--cobalto);color:var(--onAccent)}
+.gx-float{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:8;width:max-content;display:flex;align-items:center;gap:4px;padding:5px 6px;background:var(--card);border:1px solid var(--linea);border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.14);flex-wrap:wrap;max-width:calc(100% - 16px)}
 .gx-float [hidden]{display:none!important}
+.gx-favbar:not([hidden]) ~ .gx-float{top:58px}
 .gx-sw{display:flex;align-items:center;gap:3px}
 .gx-c{width:20px;height:20px;border-radius:50%;border:2px solid var(--card);box-shadow:0 0 0 1px var(--borde);cursor:pointer;padding:0}
 .gx-c[aria-pressed="true"]{box-shadow:0 0 0 2px var(--tinta)}
@@ -709,6 +710,26 @@ textarea.input{height:auto;padding:9px 11px;resize:vertical;line-height:1.5}
 .gx-mi:hover{background:var(--sub)}
 .gx-msub{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--suave);padding:10px 10px 4px}
 .gx-mrow{display:flex;align-items:center;gap:2px}
+.gx-tpo{display:flex;flex-direction:column;gap:9px;padding:4px 8px 8px;width:268px;max-width:calc(100vw - 32px)}
+.gx-tpo input[type="text"],.gx-tpsave input{height:34px;border:1px solid var(--borde);border-radius:9px;background:var(--card);color:var(--tinta);font:inherit;font-size:13px;padding:0 10px;min-width:0}
+.gx-tpo input[type="text"]:focus,.gx-tpsave input:focus{outline:none;border-color:var(--cobalto)}
+.gx-tpr{display:flex;align-items:center;gap:6px}
+.gx-tpr select{height:32px;border:1px solid var(--borde);border-radius:8px;background:var(--card);color:var(--tinta);font:inherit;font-size:12px;padding:0 6px}
+.gx-tbb{width:32px;height:32px;border:1px solid var(--borde);border-radius:8px;background:var(--card);color:var(--tinta);font:inherit;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.gx-tbb[aria-pressed="true"]{background:var(--cobaltoC);border-color:var(--cobalto);color:var(--cobalto)}
+.gx-tpl2{display:flex;flex-direction:column;gap:4px}.gx-tpl2 small{font-size:11px;color:var(--suave)}
+.gx-seg{display:flex;border:1px solid var(--borde);border-radius:9px;overflow:hidden}
+.gx-seg button{flex:1;border:0;border-right:1px solid var(--borde);background:transparent;color:var(--tinta);font:inherit;font-size:12px;padding:7px 4px;cursor:pointer}
+.gx-seg button:last-child{border-right:0}
+.gx-seg button[aria-pressed="true"]{background:var(--cobaltoC);color:var(--cobalto);font-weight:600}
+.gx-lnk{border:0;background:none;color:var(--cobalto);font:inherit;font-size:12px;text-align:left;padding:0;cursor:pointer}
+.gx-tsw{width:16px;height:16px;border-radius:5px;flex:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
+.gx-mi[aria-current="true"]{background:var(--sub)}
+.gx-mi[aria-pressed="true"]{color:var(--cobalto)}
+.gx-mi small{margin-left:auto;font-size:11px}
+.gx-tpe{padding:4px 10px 8px;font-size:12px;line-height:1.45;max-width:260px}
+.gx-tpsave{display:flex;gap:6px;padding:6px 6px 4px;border-top:1px solid var(--linea);margin-top:4px}
+.gx-tpsave input{flex:1}
 .gx-mrow .gx-mi{flex:1;min-width:0}
 .gx-star{width:30px;height:30px;flex:none;border:0;background:transparent;border-radius:8px;color:var(--gris);display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:.55}
 .gx-mrow:hover .gx-star,.gx-star[aria-pressed="true"],.gx-star:focus-visible{opacity:1}
@@ -886,7 +907,7 @@ body.bt-mode .live-only{display:none!important}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/klinecharts@10.1.0/dist/umd/klinecharts.min.js"></script>
-<script src="grafico.js?v=15"></script>
+<script src="grafico.js?v=16"></script>
 </head>
 <body>
 <div id="app" aria-live="polite"></div>

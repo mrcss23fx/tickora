@@ -16,6 +16,18 @@
   /* marcos que se construyen juntando velas de uno menor (si la fuente no los da tal cual) */
   const DERIV = { "3m": ["1m", 3], "45m": ["15m", 3], "2h": ["1h", 2] };
   const bucketOf = (ts, ms) => { const d = Math.floor(ts / 864e5) * 864e5; return d + Math.floor((ts - d) / ms) * ms; };
+  /* cada vela en su sitio: ordenadas, sin repetidas y con la hora de su marco (la fuente pública añadía al final un
+     punto con la hora exacta de ahora, y el gráfico lo pintaba como otra vela cada 15 segundos) */
+  function tidyBars(list, tf) {
+    const ms = TF_MS[tf] || 0, intra = ms && ms < 864e5, out = [];
+    list.filter(b => b && isFinite(b.open) && isFinite(b.high) && isFinite(b.low) && isFinite(b.close)).sort((a, b) => a.timestamp - b.timestamp).forEach(b0 => {
+      const b = Object.assign({}, b0); if (intra) b.timestamp = bucketOf(b.timestamp, ms);
+      const l = out[out.length - 1];
+      if (l && (b.timestamp === l.timestamp || (!intra && ms && b.timestamp - l.timestamp < ms * 0.9))) { l.high = Math.max(l.high, b.high); l.low = Math.min(l.low, b.low); l.close = b.close; l.volume = Math.max(l.volume || 0, b.volume || 0); }
+      else out.push(b);
+    });
+    return out;
+  }
   function aggBars(list, tf) {
     const ms = TF_MS[tf], out = []; let cur = null;
     for (const b of list) {
@@ -72,7 +84,7 @@
   KC.registerLocale("es-ES", { time: "Hora: ", open: "Ap: ", high: "Máx: ", low: "Mín: ", close: "Cierre: ", volume: "Vol: ", change: "Cambio: ", turnover: "Importe: ", second: "s", minute: "min", hour: "h", day: "D", week: "S", month: "M", year: "A" });
 
   /* ---------- colores ---------- */
-  let DARK = false;
+  let DARK = false, BGC = null; // BGC: color de fondo real del gráfico (para el texto «en la línea»)
   const CFG_DEF = { up: null, down: null, bg: null, grid: true, type: "candle_solid" };
   let CFG = Object.assign({}, CFG_DEF, ls.get("tk-cfg", {}));
   function pal() {
@@ -108,11 +120,57 @@
   const IND_COLORS = () => DARK ? ["#7b93ff", "#e0a33a", "#c6cee0", "#4fbf8f", "#d6336c", "#0e9aa7"] : ["#2443c7", "#d9822b", "#14213a", "#2f8f67", "#d6336c", "#0e9aa7"];
 
   /* ---------- estilo de cada dibujo ---------- */
-  const sty = o => { const ed = o.extendData || {}; return { color: ed.color || pal().cob, width: ed.width || 1.5, dash: ed.dash || "solid", text: ed.text || "", size: ed.size || 14, fill: ed.fill !== false }; };
+  const sty = o => { const ed = o.extendData || {}; return { color: ed.color || pal().cob, width: ed.width || 1.5, dash: ed.dash || "solid", text: ed.text || "", size: ed.size || 14, fill: ed.fill !== false, bold: !!ed.bold, italic: !!ed.italic, tcolor: ed.tcolor || "", th: ed.th || "", tv: ed.tv || "" }; };
   const lineSt = s => ({ color: s.color, size: s.width, style: s.dash === "solid" ? "solid" : "dashed", dashedValue: s.dash === "dotted" ? [2, 3] : [6, 4] });
-  const textSt = (s, x) => Object.assign({ color: s.color, size: s.size, family: "Inter, system-ui, sans-serif", weight: 500, backgroundColor: "transparent", borderSize: 0, borderColor: "transparent", paddingLeft: 4, paddingRight: 4, paddingTop: 2, paddingBottom: 2, borderRadius: 4 }, x || {});
+  const textSt = (s, x) => {
+    const t = Object.assign({ color: s.color, size: s.size, family: "Inter, system-ui, sans-serif", weight: 500, backgroundColor: "transparent", borderSize: 0, borderColor: "transparent", paddingLeft: 4, paddingRight: 4, paddingTop: 2, paddingBottom: 2, borderRadius: 4 }, x || {});
+    if (s.bold) t.weight = 700; if (s.italic) t.weight = "italic " + t.weight; if (s.tcolor) t.color = s.tcolor; // opciones de texto del usuario
+    return t;
+  };
   const labelSt = (s, x) => textSt(s, Object.assign({ color: "#ffffff", backgroundColor: s.color, size: 12, family: NUMF, paddingLeft: 6, paddingRight: 6, paddingTop: 4, paddingBottom: 4 }, x || {}));
+  /* ---------- texto en las líneas: va pegado a la línea, girado con ella y nunca boca abajo ---------- */
+  KC.registerFigure({
+    name: "tkRotText", checkEventOn: () => false,
+    draw: (ctx, a, st0) => {
+      ctx.save(); ctx.translate(a.x, a.y); ctx.rotate(a.angle || 0);
+      ctx.font = `${st0.weight || 500} ${st0.size || 13}px ${st0.family || "Inter, sans-serif"}`; ctx.textAlign = a.align || "center"; ctx.textBaseline = a.baseline || "middle";
+      if (a.bg) { const w = ctx.measureText(a.text).width, x0 = a.align === "left" ? 0 : a.align === "right" ? -w : -w / 2, h = (st0.size || 13) + 6; ctx.fillStyle = a.bg; ctx.fillRect(x0 - 5, -h / 2 + (a.dy || 0), w + 10, h); }
+      ctx.fillStyle = st0.color; ctx.fillText(a.text, 0, a.dy || 0); ctx.restore();
+    }
+  });
+  function lineTextFigs(a, b, s) {
+    if (!s.text || !a || !b) return [];
+    let ang = Math.atan2(b.y - a.y, b.x - a.x);
+    if (ang > Math.PI / 2 + 1e-6 || ang < -Math.PI / 2 - 1e-6) { const t = a; a = b; b = t; ang = Math.atan2(b.y - a.y, b.x - a.x); }
+    const h = s.th || "c", v = s.tv || "t", k = h === "l" ? 0 : h === "r" ? 1 : .5, pad = 8, ux = Math.cos(ang), uy = Math.sin(ang);
+    let x = a.x + (b.x - a.x) * k, y = a.y + (b.y - a.y) * k;
+    if (h === "l") { x += ux * pad; y += uy * pad; } if (h === "r") { x -= ux * pad; y -= uy * pad; }
+    const ts = textSt(s, { size: s.size || 13 });
+    return [{ type: "tkRotText", ignoreEvent: true, attrs: { x, y, angle: ang, text: s.text, align: h === "l" ? "left" : h === "r" ? "right" : "center", baseline: v === "t" ? "bottom" : v === "b" ? "top" : "middle", dy: v === "t" ? -4 : v === "b" ? 4 : 0, bg: v === "m" ? (BGC || pal().card) : "" }, styles: { color: ts.color, size: ts.size, weight: ts.weight, family: ts.family } }];
+  }
+  /* las líneas de la librería, con su texto (se envuelven las originales para no cambiar cómo se dibujan) */
+  const LINE_TEXT = ["segment", "rayLine", "straightLine", "horizontalStraightLine", "horizontalRayLine", "verticalStraightLine", "priceLine", "tkArrow"];
+  (() => {
+    const ends = (n, c, bd) => {
+      if (n === "horizontalStraightLine") return [{ x: 0, y: c[0].y }, { x: bd.width, y: c[0].y }];
+      if (n === "verticalStraightLine") return [{ x: c[0].x, y: bd.height }, { x: c[0].x, y: 0 }];
+      if (n === "horizontalRayLine") return [c[0], { x: c[1] && c[0].x < c[1].x ? bd.width : 0, y: c[0].y }];
+      if (n === "priceLine") return [c[0], { x: bd.width, y: c[0].y }];
+      return c.length > 1 ? [c[0], c[1]] : [];
+    };
+    ["segment", "rayLine", "straightLine", "horizontalStraightLine", "horizontalRayLine", "verticalStraightLine", "priceLine"].forEach(n => {
+      try {
+        const C = KC.getOverlayClass && KC.getOverlayClass(n); if (!C) return; const b = new C(), orig = b.createPointFigures;
+        KC.registerOverlay({ name: n, totalStep: b.totalStep, needDefaultPointFigure: b.needDefaultPointFigure, needDefaultXAxisFigure: b.needDefaultXAxisFigure, needDefaultYAxisFigure: b.needDefaultYAxisFigure,
+          createXAxisFigures: b.createXAxisFigures, createYAxisFigures: b.createYAxisFigures, performEventPressedMove: b.performEventPressedMove, performEventMoveForDrawing: b.performEventMoveForDrawing,
+          createPointFigures: p => { let f = orig ? orig(p) : []; f = f ? (Array.isArray(f) ? f : [f]) : []; if (!p.coordinates.length) return f; const e = ends(n, p.coordinates, p.bounding); return e.length ? f.concat(lineTextFigs(e[0], e[1], sty(p.overlay))) : f; } });
+      } catch (e) { /* si la librería cambia, la línea se queda sin texto */ }
+    });
+  })();
   const fmtP = v => nf(v, CUR_DIGITS);
+  /* texto dentro de una forma, en la posición elegida (arriba, centro, abajo · izquierda, centro, derecha) */
+  const boxText = (x, y, w, h, s) => { const H = s.th || "c", Vv = s.tv || "m", p = 6;
+    return { type: "text", ignoreEvent: true, attrs: { x: H === "l" ? x + p : H === "r" ? x + w - p : x + w / 2, y: Vv === "t" ? y + p : Vv === "b" ? y + h - p : y + h / 2, text: s.text, align: H === "l" ? "left" : H === "r" ? "right" : "center", baseline: Vv === "t" ? "top" : Vv === "b" ? "bottom" : "middle" }, styles: textSt(s, { color: pal().tinta }) }; };
   function reg(name, totalStep, fig, extra) {
     KC.registerOverlay(Object.assign({ name, totalStep, needDefaultPointFigure: true, needDefaultXAxisFigure: true, needDefaultYAxisFigure: true, createPointFigures: p => fig(p) || [] }, extra || {}));
   }
@@ -120,14 +178,14 @@
     if (c.length < 2) return [];
     const s = sty(o), x = Math.min(c[0].x, c[1].x), y = Math.min(c[0].y, c[1].y), w = Math.abs(c[1].x - c[0].x), h = Math.abs(c[1].y - c[0].y);
     const f = [{ type: "rect", attrs: { x, y, width: w, height: h }, styles: { style: s.fill ? "stroke_fill" : "stroke", color: alpha(s.color, .14), borderColor: s.color, borderSize: s.width, borderStyle: s.dash === "solid" ? "solid" : "dashed", borderDashedValue: s.dash === "dotted" ? [2, 3] : [6, 4] } }];
-    if (s.text) f.push({ type: "text", ignoreEvent: true, attrs: { x: x + w / 2, y: y + h / 2, text: s.text, align: "center", baseline: "middle" }, styles: textSt(s, { color: pal().tinta }) });
+    if (s.text) f.push(boxText(x, y, w, h, s));
     return f;
   });
   reg("tkCircle", 3, ({ coordinates: c, overlay: o }) => {
     if (c.length < 2) return [];
     const s = sty(o), r = Math.hypot(c[1].x - c[0].x, c[1].y - c[0].y);
     const f = [{ type: "circle", attrs: { x: c[0].x, y: c[0].y, r }, styles: { style: s.fill ? "stroke_fill" : "stroke", color: alpha(s.color, .14), borderColor: s.color, borderSize: s.width } }];
-    if (s.text) f.push({ type: "text", ignoreEvent: true, attrs: { x: c[0].x, y: c[0].y, text: s.text, align: "center", baseline: "middle" }, styles: textSt(s, { color: pal().tinta }) });
+    if (s.text) f.push(boxText(c[0].x - r * .72, c[0].y - r * .72, r * 1.44, r * 1.44, s));
     return f;
   });
   reg("tkTriangle", 4, ({ coordinates: c, overlay: o }) => {
@@ -139,7 +197,7 @@
     if (c.length < 2) return [];
     const s = sty(o), a = Math.atan2(c[1].y - c[0].y, c[1].x - c[0].x), L = 10 + s.width * 2;
     const h1 = { x: c[1].x - L * Math.cos(a - 0.45), y: c[1].y - L * Math.sin(a - 0.45) }, h2 = { x: c[1].x - L * Math.cos(a + 0.45), y: c[1].y - L * Math.sin(a + 0.45) };
-    return [{ type: "line", attrs: { coordinates: [c[0], c[1]] }, styles: lineSt(s) }, { type: "polygon", attrs: { coordinates: [c[1], h1, h2] }, styles: { style: "fill", color: s.color } }];
+    return [{ type: "line", attrs: { coordinates: [c[0], c[1]] }, styles: lineSt(s) }, { type: "polygon", attrs: { coordinates: [c[1], h1, h2] }, styles: { style: "fill", color: s.color } }].concat(lineTextFigs(c[0], c[1], s));
   });
   reg("tkText", 2, ({ coordinates: c, overlay: o }) => {
     const s = sty(o);
@@ -642,7 +700,10 @@
     chevL: '<path d="M12 5l-5 5 5 5"/>',
     chevR: '<path d="M8 5l5 5-5 5"/>',
     grip: '<circle cx="7" cy="5" r="1.1" fill="currentColor"/><circle cx="13" cy="5" r="1.1" fill="currentColor"/><circle cx="7" cy="10" r="1.1" fill="currentColor"/><circle cx="13" cy="10" r="1.1" fill="currentColor"/><circle cx="7" cy="15" r="1.1" fill="currentColor"/><circle cx="13" cy="15" r="1.1" fill="currentColor"/>',
-    eyeOff: '<path d="M2 10s3-6 8-6c2 0 3.6.9 4.9 2M18 10s-3 6-8 6c-2 0-3.6-.9-4.9-2M3 17L17 3"/>'
+    eyeOff: '<path d="M2 10s3-6 8-6c2 0 3.6.9 4.9 2M18 10s-3 6-8 6c-2 0-3.6-.9-4.9-2M3 17L17 3"/>',
+    textOpt: '<path d="M2.5 15.5L6.5 4.5l4 11M4 11.8h5"/><path d="M12.5 8.5h5M15 8.5v7"/>',
+    tplMark: '<path d="M5.5 2.5h9a1 1 0 0 1 1 1v14l-5.5-3.6-5.5 3.6v-14a1 1 0 0 1 1-1z"/><path d="M8 7.5h4"/>',
+    check: '<path d="M4 10.5l4 4 8-9"/>'
   };
   const icon = (n, s) => `<svg width="${s || 20}" height="${s || 20}" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[n] || ""}</svg>`;
   const GROUPS = [
@@ -698,15 +759,15 @@
     const round = v => +(+v).toFixed(digits);
     const p = {
       id: "publico", get label() { return delayed ? "Precio público · con retraso" : "Precio público"; },
-      async bars(sym, tf, to) {
-        const { data, error } = await invoke("velas", { sym, tf, to: to ? Math.floor(to / 1000) - 1 : undefined });
+      async bars(sym, tf, to, last) {
+        const { data, error } = await invoke("velas", { sym, tf, to: to ? Math.floor(to / 1000) - 1 : undefined, last: last ? 1 : undefined });
         if (error || !data || data.error) throw new Error((data && data.error) || (error && error.message) || "sin datos");
         delayed = !!data.delayed;
-        return { bars: data.bars.map(b => ({ timestamp: b[0], open: round(b[1]), high: round(b[2]), low: round(b[3]), close: round(b[4]), volume: b[5] || 0 })), more: !!data.more };
+        return { bars: tidyBars(data.bars.map(b => ({ timestamp: b[0], open: round(b[1]), high: round(b[2]), low: round(b[3]), close: round(b[4]), volume: b[5] || 0 })), tf), more: !!data.more };
       },
       subscribe(sym, tf, cb) {
         let alive = true, t = null;
-        const tick = async () => { if (!alive) return; try { const r = await p.bars(sym, tf, null); r.bars.slice(-2).forEach(cb); } catch (e) { /* lo intenta otra vez */ } if (alive) t = setTimeout(tick, 15000); };
+        const tick = async () => { if (!alive) return; try { const r = await p.bars(sym, tf, null, true); r.bars.slice(-2).forEach(cb); } catch (e) { /* lo intenta otra vez */ } if (alive) t = setTimeout(tick, 15000); };
         t = setTimeout(tick, 15000);
         return () => { alive = false; clearTimeout(t); };
       }
@@ -716,7 +777,7 @@
 
   /* ---------- el gráfico ---------- */
   let inst = null;
-  const ALL = new Set(), MODES = {};
+  const ALL = new Set(), MODES = {}, TPLS = { data: null, t: 0, synced: false }; // plantillas de estilo (compartidas por todos los gráficos)
   function mount(el, opts) {
     for (const x of Array.from(ALL)) if (x.el === el || !document.body.contains(x.el)) destroyOne(x);
     const KEY = opts.key || "main", TFK = KEY === "main" ? "tk-tf" : "tk-tf-" + KEY;
@@ -777,6 +838,8 @@
             <span class="gx-ftext"><span class="gx-vs"></span><input type="text" data-f="text" placeholder="Escribe un texto…" aria-label="Texto del dibujo" maxlength="120">
               <label class="gx-fl"><span class="sr">Tamaño del texto</span><select data-f="size">${[11, 12, 14, 16, 20, 24, 32].map(s => `<option value="${s}">${s}</option>`).join("")}</select></label></span>
             <label class="gx-fill"><input type="checkbox" data-f="fill"> Relleno</label>
+            <button type="button" class="gx-tb gx-ic" data-fa="txt" title="Opciones de texto: tamaño, negrita, cursiva, color y posición" aria-label="Opciones de texto">${icon("textOpt", 17)}</button>
+            <button type="button" class="gx-tb gx-ic" data-fa="tpl" title="Plantillas: guarda este estilo y úsalo en otros dibujos" aria-label="Plantillas de estilo">${icon("tplMark", 17)}</button>
             <span class="gx-vs"></span>
             <button type="button" class="gx-tb gx-ic" data-fa="lock" aria-pressed="false" title="Bloquear" aria-label="Bloquear dibujo">${icon("lock", 17)}</button>
             <button type="button" class="gx-tb gx-ic" data-fa="dup" title="Duplicar" aria-label="Duplicar dibujo">${icon("dup", 17)}</button>
@@ -816,7 +879,7 @@
     const $ = s => el.querySelector(s), $$ = s => Array.from(el.querySelectorAll(s));
     const box = $(".gx-chart");
     const ch = KC.init(box, { locale: "es-ES", timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Madrid", styles: styles(), decimalFold: { threshold: 99 } });
-    const paintBg = () => { box.style.background = CFG.bg || ""; };
+    const paintBg = () => { box.style.background = CFG.bg || ""; setTimeout(() => { let n = box, c = ""; while (n && n.nodeType === 1) { c = getComputedStyle(n).backgroundColor; if (c && !/rgba\(0, 0, 0, 0\)|transparent/.test(c)) break; n = n.parentNode; c = ""; } BGC = c || null; }, 0); };
     paintBg();
     let lastCross = null;
     ch.subscribeAction("onCrosshairChange", d => { lastCross = d; });
@@ -864,6 +927,10 @@
           }
           msg(type === "init" && !r.bars.length ? "No hay velas para este mercado en este marco." : "");
           callback(r.bars, { forward: r.more && r.bars.length > 0, backward: false });
+          if (type === "forward" && !r.more && prov.id === "publico" && st.limTold !== st.tf) { // al llegar al principio de lo que guarda la fuente pública
+            st.limTold = st.tf; const d = { "1m": "un mes", "3m": "un mes", "5m": "dos meses", "15m": "dos meses", "30m": "dos meses", "45m": "dos meses", "1h": "dos años", "2h": "dos años", "4h": "dos años" }[st.tf];
+            if (d) { hint(`El precio público solo guarda ${d} de velas de ${tfName(st.tf)}. Para ver más atrás, usa un marco mayor o conecta tu MT5.`); setTimeout(() => hint(""), 6000); }
+          }
           if (type === "init" && r.bars.length) { st.price = r.bars[r.bars.length - 1].close; opts.onPrice && opts.onPrice(st.price, st.sym); }
           setSrc();
         } catch (e) {
@@ -984,6 +1051,7 @@
       if (name === "tkComment") { ed.text = "Comentario"; ed.size = 13; }
       if (name === "tkPriceNote" || name === "tkFlag" || name === "tkArrowUp" || name === "tkArrowDown") { ed.text = ""; ed.size = 12; }
       if (name === "tkEmoji") { ed.text = st.emoji || "🙂"; ed.size = 28; }
+      const def = (tplAll()[name] || {}).def; if (def) Object.assign(ed, def); // estilo por defecto que eligió el usuario
       return ed;
     }
     function applyCursor() {
@@ -1107,17 +1175,77 @@
       $$(".gx-c").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.color.toLowerCase() === String(s.color).toLowerCase())));
       F.querySelector('[data-f="width"]').value = String(s.width);
       F.querySelector('[data-f="dash"]').value = s.dash;
-      const tx = TEXTABLE.includes(o.name), fl = FILLABLE.includes(o.name), noLine = ["tkText", "tkPriceLabel", "tkPos"].includes(o.name);
-      F.querySelector(".gx-ftext").hidden = !tx;
+      const tx = (TEXTABLE.includes(o.name) || LINE_TEXT.includes(o.name)) && o.name !== "tkEmoji", fl = FILLABLE.includes(o.name), noLine = ["tkText", "tkPriceLabel", "tkPos"].includes(o.name);
+      F.querySelector('[data-fa="txt"]').hidden = !tx; F.querySelector('[data-fa="tpl"]').hidden = o.name === "tkPos";
+      F.querySelector('[data-f="text"]').placeholder = LINE_TEXT.includes(o.name) ? "Texto en la línea…" : "Escribe un texto…";
+      F.querySelector(".gx-ftext").hidden = !(tx || o.name === "tkEmoji");
       F.querySelector('[data-f="text"]').value = s.text;
-      F.querySelector('[data-f="size"]').value = String(s.size);
+      const sz = F.querySelector('[data-f="size"]'); if (![...sz.options].some(x => x.value === String(s.size))) sz.add(new Option(String(s.size), String(s.size))); sz.value = String(s.size);
       F.querySelector(".gx-fill").hidden = !fl; F.querySelector('[data-f="fill"]').checked = s.fill;
       F.querySelector('[data-f="width"]').parentNode.hidden = noLine; F.querySelector('[data-f="dash"]').parentNode.hidden = noLine;
       F.querySelector(".gx-sw").hidden = o.name === "tkPos";
       F.querySelector('[data-fa="lock"]').setAttribute("aria-pressed", String(!!o.lock));
       if (focusText && tx) setTimeout(() => { const i = F.querySelector('[data-f="text"]'); i.focus(); i.select(); }, 30);
     }
-    function hideFloat() { if (F.contains(document.activeElement)) document.activeElement.blur(); F.hidden = true; st.sel = null; }
+    function hideFloat() { if (F.contains(document.activeElement)) document.activeElement.blur(); F.hidden = true; st.sel = null; if (POP.dataset.kind === "sel") closePop(); }
+    /* ---------- opciones de texto del dibujo elegido ---------- */
+    const hex6 = c => /^#[0-9a-f]{6}$/i.test(c || "") ? c : "#2443c7";
+    function menuText(btn) {
+      const o = st.sel && getOv(st.sel); if (!o) return;
+      const s = sty(o), isLine = LINE_TEXT.includes(o.name), box = ["tkRect", "tkCircle"].includes(o.name), sizes = [10, 11, 12, 13, 14, 16, 20, 24, 28, 32, 40];
+      if (!sizes.includes(s.size)) sizes.push(s.size); sizes.sort((a, b) => a - b);
+      const seg = (attr, cur, list) => `<div class="gx-seg" role="group">${list.map(([k, l]) => `<button type="button" data-${attr}="${k}" aria-pressed="${cur === k}">${l}</button>`).join("")}</div>`;
+      openPop(btn, `<div class="gx-mh">Texto</div><div class="gx-tpo">
+        <input type="text" data-f="text" value="${esc(s.text)}" placeholder="${isLine ? "Texto en la línea…" : "Escribe un texto…"}" maxlength="120" aria-label="Texto">
+        <div class="gx-tpr"><label class="gx-cc" title="Color del texto"><input type="color" data-f="tcolor" value="${hex6(s.tcolor || (box ? pal().tinta : s.color))}" aria-label="Color del texto"></label>
+          <select data-f="size" aria-label="Tamaño del texto">${sizes.map(z => `<option value="${z}" ${z === s.size ? "selected" : ""}>${z}</option>`).join("")}</select>
+          <button type="button" class="gx-tbb" data-tb="bold" aria-pressed="${s.bold}" aria-label="Negrita" title="Negrita"><b>N</b></button>
+          <button type="button" class="gx-tbb" data-tb="italic" aria-pressed="${s.italic}" aria-label="Cursiva" title="Cursiva"><i>K</i></button></div>
+        ${isLine || box ? `<div class="gx-tpl2"><small>Horizontal</small>${seg("th", s.th || "c", [["l", "Izquierda"], ["c", "Centro"], ["r", "Derecha"]])}</div>
+          <div class="gx-tpl2"><small>Vertical</small>${seg("tv", s.tv || (isLine ? "t" : "m"), isLine ? [["t", "Encima"], ["m", "En la línea"], ["b", "Debajo"]] : [["t", "Arriba"], ["m", "Centro"], ["b", "Abajo"]])}</div>` : ""}
+        ${s.tcolor ? `<button type="button" class="gx-lnk" data-tcreset>Texto del mismo color que el dibujo</button>` : ""}</div>`);
+      POP.dataset.kind = "sel";
+      POP.onclick = e => {
+        const b = e.target.closest("[data-tb],[data-th],[data-tv],[data-tcreset]"); if (!b) return;
+        if (b.dataset.tb) { const k = b.dataset.tb, v = b.getAttribute("aria-pressed") !== "true"; patchSel({ [k]: v }); b.setAttribute("aria-pressed", String(v)); }
+        if (b.dataset.th || b.dataset.tv) { const k = b.dataset.th ? "th" : "tv"; patchSel({ [k]: b.dataset[k] }); b.parentNode.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); }
+        if (b.hasAttribute("data-tcreset")) { patchSel({ tcolor: "" }); menuText(btn); }
+      };
+      const i = POP.querySelector('[data-f="text"]'); setTimeout(() => { i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 30);
+    }
+    /* ---------- plantillas: guardar el estilo de un dibujo y reutilizarlo ---------- */
+    const TPL_KEYS = ["color", "width", "dash", "size", "fill", "bold", "italic", "tcolor", "th", "tv", "bg"];
+    const pickStyle = ed => { const r = {}; TPL_KEYS.forEach(k => { if (ed && ed[k] !== undefined && ed[k] !== "") r[k] = ed[k]; }); return r; };
+    const tplAll = () => { if (!TPLS.data) { const l = ls.get("tk-tpl", null); TPLS.data = (l && l.data) || {}; TPLS.t = (l && l.t) || 0; } return TPLS.data; };
+    function tplPush() { TPLS.t = Date.now(); ls.set("tk-tpl", { t: TPLS.t, data: TPLS.data }); try { opts.saveDrawings && opts.saveDrawings("__plantillas", TPLS.data, TPLS.t); } catch (e) { /* queda en este navegador */ } }
+    async function tplSync() {
+      if (TPLS.synced || !opts.loadDrawings) return; TPLS.synced = true; tplAll();
+      try { const r = await opts.loadDrawings("__plantillas"); if (r && r.list && !Array.isArray(r.list) && (r.t || 0) > TPLS.t) { TPLS.data = r.list; TPLS.t = r.t; ls.set("tk-tpl", { t: TPLS.t, data: TPLS.data }); } else if (TPLS.t && (!r || (r.t || 0) < TPLS.t)) tplPush(); } catch (e) { TPLS.synced = false; }
+    }
+    function menuTpl(btn) {
+      const o = st.sel && getOv(st.sel); if (!o) return;
+      const n = o.name, A = tplAll(), T = A[n] || (A[n] = { list: [], def: null }), nm = TOOL_NAME[n] || "este dibujo", cur = JSON.stringify(pickStyle(o.extendData));
+      const isDef = x => T.def && JSON.stringify(T.def) === JSON.stringify(x);
+      const dot = ed => `<span class="gx-tsw" style="background:${esc(ed.color || pal().cob)}${ed.dash && ed.dash !== "solid" ? ";outline:1px dashed " + esc(ed.color || pal().cob) : ""}"></span>`;
+      openPop(btn, `<div class="gx-mh">Plantillas · ${esc(nm)}</div>
+        ${T.list.length ? T.list.map((x, i) => `<div class="gx-mrow"><button type="button" class="gx-mi" data-tpa="${i}" ${JSON.stringify(x.ed) === cur ? 'aria-current="true"' : ""}>${dot(x.ed)}<span>${esc(x.n)}</span>${isDef(x.ed) ? `<small class="gx-muted">por defecto</small>` : ""}</button><button type="button" class="gx-star" data-tpdel="${i}" aria-label="Borrar la plantilla ${esc(x.n)}" title="Borrar plantilla">${icon("x", 14)}</button></div>`).join("")
+          : `<div class="gx-muted gx-tpe">Aún no tienes plantillas de ${esc(nm.toLowerCase())}. Guarda el estilo de este dibujo (color, grosor, línea y texto) para ponérselo a otros con un toque.</div>`}
+        <div class="gx-tpsave"><input type="text" data-tpname maxlength="40" placeholder="Nombre, p. ej. Soporte diario" aria-label="Nombre de la plantilla"><button type="button" class="gx-btn" data-tpsave>Guardar estilo</button></div>
+        <button type="button" class="gx-mi" data-tpdef ${T.def && JSON.stringify(T.def) === cur ? 'aria-pressed="true"' : ""}>${icon("check", 15)}<span>Usar este estilo en cada ${esc(nm.toLowerCase())} nueva</span></button>
+        ${T.def ? `<button type="button" class="gx-mi" data-tpreset>${icon("undo", 15)}<span>Volver al estilo de siempre</span></button>` : ""}`);
+      POP.dataset.kind = "sel";
+      const nameIn = POP.querySelector("[data-tpname]");
+      const doSave = () => { const name = (nameIn.value || "").trim() || `Plantilla ${T.list.length + 1}`; T.list.push({ n: name, ed: pickStyle((getOv(st.sel) || o).extendData) }); tplPush(); menuTpl(btn); hint(`Plantilla «${name}» guardada.`); setTimeout(() => hint(""), 2200); };
+      nameIn.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); doSave(); } });
+      POP.onclick = e => {
+        const b = e.target.closest("[data-tpa],[data-tpdel],[data-tpsave],[data-tpdef],[data-tpreset]"); if (!b) return;
+        if (b.dataset.tpa) { const ed = T.list[+b.dataset.tpa].ed, patch = {}; TPL_KEYS.forEach(k => { patch[k] = ed[k]; }); patchSel(patch); showFloat(st.sel, false); closePop(); hint("Plantilla aplicada."); setTimeout(() => hint(""), 1600); return; }
+        if (b.dataset.tpdel) { const x = T.list.splice(+b.dataset.tpdel, 1)[0]; if (x && isDef(x.ed)) T.def = null; tplPush(); menuTpl(btn); return; }
+        if (b.hasAttribute("data-tpsave")) { doSave(); return; }
+        if (b.hasAttribute("data-tpdef")) { T.def = pickStyle((getOv(st.sel) || o).extendData); tplPush(); menuTpl(btn); hint(`Cada ${nm.toLowerCase()} nueva saldrá con este estilo.`); setTimeout(() => hint(""), 2400); return; }
+        if (b.hasAttribute("data-tpreset")) { T.def = null; tplPush(); menuTpl(btn); }
+      };
+    }
     function patchSel(patch) {
       const o = st.sel && getOv(st.sel); if (!o) return;
       const ed = Object.assign({}, o.extendData || {}, patch), upd = { id: o.id, extendData: ed };
@@ -1181,14 +1309,14 @@
     /* ---------- menús y ventanas ---------- */
     const POP = $(".gx-pop"), MOD = $(".gx-modal"), DLG = $(".gx-dlg");
     function openPop(anchor, html, onPick) {
-      POP.innerHTML = html; POP.hidden = false;
+      POP.innerHTML = html; POP.hidden = false; delete POP.dataset.kind;
       const a = anchor.getBoundingClientRect(), r = el.getBoundingClientRect();
       const left = Math.min(a.left - r.left, r.width - 260), top = a.bottom - r.top + 4;
       if (anchor.closest(".gx-tools") && window.innerWidth >= 1024) { POP.style.left = (a.right - r.left + 4) + "px"; POP.style.top = (a.top - r.top) + "px"; }
       else { POP.style.left = Math.max(4, left) + "px"; POP.style.top = top + "px"; }
       POP.onclick = e => { const fv = e.target.closest("[data-fav]"); if (fv) { const on = toggleFav(fv.dataset.fav); fv.setAttribute("aria-pressed", String(on)); fv.innerHTML = icon(on ? "starOn" : "star", 15); return; } const b = e.target.closest("[data-pick]"); if (b) { onPick(b.dataset.pick); closePop(); } };
     }
-    function closePop() { POP.hidden = true; POP.innerHTML = ""; }
+    function closePop() { POP.hidden = true; POP.innerHTML = ""; delete POP.dataset.kind; }
     function openModal(html, bind) { DLG.onclick = null; DLG.onchange = null; DLG.innerHTML = html; MOD.hidden = false; bind && bind(); const f = DLG.querySelector("input,button"); f && f.focus(); }
     function closeModal() { MOD.hidden = true; DLG.innerHTML = ""; }
     function typeIcon(t) { return t === "candle_stroke" ? "candlesH" : t === "ohlc" ? "bars" : t === "area" ? "area" : "candles"; }
@@ -1546,6 +1674,7 @@
 
     /* ---------- eventos ---------- */
     el.addEventListener("click", e => {
+      if (!e.target.isConnected) return; // el menú se volvió a pintar con este clic
       if (!POP.hidden && !e.target.closest(".gx-pop,[data-menu],[data-more]")) closePop();
       if (e.target === MOD) { closeModal(); return; }
       const t = e.target.closest("button,input,select,label");
@@ -1564,6 +1693,8 @@
       if (t.dataset.tool) { const g = t.closest("[data-grp]"); if (g && st.tool === t.dataset.tool && t.dataset.tool !== "cursor" && el.querySelector(`[data-more="${g.dataset.grp}"]`)) { menuGroup(t, g.dataset.grp); return; } setTool(t.dataset.tool); return; }
       if (t.dataset.color) { patchSel({ color: t.dataset.color }); return; }
       if (t.dataset.fa === "del") { removeSel(); return; }
+      if (t.dataset.fa === "txt") { menuText(t); return; }
+      if (t.dataset.fa === "tpl") { menuTpl(t); return; }
       if (t.dataset.fa === "dup") { dupSel(); return; }
       if (t.dataset.fa === "lock") { const o = st.sel && getOv(st.sel); if (o) { ch.overrideOverlay({ id: o.id, lock: !o.lock }); t.setAttribute("aria-pressed", String(!o.lock)); save(); } return; }
       if (t.dataset.back) { startAt(Date.now() - (+t.dataset.back) * 864e5); return; }
@@ -1598,13 +1729,14 @@
       if (a === "closesim") { if (R.pos) closeSim(bar().close, bar()); return; }
       if (a === "godate") { const v = $(".gx-date input").value; if (v) startAt(new Date(v).getTime()); return; }
     });
-    el.addEventListener("input", e => { const f = e.target.dataset.f; if (f === "text") patchSel({ text: e.target.value }); if (e.target.classList.contains("gx-range")) jumpTo(+e.target.value); });
+    el.addEventListener("input", e => { const f = e.target.dataset.f; if (f === "text") { patchSel({ text: e.target.value }); const other = [...el.querySelectorAll('[data-f="text"]')].find(x => x !== e.target); if (other) other.value = e.target.value; } if (e.target.classList.contains("gx-range")) jumpTo(+e.target.value); });
     el.addEventListener("change", e => {
       const t = e.target, f = t.dataset.f;
       if (f === "color") patchSel({ color: t.value });
       if (f === "width") patchSel({ width: +t.value });
       if (f === "dash") patchSel({ dash: t.value });
-      if (f === "size") patchSel({ size: +t.value });
+      if (f === "size") { patchSel({ size: +t.value }); el.querySelectorAll('[data-f="size"]').forEach(x => { if (x !== t) { if (![...x.options].some(q => q.value === t.value)) x.add(new Option(t.value, t.value)); x.value = t.value; } }); }
+      if (f === "tcolor") patchSel({ tcolor: t.value });
       if (f === "fill") patchSel({ fill: t.checked });
       if (t.dataset.act === "speed") { R.speed = +t.value; ls.set("tk-speed", R.speed); if (R.timer) { pause(); play(); } }
     });
@@ -1651,6 +1783,7 @@
     document.addEventListener("keyup", shiftTrack); document.addEventListener("keydown", shiftTrack, true);
     box.addEventListener("pointermove", shiftTrack, true); box.addEventListener("pointerdown", shiftTrack, true);
     window.addEventListener("blur", () => { st.shift = false; });
+    tplSync();
     if (MODE === "bt") whenLoaded(() => enterReplay()); else if (opts.onMode) opts.onMode("live");
     const ro = new ResizeObserver(() => ch.resize()); ro.observe(box);
 
