@@ -26,6 +26,11 @@
       if (l && (b.timestamp === l.timestamp || (!intra && ms && b.timestamp - l.timestamp < ms * 0.9))) { l.high = Math.max(l.high, b.high); l.low = Math.min(l.low, b.low); l.close = b.close; l.volume = Math.max(l.volume || 0, b.volume || 0); }
       else out.push(b);
     });
+    out.forEach((b, i) => { // máximo y mínimo siempre abarcan apertura y cierre; vela sin forma (un solo precio) abre donde cerró la anterior
+      const p = out[i - 1];
+      if (p && b.high === b.low && b.open === b.close && (!intra || b.timestamp - p.timestamp <= ms * 3)) b.open = p.close;
+      b.high = Math.max(b.high, b.open, b.close); b.low = Math.min(b.low, b.open, b.close);
+    });
     return out;
   }
   function aggBars(list, tf) {

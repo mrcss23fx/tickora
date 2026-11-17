@@ -47,6 +47,13 @@ function tidy(bars: number[][], step: number, intraday: boolean) {
       last[2] = Math.max(last[2], b[2]); last[3] = Math.min(last[3], b[3]); last[4] = b[4]; last[5] = Math.max(last[5], b[5]);
     } else out.push(b);
   }
+  // Velas imposibles o sin forma: el máximo y el mínimo siempre abarcan apertura y cierre, y si Yahoo
+  // solo da un precio por vela (divisas en 1 minuto) la vela abre donde cerró la anterior.
+  for (let i = 0; i < out.length; i++) {
+    const b = out[i], p = out[i - 1];
+    if (p && b[2] === b[3] && b[1] === b[4] && (!intraday || b[0] - p[0] <= step * 3)) b[1] = p[4];
+    b[2] = Math.max(b[2], b[1], b[4]); b[3] = Math.min(b[3], b[1], b[4]);
+  }
   return out;
 }
 Deno.serve(async (req) => {
