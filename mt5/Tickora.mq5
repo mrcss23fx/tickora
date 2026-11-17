@@ -12,11 +12,16 @@
 //| 3. En el gráfico sale un código de 6 cifras: escríbelo en la app |
 //|    (Mi plan → Conectar MT5). Queda vinculado para siempre.       |
 //| Mantén abierto un gráfico de cada mercado que operes: de ahí     |
-//| sale la captura. El programa NO abre ni cierra operaciones.      |
+//| sale la captura. El programa NUNCA abre operaciones.             |
+//| Candado (2.0): si lo activas en Tickora (Ajustes), cuando se     |
+//| cumple una de tus normas el programa te avisa, cierra al momento |
+//| las operaciones nuevas o cierra MetaTrader, según elijas.        |
+//| Para cerrar operaciones necesita «Trading algorítmico» activado. |
 //+------------------------------------------------------------------+
 #property copyright   "Tickora"
-#property version     "1.31"
-#property description "Apunta solas tus operaciones en Tickora, con la captura del gráfico al entrar y al salir. No abre ni cierra operaciones."
+#property version     "2.00"
+#property description "Apunta solas tus operaciones en Tickora, con la captura del gráfico al entrar y al salir. Nunca abre operaciones. Con el candado activado en Tickora puede avisarte, cerrar las operaciones nuevas o cerrar MetaTrader cuando se cumple una de tus normas."
+#include <Trade\Trade.mqh>
 
 input string Clave           = "";    // Clave (opcional: si la dejas vacía, te enseña un código para vincular)
 input bool   GuardarCapturas = true;  // Guardar la captura del gráfico
@@ -27,7 +32,8 @@ input bool   RehacerFoto     = true;  // Si no hubo foto en el momento, rehacerl
 #define BT_URL      "https://xsvezicjksfrklwjskfv.supabase.co"
 #define BT_RPC      "/rest/v1/rpc/bridge_ingest"
 #define BT_APIKEY   "sb_publishable_qLIhdI4CuQuisOstwl0fWg_dhW61xcm"
-#define BT_VERSION  "1.31"
+#define BT_VERSION  "2.0"
+#define BT_LOCKFILE "tickora_candado.txt"
 #define BT_KEYFILE  "bitacora_clave.txt"
 #define BT_STATE    "bitacora_estado.csv"
 #define BT_CAPFILE  "bitacora_captura.png"
@@ -70,11 +76,22 @@ datetime g_wUntil   = 0;                        // hasta cuándo seguimos envian
 string   g_lastReq  = "";                       // último historial servido
 ulong    g_lastSync = 0;
 datetime g_lastPair = 0;
+//--- candado
+string   g_lock      = "";                      // configuración que manda la app (texto con «|»)
+bool     g_lockOn    = false;
+long     g_lockSince = 0;                       // desde cuándo (ms, hora universal) está cerrado
+string   g_lockWhy   = "";
+string   g_lockCode  = "";
+string   g_lockEv[];                            // lo que ha hecho, pendiente de enviar
+ulong    g_lockDone[];                          // operaciones y órdenes ya atendidas
+datetime g_lockShown = 0;                       // cuándo enseñamos el aviso de «no dejar usar MT5»
+CTrade   g_trade;
 
 //+------------------------------------------------------------------+
 int OnInit()
   {
    LoadState();
+   LoadLock();
    g_key = StringLen(Clave) >= 10 ? Clave : LoadKey();
    EventSetMillisecondTimer(1000);
    if(g_key == "")
@@ -94,6 +111,7 @@ void OnDeinit(const int reason)
    SaveState();
    ObjectDelete(0, "bt_code1");
    ObjectDelete(0, "bt_code2");
+   LockPaint(false);
    Comment("");
   }
 
@@ -106,6 +124,8 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
   {
    if(g_key == "")
       return;                                      // aún sin vincular: se recogerá al vincular (últimos 7 días)
+   if(trans.type == TRADE_TRANSACTION_DEAL_ADD || trans.type == TRADE_TRANSACTION_ORDER_ADD)
+      CheckLock();                                 // el candado reacciona en el momento
    if(trans.type == TRADE_TRANSACTION_DEAL_ADD)
      {
       if(!HistoryDealSelect(trans.deal))
@@ -192,11 +212,12 @@ void OnTimer()
      }
    // precios en vivo: cada segundo si estás mirando el gráfico en la app; si no, una pregunta cada 5 s
    ulong ms = GetTickCount64();
-   if(ms - g_lastSync >= (g_wUntil > now ? 1000 : 5000))
+   if(ms - g_lastSync >= (g_wUntil > now || ArraySize(g_lockEv) > 0 ? 1000 : 5000))
      {
       g_lastSync = ms;
       Sync();
      }
+   CheckLock();
    for(int i = 0; i < ArraySize(g_jobs); i++)
      {
       if(g_jobs[i].due > now)
@@ -304,11 +325,29 @@ void Sync()
       if(n > 0)
          data = "\"live\":{\"sym\":\"" + JsonEsc(g_wSym) + "\",\"tf\":\"" + g_wTf + "\",\"bars\":[" + BarsJson(r, n, digits, off) + "]}";
      }
+   int nev = ArraySize(g_lockEv);
+   if(nev > 20)
+      nev = 20;
+   if(nev > 0)
+     {
+      string ev = "";
+      for(int i = 0; i < nev; i++)
+         ev += (i > 0 ? "," : "") + g_lockEv[i];
+      data += (data != "" ? "," : "") + "\"lockev\":[" + ev + "]";
+     }
    string js = "{\"p_key\":\"" + JsonEsc(g_key) + "\",\"p_data\":{" + data + "}}";
    string err = "", resp = "";
    if(!PostTo("/rest/v1/rpc/bridge_sync", js, err, resp))
       return;
    g_lastOk = TimeLocal();
+   if(nev > 0)
+      ArrayRemove(g_lockEv, 0, nev);               // ya enviados
+   string lk = JsonGet(resp, "lock");
+   if(lk != "" && lk != g_lock)
+     {
+      g_lock = lk;
+      SaveLock();
+     }
    string sym = JsonGet(resp, "sym");
    if(sym == "")
      {
@@ -1006,3 +1045,333 @@ void ShowStatus()
            (pend > 0 ? "\nPendientes de enviar: " + IntegerToString(pend) : ""));
   }
 //+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+//| Candado: lo configura el usuario en Tickora (Ajustes)            |
+//| Campos: 0 versión | 1 modo (0 apagado, 1 avisar, 2 cerrar        |
+//| operación, 3 no dejar usar MT5) | 2 bloqueo pedido hasta |        |
+//| 3-4 quitado hoy (desde, hasta) | 5 máx. operaciones | 6 pérdida   |
+//| máx. del día (dinero) | 7 minutos tras dos pérdidas | 8-9 chequeo |
+//| (norma, hecho hasta) | 10-11 semáforo rojo (norma, hasta) |       |
+//| 12 horario válido hasta | 13 sesiones a:b,… | 14 noticias a:b,… |
+//| 15 minutos de diferencia con la hora universal | 16 actualizado  |
+//| Todas las horas en milisegundos y hora universal.                |
+//+------------------------------------------------------------------+
+void LoadLock()
+  {
+   int h = FileOpen(BT_LOCKFILE, FILE_READ | FILE_TXT | FILE_ANSI);
+   if(h == INVALID_HANDLE)
+      return;
+   g_lock = FileReadString(h);
+   FileClose(h);
+  }
+
+void SaveLock()
+  {
+   int h = FileOpen(BT_LOCKFILE, FILE_WRITE | FILE_TXT | FILE_ANSI);
+   if(h == INVALID_HANDLE)
+      return;
+   FileWriteString(h, g_lock);
+   FileClose(h);
+  }
+
+long LockNum(string &f[], const int i)
+  {
+   return(i < ArraySize(f) ? StringToInteger(f[i]) : 0);
+  }
+
+bool InWindows(const string list, const long now, long &from)
+  {
+   if(list == "")
+      return(false);
+   string w[];
+   int n = StringSplit(list, ',', w);
+   for(int i = 0; i < n; i++)
+     {
+      string ab[];
+      if(StringSplit(w[i], ':', ab) != 2)
+         continue;
+      long a = StringToInteger(ab[0]), b = StringToInteger(ab[1]);
+      if(now >= a && now < b)
+        {
+         from = a;
+         return(true);
+        }
+     }
+   return(false);
+  }
+
+long ToUtcMs(const datetime serverTime)
+  {
+   return(((long)serverTime - ServerOffset()) * 1000);
+  }
+
+// ¿está cerrado el candado ahora? Devuelve el motivo y desde cuándo (0 si no se sabe exacto)
+bool LockState(string &why, string &code, long &since)
+  {
+   why = ""; code = ""; since = 0;
+   if(g_lock == "")
+      return(false);
+   string f[];
+   int nf = StringSplit(g_lock, '|', f);
+   if(nf < 16)
+      return(false);
+   int mode = (int)LockNum(f, 1);
+   if(mode <= 0)
+      return(false);
+   long now = (long)TimeGMT() * 1000;
+   long offFrom = LockNum(f, 3), offUntil = LockNum(f, 4);
+   if(offFrom > 0 && now >= offFrom && now < offUntil)
+      return(false);                               // lo quitaste hoy (con la frase y los 10 minutos)
+   long manual = LockNum(f, 2);
+   if(manual > now)
+     {
+      why = "Pediste en Tickora no operar hasta las " + TimeToString((datetime)(manual / 1000 + ServerOffset()), TIME_MINUTES) + " (hora del bróker)";
+      code = "manual";
+      return(true);
+     }
+   long from = 0;
+   if(InWindows(f[14], now, from))
+     {
+      why = "Noticia fuerte de tus mercados: espera a que pase";
+      code = "noticia"; since = from;
+      return(true);
+     }
+   long horizon = LockNum(f, 12);
+   if(horizon > now && !InWindows(f[13], now, from))
+     {
+      why = "Estás fuera de tu horario";
+      code = "horario";
+      return(true);
+     }
+   if(LockNum(f, 8) == 1 && now > LockNum(f, 9))
+     {
+      why = "Aún no has hecho tu chequeo de hoy en Tickora";
+      code = "chequeo";
+      return(true);
+     }
+   if(LockNum(f, 10) == 1 && now < LockNum(f, 11))
+     {
+      why = "Tu semáforo de hoy está en rojo";
+      code = "semaforo";
+      return(true);
+     }
+   // lo que ha pasado hoy en la cuenta (día según tu hora)
+   long tz = LockNum(f, 15) * 60000;
+   long dayStart = (long)MathFloor((double)(now + tz) / 86400000.0) * 86400000 - tz;
+   if(!HistorySelect((datetime)(dayStart / 1000 + ServerOffset()), TimeTradeServer() + 60))
+      return(false);
+   int maxOps = (int)LockNum(f, 5), twoMin = (int)LockNum(f, 7);
+   double maxLoss = nf > 6 ? StringToDouble(f[6]) : 0;
+   int entries = 0;
+   double sum = 0;
+   long lastOut = 0, prevOut = 0;
+   double lastPl = 0, prevPl = 0;
+   int nd = HistoryDealsTotal();
+   for(int i = 0; i < nd; i++)
+     {
+      ulong d = HistoryDealGetTicket(i);
+      long  t = HistoryDealGetInteger(d, DEAL_TYPE);
+      if(t != DEAL_TYPE_BUY && t != DEAL_TYPE_SELL)
+         continue;
+      long  e  = HistoryDealGetInteger(d, DEAL_ENTRY);
+      long  ms = ToUtcMs((datetime)HistoryDealGetInteger(d, DEAL_TIME));
+      double pl = HistoryDealGetDouble(d, DEAL_PROFIT) + HistoryDealGetDouble(d, DEAL_SWAP) + HistoryDealGetDouble(d, DEAL_COMMISSION);
+      sum += pl;
+      if(e == DEAL_ENTRY_IN)
+        {
+         entries++;
+         if(maxOps > 0 && entries == maxOps)
+            since = ms;                            // la última operación permitida
+        }
+      if(e == DEAL_ENTRY_OUT || e == DEAL_ENTRY_OUT_BY)
+        {
+         prevOut = lastOut; prevPl = lastPl;
+         lastOut = ms; lastPl = pl;
+        }
+      if(maxLoss > 0 && sum <= -maxLoss && code == "")
+        {
+         code = "limite"; why = "Has llegado a tu límite del día"; since = ms;
+        }
+     }
+   if(code == "limite")
+      return(true);
+   if(maxOps > 0 && entries >= maxOps)
+     {
+      why = "Ya hiciste tus " + IntegerToString(maxOps) + " operaciones de hoy";
+      code = "maxops";
+      return(true);
+     }
+   since = 0;
+   if(twoMin > 0 && prevOut > 0 && lastPl < 0 && prevPl < 0 && now < lastOut + (long)twoMin * 60000)
+     {
+      why = "Dos pérdidas seguidas: pausa hasta las " + TimeToString((datetime)((lastOut + (long)twoMin * 60000) / 1000 + ServerOffset()), TIME_MINUTES);
+      code = "dos"; since = lastOut;
+      return(true);
+     }
+   return(false);
+  }
+
+bool LockDoneHas(const ulong id)
+  {
+   for(int i = 0; i < ArraySize(g_lockDone); i++)
+      if(g_lockDone[i] == id)
+         return(true);
+   return(false);
+  }
+
+void LockDoneAdd(const ulong id)
+  {
+   int n = ArraySize(g_lockDone);
+   if(n > 200)
+     {
+      ArrayRemove(g_lockDone, 0, 100);
+      n = ArraySize(g_lockDone);
+     }
+   ArrayResize(g_lockDone, n + 1);
+   g_lockDone[n] = id;
+  }
+
+void LockEvent(const string kind, const string sym, const double cost)
+  {
+   int n = ArraySize(g_lockEv);
+   if(n >= 60)
+      return;
+   ArrayResize(g_lockEv, n + 1);
+   g_lockEv[n] = "{\"t\":" + IntegerToString((long)TimeGMT() * 1000) + ",\"k\":\"" + kind + "\",\"s\":\"" + JsonEsc(sym) +
+                 "\",\"r\":\"" + g_lockCode + "\",\"c\":" + DoubleToString(cost, 2) + "}";
+  }
+
+void CheckLock()
+  {
+   if(g_key == "")
+      return;
+   string why, code;
+   long since;
+   bool on = LockState(why, code, since);
+   long now = (long)TimeGMT() * 1000;
+   if(!on)
+     {
+      if(g_lockOn)
+         LockPaint(false);
+      g_lockOn = false;
+      return;
+     }
+   if(!g_lockOn || code != g_lockCode)
+      g_lockSince = now;                           // desde que lo vemos cerrado
+   g_lockOn = true;
+   g_lockWhy = why;
+   g_lockCode = code;
+   long from = since > 0 ? since : g_lockSince;
+   string f[];
+   StringSplit(g_lock, '|', f);
+   int mode = (int)LockNum(f, 1);
+   bool acted = false;
+   // operaciones abiertas con el candado cerrado
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+     {
+      ulong tk = PositionGetTicket(i);
+      if(tk == 0 || LockDoneHas(tk))
+         continue;
+      long opened = ToUtcMs((datetime)PositionGetInteger(POSITION_TIME));
+      if(opened <= from)
+         continue;                                 // ya estaba abierta antes: no se toca
+      string sym = PositionGetString(POSITION_SYMBOL);
+      double pl = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+      LockDoneAdd(tk);
+      if(mode == 1)
+        {
+         Alert("Tickora · Candado: ", why, ". Has abierto ", sym, ".");
+         LockEvent("aviso", sym, 0);
+         continue;
+        }
+      if(g_trade.PositionClose(tk))
+        {
+         LockEvent("cerrada", sym, pl);
+         acted = true;
+        }
+      else
+        {
+         Print("Tickora · Candado: no se pudo cerrar ", sym, " (activa «Trading algorítmico»). Error ", GetLastError());
+         LockEvent("sinpermiso", sym, 0);
+        }
+     }
+   // órdenes pendientes puestas con el candado cerrado
+   if(mode >= 2)
+      for(int i = OrdersTotal() - 1; i >= 0; i--)
+        {
+         ulong ot = OrderGetTicket(i);
+         if(ot == 0 || LockDoneHas(ot))
+            continue;
+         if(ToUtcMs((datetime)OrderGetInteger(ORDER_TIME_SETUP)) <= from)
+            continue;
+         LockDoneAdd(ot);
+         if(g_trade.OrderDelete(ot))
+            LockEvent("orden", OrderGetString(ORDER_SYMBOL), 0);
+        }
+   LockPaint(true);
+   // «No dejar usar MT5»: se cierra MetaTrader (nunca en el servidor de MetaQuotes, que vigila las 24 h)
+   if(mode == 3 && !TerminalInfoInteger(TERMINAL_VPS))
+     {
+      if(g_lockShown == 0)
+         g_lockShown = TimeLocal();
+      if(TimeLocal() - g_lockShown >= 5 && TimeLocal() - g_lastOk <= 15)
+        {
+         LockEvent("mt5", "", 0);
+         Sync();                                   // que Tickora lo sepa antes de cerrar
+         SaveState();
+         g_lockShown = 0;
+         TerminalClose(0);
+        }
+     }
+   else
+      g_lockShown = 0;
+  }
+
+void LockPaint(const bool show)
+  {
+   string bg = "tk_lock_bg", t1 = "tk_lock_t1", t2 = "tk_lock_t2";
+   if(!show)
+     {
+      ObjectDelete(0, bg);
+      ObjectDelete(0, t1);
+      ObjectDelete(0, t2);
+      ChartRedraw();
+      return;
+     }
+   string f[];
+   StringSplit(g_lock, '|', f);
+   int mode = (int)LockNum(f, 1);
+   string sub = mode == 1 ? "Puedes operar, pero lo dijiste en frío: mejor no." :
+                mode == 2 ? "Si abres una operación, se cerrará al momento." :
+                "MetaTrader se cerrará en unos segundos.";
+   if(ObjectFind(0, bg) < 0)
+     {
+      ObjectCreate(0, bg, OBJ_RECTANGLE_LABEL, 0, 0, 0);
+      ObjectSetInteger(0, bg, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+      ObjectSetInteger(0, bg, OBJPROP_XDISTANCE, 20);
+      ObjectSetInteger(0, bg, OBJPROP_YDISTANCE, 40);
+      ObjectSetInteger(0, bg, OBJPROP_XSIZE, 520);
+      ObjectSetInteger(0, bg, OBJPROP_YSIZE, 84);
+      ObjectSetInteger(0, bg, OBJPROP_BGCOLOR, C'24,20,32');
+      ObjectSetInteger(0, bg, OBJPROP_BORDER_TYPE, BORDER_FLAT);
+      ObjectSetInteger(0, bg, OBJPROP_COLOR, C'196,157,255');
+      ObjectSetInteger(0, bg, OBJPROP_BACK, false);
+      ObjectSetInteger(0, bg, OBJPROP_SELECTABLE, false);
+      ObjectCreate(0, t1, OBJ_LABEL, 0, 0, 0);
+      ObjectCreate(0, t2, OBJ_LABEL, 0, 0, 0);
+      ObjectSetInteger(0, t1, OBJPROP_XDISTANCE, 36);
+      ObjectSetInteger(0, t1, OBJPROP_YDISTANCE, 52);
+      ObjectSetInteger(0, t2, OBJPROP_XDISTANCE, 36);
+      ObjectSetInteger(0, t2, OBJPROP_YDISTANCE, 84);
+      ObjectSetInteger(0, t1, OBJPROP_FONTSIZE, 13);
+      ObjectSetInteger(0, t2, OBJPROP_FONTSIZE, 10);
+      ObjectSetInteger(0, t1, OBJPROP_COLOR, clrWhite);
+      ObjectSetInteger(0, t2, OBJPROP_COLOR, C'201,201,207');
+      ObjectSetInteger(0, t1, OBJPROP_SELECTABLE, false);
+      ObjectSetInteger(0, t2, OBJPROP_SELECTABLE, false);
+     }
+   ObjectSetString(0, t1, OBJPROP_TEXT, "Candado de Tickora · " + g_lockWhy);
+   ObjectSetString(0, t2, OBJPROP_TEXT, sub);
+   ChartRedraw();
+  }

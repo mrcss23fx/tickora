@@ -2814,3 +2814,34 @@ html[data-theme="light"] .cf{--cv:#7d4fd1;--cb:#3d63d6;--cw:#c8434a}
 @media (max-width:860px){.cf-vs{grid-template-columns:1fr}.cf-mid{flex-direction:row}.cf-mid i{height:1px;width:auto}.cf-mid span{writing-mode:horizontal-tb;transform:none}
   .cf-tg{grid-template-columns:1fr}.cf-g,.cf-g .cf-col:last-child{grid-template-columns:1fr;display:flex;flex-direction:column}
   .cf-yn>span{flex-basis:100%}.cf-side{padding:20px}.cf-side h2{font-size:27px}.cf-big{font-size:36px}.cf-r{grid-template-columns:82px 1fr;font-size:13.5px}.cf-hm span{height:32px;font-size:11.5px}}
+
+/* ===== Candado en MetaTrader (extra8.js · Ajustes) ===== */
+.cd{--cdv:#c49dff}html[data-theme="light"] .cd{--cdv:#7d4fd1}
+.cd h3{font-size:20px;font-weight:600}
+.cd-eye{font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--cdv)}
+.cd-state{font-size:12.5px;padding:6px 12px;border-radius:99px;border:1px solid var(--hb-line,var(--linea));white-space:nowrap}
+.cd-state.on{border-color:color-mix(in srgb,var(--cdv) 60%,transparent);background:color-mix(in srgb,var(--cdv) 14%,transparent)}
+.cd-state.open{color:var(--hb-ink2,var(--suave))}
+.cd-warn{padding:11px 13px;border-radius:12px;background:color-mix(in srgb,var(--cdv) 10%,transparent);border:1px solid color-mix(in srgb,var(--cdv) 35%,transparent);font-size:13px;line-height:1.5}
+.cd-modes{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.cd-mode{all:unset;cursor:pointer;box-sizing:border-box;border:1px solid var(--hb-line,var(--linea));border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+.cd-mode b{font-size:14px}.cd-mode small{font-size:12px;line-height:1.45;color:var(--hb-ink2,var(--suave))}
+.cd-mode.on{border-color:var(--cdv);background:color-mix(in srgb,var(--cdv) 12%,transparent)}
+.cd-mode:focus-visible{outline:2px solid var(--cdv);outline-offset:2px}
+.cd-sub{font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--hb-ink2,var(--suave));margin-bottom:4px}
+.cd-rule{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--hb-line,var(--linea));cursor:pointer}
+.cd-rule span{flex:1;min-width:0}.cd-rule b{display:block;font-size:14px;font-weight:500}.cd-rule small{display:block;font-size:12px;color:var(--hb-ink2,var(--suave));margin-top:2px}
+.cd-rule.dis{opacity:.55;cursor:default}
+.cd-sw{appearance:none;-webkit-appearance:none;flex:none;width:40px;height:23px;border-radius:99px;background:color-mix(in srgb,var(--hb-ink,#888) 18%,transparent);position:relative;cursor:pointer;margin:0;transition:background .15s}
+.cd-sw:after{content:"";position:absolute;top:3px;left:3px;width:17px;height:17px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.cd-sw:checked{background:var(--cdv)}.cd-sw:checked:after{left:20px}.cd-sw:focus-visible{outline:2px solid var(--cdv);outline-offset:2px}
+.cd select{margin-left:6px;height:30px;border-radius:8px;border:1px solid var(--hb-line,var(--linea));background:transparent;color:inherit;font:inherit;padding:0 6px}
+.cd-pend{font-size:13px;line-height:1.5;padding:11px 13px;border-radius:12px;border:1px dashed color-mix(in srgb,var(--cdv) 50%,transparent)}
+.cd-pend button,.cd-off button{all:unset;cursor:pointer;color:var(--cdv);text-decoration:underline;text-underline-offset:2px;margin-left:4px}
+.cd-prop{padding:14px 16px;border-radius:14px;border:1px solid color-mix(in srgb,#86a9ff 40%,transparent);background:color-mix(in srgb,#86a9ff 8%,transparent)}
+.cd-prop p{margin:8px 0 10px;font-family:"Instrument Serif",Georgia,serif;font-style:italic;font-size:19px;line-height:1.3}
+.cd-tag{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:4px 9px;border-radius:99px;background:color-mix(in srgb,#86a9ff 18%,transparent);color:#86a9ff}
+html[data-theme="light"] .cd-tag{color:#3d63d6}
+.cd-off{font-size:13px}.cd-off summary{cursor:pointer;color:var(--hb-ink2,var(--suave))}.cd-off input{flex:1;min-width:0;height:34px;border-radius:9px;border:1px solid var(--hb-line,var(--linea));background:transparent;color:inherit;font:inherit;padding:0 10px}
+.cd-ev{display:grid;grid-template-columns:120px 1fr;gap:2px 12px;padding:8px 0;border-bottom:1px solid var(--hb-line,var(--linea));font-size:13px}.cd-ev span{color:var(--hb-ink2,var(--suave));grid-row:span 2}.cd-ev small{color:var(--hb-ink2,var(--suave))}
+@media (max-width:860px){.cd-modes{grid-template-columns:1fr 1fr}}

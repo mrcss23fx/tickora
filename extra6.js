@@ -45,13 +45,14 @@
     lsSet("tk-lock", "0"); hideLock(); S.pauseUntil = 0;
     if (early) { const n = (+lsGet("tk-lockbreak-" + todayKey(), "0") || 0) + 1; lsSet("tk-lockbreak-" + todayKey(), String(n)); toast("Pausa terminada antes de tiempo"); }
     else toast("Pausa terminada. Vuelve con calma");
+    setTimeout(() => window.tkCandPush && window.tkCandPush(true), 300);
     await saveMeta({ lockUntil: 0, lockBreaks: early ? (+md().lockBreaks || 0) + 1 : (+md().lockBreaks || 0) });
     S.lastView = null; A.render();
   }
   async function lock(min) {
     const until = min === "dia" ? endOfDay() : Date.now() + min * 6e4;
     lsSet("tk-lock", String(until)); S.pauseUntil = until; showLock();
-    await saveMeta({ lockUntil: until });
+    await saveMeta({ lockUntil: until }); if (window.tkCandPush) window.tkCandPush(true); // que también valga en MetaTrader
   }
   /* elegir cuánto tiempo, en el momento */
   function askLock() {
@@ -102,7 +103,7 @@
     <div class="small muted">${c.mode === "bloqueo" ? "Tickora tapará toda su pantalla con una cuenta atrás. Solo se puede quitar antes escribiendo una frase, y queda anotado." : "Tickora te recomendará una pausa y te dejará seguir usando la app."}</div>
     <div><div style="font-weight:600;font-size:14px;margin-bottom:8px">Tiempo por defecto</div><div class="row" style="gap:6px;flex-wrap:wrap">${MINS.map(m => `<button type="button" class="dj-chip${c.min === m ? " on" : ""}" data-lkmin="${m}" aria-pressed="${c.min === m}">${m} min</button>`).join("")}</div><div class="small muted" style="margin-top:6px">Al bloquear podrás elegir otro tiempo en ese momento, o el resto del día.</div></div>
     ${c.mode === "bloqueo" ? `<label class="row" style="gap:10px;align-items:flex-start;cursor:pointer"><input type="checkbox" data-lkauto ${c.auto ? "checked" : ""} style="width:18px;height:18px;margin-top:2px"><span><b style="font-size:14px">Bloquear solo tras dos pérdidas seguidas</b><br><span class="small muted">Si en la misma sesión pierdes dos operaciones seguidas, Tickora se bloquea ${c.min} minutos sin preguntarte.</span></span></label>` : ""}
-    <div class="small muted" style="border-top:1px solid var(--linea);padding-top:10px">Tickora no puede bloquear MetaTrader desde la web: bloquea su propia pantalla (gráfico, boleto y todo lo demás).</div></div>`; };
+    <div class="small muted" style="border-top:1px solid var(--linea);padding-top:10px">Esto bloquea la pantalla de Tickora. Para que tu MetaTrader también se bloquee, activa <a href="#ajustes" onclick="setTimeout(()=>document.getElementById('candado')?.scrollIntoView({behavior:'smooth'}),50)">tu candado</a>: el bloqueo que pidas aquí también vale allí.</div></div>`; };
   const V0 = V.ajustes;
   V.ajustes = {
     view(r) {
