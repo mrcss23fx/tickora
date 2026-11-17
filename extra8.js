@@ -102,6 +102,7 @@
     sending = false;
   }
   window.tkCandPush = push;
+  window.tkCandPreview = () => preview();
   setInterval(() => { if (S.loaded && S.user) { if (!S.news && window.tkLoadNews && cfg().r.noticia && cfg().mode) window.tkLoadNews().catch(() => 0); push(false); } }, 15000);
 
   /* ---------- cómo está ahora (lo mismo que mira el programa, con las operaciones que ve Tickora) ---------- */

@@ -333,7 +333,7 @@
     bind(r) { if (PL0.bind) PL0.bind(r); bindRec(); }
   };
 
-  window.TK_X3 = { loadAllD, setReview, saveDoc, dlogOf, answered, saidOf, micBtn, startMic, recList, strats, stratName, WHY_BAD, autoGrow };
+  window.TK_X3 = { loadAllD, setReview, saveDoc, dlogOf, setDlog, answered, saidOf, micBtn, startMic, recList, strats, stratName, WHY_BAD, autoGrow };
 
   /* ---------------- arranque ---------------- */
   setInterval(() => { if (S.user && S.trades) { if (!S.d3Loaded) loadAllD(); else checkSheet(); } }, 20000);

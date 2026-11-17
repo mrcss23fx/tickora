@@ -1976,7 +1976,7 @@
       $$("[data-fdel]").forEach(b => b.onclick = async () => { if (!confirm("¿Borrar este movimiento?")) return; const { error } = await sb.from("docs").delete().eq("col", "fin").eq("id", b.dataset.fdel); if (error) { toast("No se pudo borrar"); return; } S.fin = S.fin.filter(x => x.id !== b.dataset.fdel); re(); });
     }
   };
-  window.TK_X2 = { hData, dayX, mkOf, glyph, EMOL, MK, NK, NLAB, dateOf, re, gRefresh, healthOk, loadMente, PTRIG, PCALM, PTONE, mDone, mScore };
+  window.TK_X2 = { hData, dayX, mkOf, glyph, EMOL, MK, NK, NLAB, dateOf, re, gRefresh, healthOk, loadMente, PTRIG, PCALM, PTONE, mDone, mScore, heroQ, bindHero, bindDay, psyPanel, loadPlanOk, loadAll, loadMini, bindWidgets, homeSw, homeCar, bindCar };
 })();
 
 /* si la página ya se pintó antes de cargar estos archivos, la repinto */
