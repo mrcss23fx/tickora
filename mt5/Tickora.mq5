@@ -1306,8 +1306,9 @@ void CheckLock()
          if(ToUtcMs((datetime)OrderGetInteger(ORDER_TIME_SETUP)) <= from)
             continue;
          LockDoneAdd(ot);
+         string osym = OrderGetString(ORDER_SYMBOL);
          if(g_trade.OrderDelete(ot))
-            LockEvent("orden", OrderGetString(ORDER_SYMBOL), 0);
+            LockEvent("orden", osym, 0);
         }
    LockPaint(true);
    // «No dejar usar MT5»: se cierra MetaTrader (nunca en el servidor de MetaQuotes, que vigila las 24 h)
