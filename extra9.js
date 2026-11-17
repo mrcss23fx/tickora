@@ -109,7 +109,7 @@
   }
   function view() {
     X2.loadAll();
-    const D = X2.hData(), ph = D.phase, h = new Date().getHours(), hi = h < 14 ? "Buenos días" : h < 21 ? "Buenas tardes" : "Buenas noches";
+    const D = X2.hData(), ph = D.phase, h = new Date().getHours(), hi = h < 6 ? "Buenas noches" : h < 14 ? "Buenos días" : h < 21 ? "Buenas tardes" : "Buenas noches";
     const toStart = D.a - D.now, toEnd = D.b - D.now, nm = first();
     const T = D.today, bad = T.filter(t => t.status === "closed" && !evaluate(t).good).length;
     const title = ph === "antes" ? `${hi}, ${nm}.<br><em>Tu sesión empieza a las ${esc(D.p.start)}</em>`
