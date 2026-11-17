@@ -729,7 +729,7 @@
     CUR_TF = st.tf;
     const magMode = () => st.magnet === "strong" ? "strong_magnet" : st.magnet ? "weak_magnet" : "normal";
     const magTitle = () => st.magnet === "strong" ? "Imán fuerte: pega los puntos al precio exacto de la vela" : st.magnet ? "Imán débil: pega los puntos cuando estás cerca de la vela" : "Imán apagado";
-    const R = { on: false, all: [], idx: 0, timer: null, speed: ls.get("tk-speed", 2), cb: null, pos: null, trades: [], picking: false };
+    const R = { on: false, all: [], idx: 0, timer: null, speed: ls.get("tk-speed", 2), cb: null, pos: null, trades: [], picking: false, tok: 0, more: false, fetching: false, fails: 0 };
     const groupBtn = g => { const cur = st.last[g[0]] && TOOL_NAME[st.last[g[0]]] ? st.last[g[0]] : g[2].find(x => x[0] !== "#")[0]; return `<div class="gx-grp" data-grp="${g[0]}"><button type="button" class="gx-tool" data-tool="${cur}" aria-pressed="${cur === "cursor"}" aria-label="${esc(TOOL_NAME[cur])}" title="${esc(TOOL_NAME[cur])}">${icon(cur)}</button>${g[2].length > 1 ? `<button type="button" class="gx-more" data-more="${g[0]}" aria-label="Más herramientas: ${esc(g[1])}" title="${esc(g[1])}"><svg width="6" height="6" viewBox="0 0 6 6" aria-hidden="true"><path d="M0 6L6 6 6 0z" fill="currentColor"/></svg></button>` : ""}</div>`; };
     el.innerHTML = `<div class="gx">
       <div class="gx-top" role="toolbar" aria-label="Barra del gráfico">
@@ -1260,6 +1260,7 @@
     }
     function setTf(k) {
       if (k === st.tf) return;
+      if (R.on && !R.picking && (bar() || R.at)) { replayTf(k); return; } // en backtesting: cargamos solo las velas de esa fecha
       const was = R.on, keep = R.on && !R.picking && bar() ? bar().timestamp : null, hadPos = !!R.pos;
       const anchor = R.on ? null : viewAnchor();
       if (R.on) exitReplay();
@@ -1370,27 +1371,79 @@
       hint("Toca la vela desde la que quieres practicar, o elige una fecha abajo.");
       setSrc(); setTimeout(() => ch.resize(), 0);
     }
-    async function startAt(ts) {
-      let list = ch.getDataList().slice();
-      if (!list.length) return;
-      if (ts < list[0].timestamp && st.prov) {
-        msg("Cargando velas antiguas…");
-        for (let i = 0; i < 15 && ts < list[0].timestamp; i++) {
-          try { const r = await st.prov.bars(st.sym, st.tf, list[0].timestamp); if (!r.bars.length) break; list = r.bars.filter(b => b.timestamp < list[0].timestamp).concat(list); if (!r.more) break; } catch (e) { break; }
-        }
-        msg("");
-        if (ts < list[0].timestamp) hint("No hay velas tan antiguas en este marco: empiezo en la más antigua que hay. Prueba un marco mayor para ir más atrás.");
+    /* velas alrededor de una fecha, pidiéndolas de golpe a esa fecha (antes se iba hacia atrás página a página desde hoy, y en marcos pequeños tardaba muchísimo) */
+    const tfName = k => (TFS.find(t => t[0] === k) || [0, k])[1];
+    async function loadWindow(ts) {
+      const prov = st.prov, tf = st.tf, ms = TF_MS[tf] || 3e5;
+      const r = await prov.bars(st.sym, tf, ts + ms * 700);
+      if (prov !== st.prov || tf !== st.tf) return null;
+      let list = r.bars.slice();
+      if (list.filter(b => b.timestamp <= ts).length < 150 && (r.more || !list.length || list[0].timestamp > ts)) { // un poco más de contexto antes (algunas fuentes dan pocas velas por petición)
+        try { const o = await prov.bars(st.sym, tf, list.length ? Math.min(list[0].timestamp, ts + ms) : ts + ms); if (prov !== st.prov || tf !== st.tf) return null; list = o.bars.filter(b => !list.length || b.timestamp < list[0].timestamp).concat(list); } catch (e) { /* seguimos con lo que hay */ }
       }
+      return list;
+    }
+    const moreAfter = list => !!list.length && list[list.length - 1].timestamp < Date.now() - (TF_MS[st.tf] || 3e5) * 3 && !(R.end && list[list.length - 1].timestamp + (TF_MS[st.tf] || 3e5) * 2 > R.end);
+    async function startAt(ts) {
+      const tok = ++R.tok, ms = TF_MS[st.tf] || 3e5;
+      let list = ch.getDataList().slice();
+      if (st.prov && (!list.length || ts < list[0].timestamp + ms * 150)) {
+        msg("Cargando velas de esa fecha…");
+        try { const w = await loadWindow(ts); if (tok !== R.tok) return; if (w && w.length && (!list.length || w[0].timestamp < list[0].timestamp)) list = w; } catch (e) { /* seguimos con lo que hay */ }
+        msg("");
+      }
+      if (!list.length) { hint("No se pudieron cargar las velas. Prueba otra vez en un momento."); setTimeout(() => hint(""), 3500); return; }
+      if (ts < list[0].timestamp) hint("No hay velas tan antiguas en este marco: empiezo en la más antigua que hay. Prueba un marco mayor para ir más atrás.");
       let idx = list.findIndex(b => b.timestamp > ts) - 1;
       if (idx < 0) idx = ts < list[0].timestamp ? Math.min(60, list.length - 2) : list.length - 1;
-      else if (idx < 120 && st.prov) { // un poco de contexto antes del punto de inicio
-        try { const r = await st.prov.bars(st.sym, st.tf, list[0].timestamp); const add = r.bars.filter(b => b.timestamp < list[0].timestamp); list = add.concat(list); idx += add.length; } catch (e) { /* seguimos con lo que hay */ }
-      }
+      R.more = moreAfter(list); R.fails = 0;
       begin(list, idx);
+    }
+    /* cambiar de marco en mitad del backtesting: se queda en el mismo momento, sin ver el futuro */
+    function tfUI(k) { st.tf = k; CUR_TF = k; ls.set(TFK, k); opts.onTf && opts.onTf(k); $(".gx-tfname").textContent = TF_SHORT[k]; renderTfq(); st.prov = pickProv(); setSrc(); ch.setDataLoader(replayLoader); ch.setPeriod(TFS.find(x => x[0] === k)[2]); }
+    async function replayTf(k) {
+      const old = st.tf, oldMs = TF_MS[old] || 3e5, now = R.at || (R.clock && R.clockIdx === R.idx ? R.clock : bar().timestamp + oldMs), hadPos = !!R.pos, tok = ++R.tok;
+      if (R.all.length) R.snap = { tf: old, all: R.all, idx: R.idx, more: R.more }; // para volver tal cual si no llegan las velas
+      R.at = now; // el momento del backtesting, por si cambias otra vez de marco mientras carga
+      pause(); if (R.cut) cutMode(false);
+      if (R.pos) { ch.removeOverlay({ id: R.pos.id }); R.pos = null; }
+      R.all = []; R.idx = 0; R.more = false; R.fetching = false; R.fails = 0;
+      tfUI(k);
+      msg(`Cargando velas de ${tfName(k)}…`);
+      let w = null; try { w = await loadWindow(now - (TF_MS[k] || 3e5)); } catch (e) { w = null; }
+      if (tok !== R.tok) return;
+      msg("");
+      const ms = TF_MS[k] || 3e5;
+      let idx = -1; if (w) for (let i = w.length - 1; i >= 0; i--) if (w[i].timestamp + ms <= now) { idx = i; break; }
+      if (!w || !w.length || idx < 1) {
+        const sn = R.snap; R.snap = null;
+        if (sn) { tfUI(sn.tf); R.more = sn.more; begin(sn.all, sn.idx); R.clock = now; R.clockIdx = R.idx; }
+        hint(sn ? `No se pudieron cargar velas de ${tfName(k)} de esta fecha. Sigues en ${tfName(sn.tf)}; prueba otra vez en unos segundos.` : "No se pudieron cargar las velas. Prueba otra vez en un momento."); setTimeout(() => hint(""), 6000);
+        return;
+      }
+      R.snap = null; R.more = moreAfter(w);
+      begin(w, idx); R.clock = now; R.clockIdx = R.idx; // si vuelves al marco pequeño sin avanzar, sigues en el mismo minuto
+      if (hadPos) { hint("La simulada abierta se ha cerrado al cambiar de marco."); setTimeout(() => hint(""), 3000); }
+    }
+    /* más velas hacia delante, poco a poco, mientras avanzas */
+    async function ahead() {
+      if (R.fetching || !R.more || !R.all.length || !st.prov) return;
+      R.fetching = true; const tok = R.tok, prov = st.prov, tf = st.tf, ms = TF_MS[tf] || 3e5, last = R.all[R.all.length - 1].timestamp;
+      try {
+        let to = last, add = [];
+        for (let g = 0; g < 8 && !add.length && to < Date.now() && !(R.end && to > R.end); g++) { // salta fines de semana y festivos
+          to += ms * 900;
+          const r = await prov.bars(st.sym, tf, to); if (tok !== R.tok || prov !== st.prov) return;
+          add = r.bars.filter(b => b.timestamp > last && (!R.end || b.timestamp <= R.end));
+        }
+        if (add.length) R.all = R.all.concat(add);
+        R.more = !!add.length && moreAfter(R.all); R.fails = 0;
+      } catch (e) { if (tok === R.tok && ++R.fails >= 3) R.more = false; }
+      finally { if (tok === R.tok) { R.fetching = false; stats(); } }
     }
     function begin(list, idx) {
       if (R.end) { const k = list.findIndex(b => b.timestamp > R.end); if (k > 0) list = list.slice(0, k); } // la sesión no deja ver más allá de su fecha final
-      R.all = list; R.idx = Math.max(1, Math.min(idx, list.length - 2)); R.picking = false;
+      R.all = list; R.idx = Math.max(1, Math.min(idx, list.length - 2)); R.picking = false; R.at = null;
       if (!/No hay velas tan antiguas/.test($(".gx-hint").textContent)) hint("");
       $(".gx-start").hidden = true; $(".gx-play").hidden = false;
       ch.setDataLoader(replayLoader); ch.resetData(); syncMode();
@@ -1398,9 +1451,14 @@
     }
     function step() {
       if (R.cut) cutMode(false);
-      if (R.idx >= R.all.length - 1) { pause(); hint("Has llegado al presente."); setTimeout(() => hint(""), 2500); return false; }
+      if (R.idx >= R.all.length - 1) {
+        if (R.more) { ahead(); hint("Cargando más velas…"); setTimeout(() => { if (/Cargando más velas/.test($(".gx-hint").textContent)) hint(""); }, 1500); return true; }
+        pause(); hint("Has llegado al presente."); setTimeout(() => hint(""), 2500); return false;
+      }
       if (R.end && bar() && bar().timestamp >= R.end) { pause(); hint("Has llegado al final del periodo de esta sesión."); setTimeout(() => hint(""), 3500); opts.onSessionEnd && opts.onSessionEnd(); return false; }
-      R.idx++; const b = bar(); R.cb && R.cb(b); checkSim(b); stats(); opts.onReplay && opts.onReplay(b.timestamp); return true;
+      R.idx++; const b = bar(); R.cb && R.cb(b); checkSim(b); stats(); opts.onReplay && opts.onReplay(b.timestamp);
+      if (R.more && R.all.length - 1 - R.idx < 150) ahead();
+      return true;
     }
     function back() {
       if (R.cut) cutMode(false);
@@ -1411,6 +1469,7 @@
     function play() { if (R.timer) { pause(); return; } $('[data-act="play"]').textContent = "❚❚"; $('[data-act="play"]').setAttribute("aria-label", "Pausa"); R.timer = setInterval(() => { if (!step()) pause(); }, 1000 / R.speed); }
     function pause() { if (R.timer) clearInterval(R.timer); R.timer = null; const b = $('[data-act="play"]'); if (b) { b.textContent = "▶︎"; b.setAttribute("aria-label", "Reproducir"); } }
     function exitReplay() {
+      R.tok++; R.more = false; R.fetching = false; R.at = null; msg("");
       pause(); if (R.cut) { R.cut = false; ch.removeOverlay({ id: "tkfog" }); el.querySelector(".gx").classList.remove("cut"); $('[data-act="cut"]').setAttribute("aria-pressed", "false"); } if (R.pos) { ch.removeOverlay({ id: R.pos.id }); R.pos = null; }
       ch.removeOverlay({ groupId: "sim" });
       R.on = false; R.picking = false; hint("");
@@ -1443,6 +1502,7 @@
       if (!R.all.length) return;
       if (R.cut) { R.cut = false; ch.removeOverlay({ id: "tkfog" }); el.querySelector(".gx").classList.remove("cut"); $('[data-act="cut"]').setAttribute("aria-pressed", "false"); ch.setDataLoader(replayLoader); }
       i = Math.max(1, Math.min(i, R.all.length - 1)); if (i === R.idx) return; pause();
+      if (R.more && R.all.length - 1 - i < 150) ahead();
       if (i > R.idx) { for (let k = R.idx + 1; k <= i; k++) { R.idx = k; checkSim(R.all[k]); } }
       else { R.idx = i; if (R.pos && R.idx < R.pos.entryIdx) { ch.removeOverlay({ id: R.pos.id }); R.pos = null; hint("Simulada anulada: has vuelto a antes de la entrada."); setTimeout(() => hint(""), 2500); } }
       ch.resetData(); stats();

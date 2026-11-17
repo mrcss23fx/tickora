@@ -886,7 +886,7 @@ body.bt-mode .live-only{display:none!important}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/klinecharts@10.1.0/dist/umd/klinecharts.min.js"></script>
-<script src="grafico.js?v=14"></script>
+<script src="grafico.js?v=15"></script>
 </head>
 <body>
 <div id="app" aria-live="polite"></div>
@@ -1827,16 +1827,24 @@ function mt5Provider(sym){
     id:"mt5", get label(){return off?"MT5 no responde · precio público":"Tu MT5 · en vivo"},
     async bars(s,tf,to){
       if(off||!okTf(tf))return pub.bars(s,tf,to);
-      const req=Math.random().toString(36).slice(2,10);
-      const {error}=await sb.rpc("bridge_watch_set",{p_sym:s,p_tf:tf,p_req:req,p_to:to||null,p_n:1000});
-      if(!error){
-        const t0=Date.now();
-        while(Date.now()-t0<9000){
+      // velas de una fecha concreta: MT5 a veces tiene que descargarlas primero, así que le damos más tiempo
+      const limit=to?20000:9000;
+      for(let tries=0;tries<2;tries++){
+        const req=Math.random().toString(36).slice(2,10);
+        const {error}=await sb.rpc("bridge_watch_set",{p_sym:s,p_tf:tf,p_req:req,p_to:to||null,p_n:1000});
+        if(error)break;
+        const t0=Date.now();let wrong=false;
+        while(Date.now()-t0<limit){
           await wait(600);
-          const {data}=await sb.from("bridge_hist").select("req,bars").maybeSingle();
-          if(data&&data.req===req){const bars=(data.bars||[]).map(toBar).filter(x=>!to||x.timestamp<to);return {bars,more:(data.bars||[]).length>=900}}
+          const {data}=await sb.from("bridge_hist").select("req,sym,tf,bars").maybeSingle();
+          if(data&&data.req===req){
+            if((data.tf&&data.tf!==tf)||(data.sym&&data.sym!==s)){wrong=true;break}   // otro gráfico cambió el marco a la vez: lo pedimos otra vez
+            const bars=(data.bars||[]).map(toBar).filter(x=>!to||x.timestamp<to);return {bars,more:(data.bars||[]).length>=900}
+          }
         }
+        if(!wrong)break;
       }
+      if(to)throw new Error("Tu MT5 no ha enviado las velas de esa fecha a tiempo");   // no mezclamos precios de otra fuente en una fecha pasada
       off=true;return pub.bars(s,tf,to);   // MT5 cerrado o sin responder: seguimos con el precio público
     },
     subscribe(s,tf,cb){
