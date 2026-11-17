@@ -75,7 +75,7 @@
   const CATDESC = {
     hoy: "Lo que llevas hoy, tus límites y tu horario", noticias: "Noticias que mueven el mercado esta semana", plan: "Tus normas, tus límites y tu horario",
     analizar: "Gráfico en directo", backtest: "Crea y continúa tus sesiones", btanalisis: "Tus estadísticas de práctica", btops: "Todo lo que has operado practicando", btnotas: "Tus notas de cada sesión",
-    rendimiento: "Todos tus números, en dinero y en R", progreso: "Cuánto cumples tu plan y qué normas rompes", emociones: "Qué emociones te ayudan y cuáles te cuestan", historial: "Todas tus operaciones en una tabla", calendario: "Tu resultado de cada día; toca uno para ver su informe",
+    comofuncionas: "Tu mejor y tu peor versión, y lo que las separa", rendimiento: "Todos tus números, en dinero y en R", progreso: "Cuánto cumples tu plan y qué normas rompes", emociones: "Qué emociones te ayudan y cuáles te cuestan", historial: "Todas tus operaciones en una tabla", calendario: "Tu resultado de cada día; toca uno para ver su informe",
     diario: "Tus páginas", cuentas: "Demo, fondeo y capital propio", finanzas: "Lo que pagas y cobras", asistente: "Pregunta por tus números"
   };
   const MAINV = { calendario: "calendario" };
@@ -377,7 +377,7 @@
         <div class="pz-tip"><small>Para ti, hoy</small><b>${esc(tip[0])}</b>${pers ? `<p class="pz-pers">${esc(pers)}</p>` : ""}<p>${esc(tone === "directo" ? tip[1] : tip[2])}</p>${tip[3] && tone !== "directo" ? `<em>Estudio: ${esc(tip[3])}</em>` : ""}</div>
         <div class="pz-si"><small>Tu regla de hoy</small><p><b>Si</b> ${esc(a.sit)} <b>→</b> ${esc(a.then)}</p>${added ? `<span class="pz-ok">${ico("check", 14, 2.6)} Está en tu cuadro de Mi plan</span>` : `<button type="button" class="btn2" data-go="si-add">Llevarla a Mi plan hoy</button>`}</div>
         <div class="pz-data"><small>Lo que dicen tus datos</small><p>${esc(mPattern())}</p></div>
-        <div class="pz-links"><button type="button" class="pz-l" data-go="hoy">Cambiar mis respuestas de hoy</button><a class="pz-l" href="#conocete" data-close>Ver o cambiar mi ficha de trader</a></div>`,
+        <div class="pz-links"><button type="button" class="pz-l" data-go="hoy">Cambiar mis respuestas de hoy</button><a class="pz-l" href="#conocete" data-close>Ver o cambiar mi ficha de trader</a><a class="pz-l" href="#comofuncionas" data-close>Cómo funcionas tú</a></div>`,
         f: `<span class="pz-more">Ver más:</span><a class="pz-l" href="#rendimiento" data-close>Rendimiento</a><a class="pz-l" href="#progreso" data-close>Disciplina</a><a class="pz-l" href="#emociones" data-close>Emociones</a>` };
     }
     function paint() {
@@ -552,7 +552,7 @@
       } catch (e) { }
       return "";
     };
-    const SUBD = { aprender: "Cómo hiciste cada operación", errores: "Lo que se repite y lo que ya superaste", estrategias: "Tus formas de operar y sus resultados", hoy: "Tu sesión de hoy", noticias: "Calendario económico", backtest: "Tus sesiones de práctica", btanalisis: "Los números de tu práctica", btops: "Todas tus operaciones simuladas", btnotas: "Notas de cada sesión", rendimiento: "Tus números en dinero y en R", progreso: "Tu nota, racha y normas", emociones: "Cómo te afecta cada emoción", cuentas: "Fondeo, propias y demo", finanzas: "Cobros y gastos", historial: "Todas tus operaciones", calendario: "Tu mes día a día" };
+    const SUBD = { comofuncionas: "Tus dos versiones y tu mapa de trader", aprender: "Cómo hiciste cada operación", errores: "Lo que se repite y lo que ya superaste", estrategias: "Tus formas de operar y sus resultados", hoy: "Tu sesión de hoy", noticias: "Calendario económico", backtest: "Tus sesiones de práctica", btanalisis: "Los números de tu práctica", btops: "Todas tus operaciones simuladas", btnotas: "Notas de cada sesión", rendimiento: "Tus números en dinero y en R", progreso: "Tu nota, racha y normas", emociones: "Cómo te afecta cada emoción", cuentas: "Fondeo, propias y demo", finanzas: "Cobros y gastos", historial: "Todas tus operaciones", calendario: "Tu mes día a día" };
     const CHV = '<svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 5l5 5-5 5"/></svg>';
     const item = (k, col) => { const a = NAV_APPS.find(x => x[0] === k); if (!a) return ""; const [, l, items] = a, on = curApp && curApp[0] === k, multi = items.length > 1;
       const inner = `<span class="nv-ic">${ico(k, 17)}</span><span class="nv-n">${esc(l)}</span><span class="nv-mv">${mv(k)}</span>`;
@@ -1976,7 +1976,7 @@
       $$("[data-fdel]").forEach(b => b.onclick = async () => { if (!confirm("¿Borrar este movimiento?")) return; const { error } = await sb.from("docs").delete().eq("col", "fin").eq("id", b.dataset.fdel); if (error) { toast("No se pudo borrar"); return; } S.fin = S.fin.filter(x => x.id !== b.dataset.fdel); re(); });
     }
   };
-  window.TK_X2 = { hData, dayX, mkOf, glyph, EMOL, MK, NK, NLAB, dateOf, re, gRefresh, healthOk, loadMente, PTRIG, PCALM, PTONE };
+  window.TK_X2 = { hData, dayX, mkOf, glyph, EMOL, MK, NK, NLAB, dateOf, re, gRefresh, healthOk, loadMente, PTRIG, PCALM, PTONE, mDone, mScore };
 })();
 
 /* si la página ya se pintó antes de cargar estos archivos, la repinto */

@@ -60,14 +60,25 @@
     const box = document.createElement("div"); box.id = "lk-ask"; box.className = "lk-ask"; box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true"); box.setAttribute("aria-label", "Bloquear Tickora");
     const paint = () => { box.innerHTML = `<div class="lk-box"><b class="lk-h">¿Cuánto tiempo bloqueo Tickora?</b><p>No podrás usar Tickora hasta que acabe. Es tu decisión, tomada ahora en frío.</p><div class="lk-opts">${MINS.map(m => `<button type="button" class="dj-chip${sel === m ? " on" : ""}" data-lm="${m}" aria-pressed="${sel === m}">${m} min</button>`).join("")}<button type="button" class="dj-chip${sel === "dia" ? " on" : ""}" data-lm="dia" aria-pressed="${sel === "dia"}">El resto del día</button></div><div class="lk-acts"><button type="button" class="x-ch" data-lx>Cancelar</button><button type="button" class="x-ch pri" data-lgo>Bloquear ${sel === "dia" ? "hasta mañana" : sel + " minutos"}</button></div></div>`;
       box.querySelectorAll("[data-lm]").forEach(b => b.onclick = () => { sel = b.dataset.lm === "dia" ? "dia" : +b.dataset.lm; paint(); });
-      box.querySelector("[data-lx]").onclick = close; box.querySelector("[data-lgo]").onclick = () => { close(); lock(sel); }; };
+      box.querySelector("[data-lx]").onclick = close; box.querySelector("[data-lgo]").onclick = () => { close(); lock(sel); logHelp("bloqueo", sel); }; };
     const close = () => { box.remove(); document.removeEventListener("keydown", ek); };
     const ek = e => { if (e.key === "Escape") close(); };
     box.addEventListener("click", e => { if (e.target === box) close(); });
     paint(); document.body.appendChild(box); document.addEventListener("keydown", ek); setTimeout(() => { const f = box.querySelector("[data-lgo]"); f && f.focus(); }, 30);
   }
+  /* registro de cada ayuda (para «Lo que funciona contigo»): docs col «ayudas», id «log» */
+  async function loadHelps() {
+    if (S.helps) return S.helps;
+    try { const { data } = await sb.from("docs").select("id,data").eq("col", "ayudas"); const d = (data || []).find(x => x.id === "log"); S.helps = (d && d.data && d.data.items) || []; } catch (e) { S.helps = []; }
+    return S.helps;
+  }
+  async function logHelp(k, min) {
+    const L = (await loadHelps()).concat({ ts: Date.now(), k, min }).slice(-200); S.helps = L;
+    await sb.from("docs").upsert({ user_id: S.user.id, col: "ayudas", id: "log", data: { items: L }, updated_at: new Date().toISOString() });
+  }
+  window.tkHelpsLoad = loadHelps;
   /* la función que usan todos los botones de pausa de la app */
-  window.tkPause = () => { const c = cfg(); if (c.mode === "bloqueo") { askLock(); return true; } S.pauseUntil = Date.now() + c.min * 6e4; toast(`Pausa de ${c.min} minutos. Aléjate de la pantalla`); return false; };
+  window.tkPause = () => { const c = cfg(); if (c.mode === "bloqueo") { askLock(); return true; } S.pauseUntil = Date.now() + c.min * 6e4; toast(`Pausa de ${c.min} minutos. Aléjate de la pantalla`); logHelp("pausa", c.min); return false; };
   window.tkPauseLabel = () => { const c = cfg(); return c.mode === "bloqueo" ? "Bloquear Tickora" : `Pausa ${c.min} min`; };
 
   /* bloqueo automático tras dos pérdidas seguidas (solo si el usuario lo eligió) */
@@ -76,7 +87,7 @@
     const tk = todayKey(), C = S.trades.filter(t => t.status === "closed" && t.close_time && dayKey(t.close_time) === tk).sort((a, b) => new Date(a.close_time) - new Date(b.close_time)), l2 = C.slice(-2);
     if (l2.length < 2 || !l2.every(t => +t.r < 0)) return;
     const last = l2[1]; if (lsGet("tk-lockauto", "") === last.id || Date.now() - new Date(last.close_time) > 30 * 6e4) return;
-    lsSet("tk-lockauto", last.id); lock(c.min); toast("Dos pérdidas seguidas: Tickora se bloquea, como pediste");
+    lsSet("tk-lockauto", last.id); lock(c.min); logHelp("bloqueo", c.min); toast("Dos pérdidas seguidas: Tickora se bloquea, como pediste");
   }, 15000);
 
   /* comprobar al cargar y al volver a la pestaña (el bloqueo sigue aunque recargues) */

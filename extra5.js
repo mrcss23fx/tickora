@@ -114,7 +114,7 @@
           const P = Object.assign({}, S.menteP || {}, { v: 2, trig: c.trig.slice(), calm: c.calm.slice(), tone: c.tone || "cercano", exp: c.exp, goal: c.goal, why: (c.why || "").trim(), scen: Object.assign({}, c.ans), scores: scores(c), ts: Date.now() });
           const { error } = await sb.from("docs").upsert({ user_id: S.user.id, col: "mente", id: "perfil", data: P, updated_at: new Date().toISOString() });
           if (error) { toast("No se pudo guardar"); b.disabled = false; return; }
-          S.menteP = P; S.cono = null; toast("Tu ficha está guardada"); location.hash = "#inicio";
+          S.menteP = P; S.cono = null; toast("Tu ficha está guardada"); location.hash = "#comofuncionas";
         }
       });
     }
