@@ -2910,3 +2910,4 @@ html[data-theme="light"] .f9-tag{color:#7d4fd1}html[data-theme="light"] .f9-tag.
 @media (max-width:860px){.f9-learn{grid-template-columns:1fr!important}.f9-cab{grid-template-columns:1fr 1fr}.f9-cab .hd-sem{grid-column:1/-1}.f9-big{font-size:26px}.f9-acts .x-ch{flex:1 1 auto;justify-content:center}}
 html[data-theme="light"] .f9-tag.t{color:#1f8f80}
 @media (max-width:860px){.f9 .hx-top{justify-content:space-between;gap:8px}.f9 .hx-top .hx-sw{position:static;flex:none}.f9 .hx-top .hx-pill{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.f9 .f9-hero.hx{min-height:0;padding:18px 8px 6px}

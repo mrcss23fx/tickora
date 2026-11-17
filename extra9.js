@@ -14,7 +14,7 @@
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
   const hm = m => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
   const dur = min => min >= 60 ? `${Math.floor(min / 60)} h${min % 60 ? " " + (min % 60) + " min" : ""}` : `${Math.max(1, min)} min`;
-  const realName = () => !!(S.user && S.user.user_metadata && S.user.user_metadata.name);
+  const realName = () => { const n = S.user && S.user.user_metadata && S.user.user_metadata.name, e = ((S.user && S.user.email) || "").split("@")[0]; return !!n && !/\d/.test(n) && n.toLowerCase() !== e.toLowerCase(); };
   const first = () => esc((S.name || "").split(" ")[0] || "trader");
 
   /* ---------- selector de vista (3 opciones) ---------- */
@@ -119,7 +119,7 @@
     const pill = `${cap(new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" }))} · ${ph === "antes" ? "Antes de tu sesión" : ph === "en" ? "En sesión" : "Sesión terminada"}`;
     const nameAsk = !realName() ? `<button type="button" class="f9-name" data-f9="name">¿Cómo te llamas?</button>` : "";
     return `<div class="f9" data-ph="${ph}"><div class="hx-top"><span class="hx-pill"><i class="f9-ph ${ph}"></i>${pill}</span>${sw("fase")}</div>
-      <header class="f9-hero"><h1 class="f9-hi">${title}</h1><p class="f9-sub">${sub}${nameAsk}</p>
+      <header class="f9-hero hx"><h1 class="f9-hi">${title}</h1><p class="f9-sub">${sub}${nameAsk}</p>
         ${ph !== "despues" ? `<div class="hx-q" id="hxq" aria-live="polite">${X2.heroQ(D)}</div>` : ""}</header>
       <div class="f9-body">
       ${ph === "antes" ? `${steps()}<div class="f9-g2">${morning(D)}${rules(D)}</div>${tiles(D)}${learn(D)}`
