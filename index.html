@@ -1036,7 +1036,7 @@ const NAV_APPS=[
  ["calendario","Calendario",[["historial","Historial"],["calendario","Calendario"]]],
  ["ajustes","Ajustes",[["ajustes","Ajustes"]]]];
 /* páginas que existen pero no salen en el menú (se llega desde otras) */
-const NAV_HIDDEN=["informe","btcal","grupo","conocete"];
+const NAV_HIDDEN=["informe","btcal","grupo","conocete","comofuncionas"];
 const NAV_GROUPS=NAV_APPS.map(a=>[a[1],a[2]]);
 const appOf=v=>NAV_APPS.find(a=>a[2].some(x=>x[0]===v));
 const NAV_SIDE=NAV_GROUPS.flatMap(g=>g[1]).concat(NAV_HIDDEN.map(k=>[k,k]));
@@ -2065,7 +2065,7 @@ function render(){
   S.lastView=key;
   if(r.view!=="analizar"&&window.TkChart&&TkChart.current){TkChart.destroy();document.body.style.overflow=""}
   const XV=window.TK_VIEWS&&TK_VIEWS[r.view];
-  const NEWV=["app","backtest","historial","emociones","diario","noticias","asistente","inicio","btanalisis","btops","btcal","btnotas","rendimiento","calendario","informe","finanzas","aprender","errores"];
+  const NEWV=["app","backtest","historial","emociones","diario","noticias","asistente","inicio","btanalisis","btops","btcal","btnotas","rendimiento","calendario","informe","finanzas","aprender","errores","comofuncionas"];
   if(NEWV.includes(r.view)&&!XV&&document.readyState==="complete"&&!S.loadWarn){S.loadWarn=setTimeout(()=>{S.lastView=null;render()},2500)}
   const content=(window.tkCrumb&&!["analizar","inicio","app"].includes(r.view)?tkCrumb(r.view):"")+(XV?XV.view(r):NEWV.includes(r.view)?`<div class="stack" style="gap:12px;max-width:520px;padding:40px 0"><div class="muted">Cargando…</div>${document.readyState==="complete"?`<div class="small muted">Si tarda mucho, recarga la página sin caché: Ctrl + F5 (en Mac, ⌘ + Mayús + R).</div><button type="button" class="btn" onclick="location.replace(location.pathname+'?r='+Date.now()+location.hash)" style="height:40px;align-self:flex-start">Recargar ahora</button>`:""}</div>`:r.view==="mas"?viewMas():r.view==="op"?viewOp(r.id):r.view==="analizar"?viewAnalizar():r.view==="progreso"?viewProgreso():r.view==="plan"?viewPlan("plan"):r.view==="ajustes"?viewPlan("ajustes"):r.view==="cuentas"?viewCuentas():
     r.view==="grupo"?viewSoon("Grupo","Los grupos nuevos, donde solo se comparte disciplina y nunca dinero, llegan en el último paso de esta versión. Mientras tanto, tus grupos siguen en la versión anterior."):
@@ -2287,6 +2287,6 @@ window.viewPlan=viewPlan;window.viewProgreso=viewProgreso;window.TKAPP={S,sb,esc
 <script src="extra4.js?v=1"></script>
 <script src="extra5.js?v=2"></script>
 <script src="extra6.js?v=2"></script>
-<script src="extra7.js?v=1"></script>
+<script src="extra7.js?v=2"></script>
 </body>
 </html>

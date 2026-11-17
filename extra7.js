@@ -182,5 +182,7 @@
       const rs = document.querySelector("[data-cfreset]"); if (rs) rs.onclick = () => { if (!confirm("¿Borrar lo que Tickora ha deducido de ti (confirmaciones y lo que quitaste)? Tu ficha del Conócete se queda.")) return; const p = P(); delete p.hide; delete p.ok; save(p); };
     }
   };
-  if (S.loaded && location.hash.startsWith("#comofuncionas")) { S.lastView = null; A.render(); }
+  /* si la página se abrió directamente aquí y se pintó antes de que existiera esta vista, se vuelve a pintar */
+  const fix = () => { if (location.hash.startsWith("#comofuncionas") && S.user && !document.querySelector(".cf")) { S.lastView = null; A.render(); } };
+  [0, 800, 2500, 5000].forEach(ms => setTimeout(fix, ms)); window.addEventListener("load", () => setTimeout(fix, 300));
 })();
