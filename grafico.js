@@ -1321,13 +1321,23 @@
     function closeModal() { MOD.hidden = true; DLG.innerHTML = ""; }
     function typeIcon(t) { return t === "candle_stroke" ? "candlesH" : t === "ohlc" ? "bars" : t === "area" ? "area" : "candles"; }
     st.tfFav = ls.get("tk-tffav", ["1m", "5m", "15m", "1h", "4h", "1d"]);
+    /* en backtesting con el precio público, los marcos pequeños solo existen para fechas recientes */
+    const PUB_DAYS = { "1m": 29, "3m": 29, "5m": 59, "15m": 59, "30m": 59, "45m": 59, "1h": 729, "2h": 729, "4h": 729 };
+    const PUB_TXT = { 29: "el último mes", 59: "los dos últimos meses", 729: "los dos últimos años" };
+    function tfNoData(k) {
+      if (!R.on || R.picking || !st.prov || st.prov.id !== "publico" || !PUB_DAYS[k]) return "";
+      const at = bar() ? bar().timestamp : R.at; if (!at) return "";
+      if (Date.now() - at < (PUB_DAYS[k] - 1) * 864e5) return "";
+      const alt = TFS.map(t => t[0]).find(x => TF_MS[x] > TF_MS[k] && (!PUB_DAYS[x] || Date.now() - at < (PUB_DAYS[x] - 1) * 864e5));
+      return `Para esta fecha no hay velas de ${tfName(k)}: el precio público solo guarda ${PUB_TXT[PUB_DAYS[k]]}.${alt ? ` Usa ${tfName(alt)} o más` : ""}, o conecta tu MT5 para tener todo el historial.`;
+    }
     function renderTfq() {
       const q = $(".gx-tfq"); if (!q) return;
-      q.innerHTML = TFS.filter(([k]) => st.tfFav.includes(k)).map(([k, l]) => `<button type="button" class="gx-tfb" data-tfq="${k}" aria-pressed="${k === st.tf}" title="${l}">${TF_SHORT[k]}</button>`).join("");
+      q.innerHTML = TFS.filter(([k]) => st.tfFav.includes(k)).map(([k, l]) => { const no = tfNoData(k); return `<button type="button" class="gx-tfb${no ? " off" : ""}" data-tfq="${k}" aria-pressed="${k === st.tf}" ${no ? `aria-disabled="true" title="${esc(no)}"` : `title="${l}"`}>${TF_SHORT[k]}</button>`; }).join("");
       $(".gx-tfdd").classList.toggle("on", !st.tfFav.includes(st.tf));
     }
     function menuTf(btn) {
-      openPop(btn, `<div class="gx-mh">Marco de tiempo</div>` + TFS.map(([k, l]) => `<div class="gx-mrow"><button type="button" class="gx-mi" data-pick="${k}" aria-pressed="${k === st.tf}"><b style="min-width:30px">${TF_SHORT[k]}</b><span>${l}</span></button><button type="button" class="gx-star" data-tfstar="${k}" aria-pressed="${st.tfFav.includes(k)}" aria-label="Mostrar ${l} en la barra" title="Mostrar en la barra">${icon(st.tfFav.includes(k) ? "starOn" : "star", 15)}</button></div>`).join("") + `<div class="gx-muted" style="padding:8px 10px 4px;font-size:12px">Atajo: escribe el marco en el gráfico (5, 15, 1h, 4h, D…) y pulsa Intro.</div>`, k => setTf(k));
+      openPop(btn, `<div class="gx-mh">Marco de tiempo</div>` + TFS.map(([k, l]) => `<div class="gx-mrow"><button type="button" class="gx-mi${tfNoData(k) ? " off" : ""}" data-pick="${k}" aria-pressed="${k === st.tf}"${tfNoData(k) ? ` aria-disabled="true" title="${esc(tfNoData(k))}"` : ""}><b style="min-width:30px">${TF_SHORT[k]}</b><span>${l}</span>${tfNoData(k) ? `<small class="gx-muted" style="margin-left:auto">sin velas en esta fecha</small>` : ""}</button><button type="button" class="gx-star" data-tfstar="${k}" aria-pressed="${st.tfFav.includes(k)}" aria-label="Mostrar ${l} en la barra" title="Mostrar en la barra">${icon(st.tfFav.includes(k) ? "starOn" : "star", 15)}</button></div>`).join("") + `<div class="gx-muted" style="padding:8px 10px 4px;font-size:12px">Atajo: escribe el marco en el gráfico (5, 15, 1h, 4h, D…) y pulsa Intro.</div>`, k => setTf(k));
       POP.addEventListener("click", e => { const b = e.target.closest("[data-tfstar]"); if (!b) return; e.stopPropagation(); const k = b.dataset.tfstar, i = st.tfFav.indexOf(k); if (i >= 0) st.tfFav.splice(i, 1); else st.tfFav.push(k); ls.set("tk-tffav", st.tfFav); b.setAttribute("aria-pressed", String(i < 0)); b.innerHTML = icon(i < 0 ? "starOn" : "star", 15); renderTfq(); }, { capture: true, once: false });
     }
     /* escribir el marco con el teclado: 5, 15, 1h, 240, D, W… */
@@ -1388,6 +1398,7 @@
     }
     function setTf(k) {
       if (k === st.tf) return;
+      const no = tfNoData(k); if (no) { hint(no); clearTimeout(st.noT); st.noT = setTimeout(() => { if ($(".gx-hint").textContent === no) hint(""); }, 7000); return; }
       if (R.on && !R.picking && (bar() || R.at)) { replayTf(k); return; } // en backtesting: cargamos solo las velas de esa fecha
       const was = R.on, keep = R.on && !R.picking && bar() ? bar().timestamp : null, hadPos = !!R.pos;
       const anchor = R.on ? null : viewAnchor();
@@ -1575,7 +1586,7 @@
       if (!/No hay velas tan antiguas/.test($(".gx-hint").textContent)) hint("");
       $(".gx-start").hidden = true; $(".gx-play").hidden = false;
       ch.setDataLoader(replayLoader); ch.resetData(); syncMode();
-      stats(); setTimeout(() => hint(""), 4000);
+      stats(); renderTfq(); const h0 = $(".gx-hint").textContent; setTimeout(() => { if ($(".gx-hint").textContent === h0) hint(""); }, 4000); // no borra un aviso nuevo
     }
     function step() {
       if (R.cut) cutMode(false);
@@ -1601,7 +1612,7 @@
       pause(); if (R.cut) { R.cut = false; ch.removeOverlay({ id: "tkfog" }); el.querySelector(".gx").classList.remove("cut"); $('[data-act="cut"]').setAttribute("aria-pressed", "false"); } if (R.pos) { ch.removeOverlay({ id: R.pos.id }); R.pos = null; }
       ch.removeOverlay({ groupId: "sim" });
       R.on = false; R.picking = false; hint("");
-      $(".gx-replay").hidden = true; syncMode();
+      $(".gx-replay").hidden = true; syncMode(); renderTfq();
       ch.setDataLoader(live); ch.resetData(); setSrc(); setTimeout(() => ch.resize(), 0);
     }
     const fullLoader = { getBars: ({ type, callback }) => { if (type === "init") callback(R.all.slice(), { backward: false, forward: false }); else callback([], false); }, subscribeBar: () => {}, unsubscribeBar: () => {} };
