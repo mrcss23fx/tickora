@@ -44,6 +44,13 @@
       ["Calendario", mon.length ? fmtV(mr) : "—", mon.length ? A.MESES_L ? A.MESES_L[new Date().getMonth()] : "este mes" : "sin días operados", "#calendario", "Ver el mes"]];
     return `<section aria-label="Tus apartados"><h2 class="f9-lbl">Tus apartados</h2><div class="f9-tiles">${T.map(([n, v, s, h, a]) => `<a class="f9-tile" href="${h}"><span class="f9-n">${n}</span><span class="f9-v">${v}<small>${s}</small></span><span class="f9-a">${a} →</span></a>`).join("")}</div></section>`;
   }
+  /* ---------- el carrusel con todo lo que ofrece Tickora (para descubrir cada apartado) ---------- */
+  function carousel(D) {
+    let h = ""; try { h = X2.homeCar(D, first()); } catch (e) { return tiles(D); }
+    const a = h.indexOf('<div class="hx-car"'), z = h.indexOf('<div class="hx-cats" id="hxcats"></div>');
+    if (a < 0 || z < 0) return tiles(D);
+    return `<section class="hx f9-carw" aria-label="Todo lo que puedes hacer en Tickora"><h2 class="f9-lbl">Todo lo que puedes hacer en Tickora</h2>${h.slice(a, z + '<div class="hx-cats" id="hxcats"></div>'.length)}</section>`;
+  }
   /* ---------- 5 · para aprender: solo lo que ya tiene algo que decir ---------- */
   function learn(D) {
     const X = X2.dayX(D), C = (S.trades || []).filter(t => t.status === "closed"), n = C.length, now = Date.now();
@@ -122,15 +129,16 @@
       <header class="f9-hero hx"><h1 class="f9-hi">${title}</h1><p class="f9-sub">${sub}${nameAsk}</p>
         ${ph !== "despues" ? `<div class="hx-q" id="hxq" aria-live="polite">${X2.heroQ(D)}</div>` : ""}</header>
       <div class="f9-body">
-      ${ph === "antes" ? `${steps()}<div class="f9-g2">${morning(D)}${rules(D)}</div>${tiles(D)}${learn(D)}`
-        : ph === "en" ? `${during(D)}${steps()}`
-        : `${after(D)}${steps()}${tiles(D)}${learn(D)}`}
+      ${ph === "antes" ? `${steps()}<div class="f9-g2">${morning(D)}${rules(D)}</div>${carousel(D)}${learn(D)}`
+        : ph === "en" ? `${during(D)}${steps()}${carousel(D)}`
+        : `${after(D)}${steps()}${carousel(D)}${learn(D)}`}
       </div></div>`;
   }
   function bind() {
     document.querySelectorAll("[data-home3]").forEach(b => b.onclick = () => { const m = b.dataset.home3; lsSet("tk-home3", m); if (m !== "fase") lsSet("tk-home", m); S.lastView = null; A.render(); });
     if (MODE() !== "fase") return;
-    if (X2.bindHero) X2.bindHero(); if (X2.bindDay) X2.bindDay(); if (X2.bindWidgets) X2.bindWidgets(document);
+    if (document.querySelector(".f9 .hx-c") && X2.bindCar) X2.bindCar(); else { if (X2.bindHero) X2.bindHero(); if (X2.bindDay) X2.bindDay(); }
+    if (X2.bindWidgets) X2.bindWidgets(document);
     if (X2.loadMente) X2.loadMente(); if (X2.loadPlanOk) X2.loadPlanOk(); if (X2.loadMini) X2.loadMini();
     if (!S.news && window.tkLoadNews) window.tkLoadNews().then(rep).catch(() => 0);
     if (X3 && X3.loadAllD && !S.d3Loaded) Promise.resolve(X3.loadAllD()).then(rep).catch(() => 0);

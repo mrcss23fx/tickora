@@ -2911,3 +2911,7 @@ html[data-theme="light"] .f9-tag{color:#7d4fd1}html[data-theme="light"] .f9-tag.
 html[data-theme="light"] .f9-tag.t{color:#1f8f80}
 @media (max-width:860px){.f9 .hx-top{justify-content:space-between;gap:8px}.f9 .hx-top .hx-sw{position:static;flex:none}.f9 .hx-top .hx-pill{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 .f9 .f9-hero.hx{min-height:0;padding:18px 8px 6px}
+.f9 .f9-carw{padding:0;margin:4px 0 0;align-items:stretch;text-align:left}
+.f9 .f9-carw .f9-lbl{align-self:flex-start}
+.f9 .f9-carw .hx-car{margin-top:4px}
+.f9 .f9-carw .hx-cats{margin-top:14px;align-self:center}
