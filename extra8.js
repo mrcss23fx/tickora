@@ -55,10 +55,8 @@
   }
 
   /* ---------- 1 R en la moneda de la cuenta (para el límite del día en dinero) ---------- */
-  function oneRAcct() {
-    const L = (S.trades || []).filter(t => t.risk_money != null && +t.risk_money > 0).slice(-30).map(t => +t.risk_money).sort((a, b) => a - b);
-    return L.length ? L[Math.floor(L.length / 2)] : 0;
-  }
+  // 1 R de tu plan en la moneda de la cuenta (lo compara el programa con las pérdidas del día): riesgo del plan × saldo real
+  function oneRAcct() { const pr = A.planRiskBal && A.planRiskBal(); return pr ? Math.round(pr.bal * pr.risk) / 100 : 0; }
   /* ---------- mercados tuyos que mueve una noticia ---------- */
   const mySyms = () => { const s = new Set(); (S.trades || []).filter(t => Date.now() - new Date(t.open_time) < 90 * 864e5).forEach(t => s.add(String(t.symbol || "").toUpperCase())); return [...s]; };
   function moves(sym, cur) {
@@ -156,7 +154,7 @@
       ${mt5Note}
       <div class="cd-modes" role="radiogroup" aria-label="Qué hace el candado">${MODES.map(([k, l, d]) => `<button type="button" role="radio" class="cd-mode${c.mode === k ? " on" : ""}" data-cdmode="${k}" aria-checked="${c.mode === k}"><b>${l}</b><small>${d}</small></button>`).join("")}</div>
       ${c.mode ? `<div><div class="cd-sub">Cuándo se cierra el candado</div>
-        ${RULES.map(([k, l, d]) => { const dis = (k === "chequeo" || k === "semaforo") && !hOk, lim = k === "limite" && !one; return `<label class="cd-rule${dis ? " dis" : ""}"><span><b>${l}</b><small>${dis ? "Necesita el chequeo diario activado (Ajustes › Permisos)" : lim ? "Tickora aún no sabe cuánto es 1 R en tu cuenta: hará falta alguna operación con stop desde MT5" : d(p, c)}</small></span><input type="checkbox" class="cd-sw" data-cdrule="${k}" ${c.r[k] ? "checked" : ""} ${dis ? "disabled" : ""}></label>`; }).join("")}
+        ${RULES.map(([k, l, d]) => { const dis = (k === "chequeo" || k === "semaforo") && !hOk, lim = k === "limite" && !one; return `<label class="cd-rule${dis ? " dis" : ""}"><span><b>${l}</b><small>${dis ? "Necesita el chequeo diario activado (Ajustes › Permisos)" : lim ? "Tickora aún no sabe tu saldo: añade tu cuenta o conecta MT5" : d(p, c)}</small></span><input type="checkbox" class="cd-sw" data-cdrule="${k}" ${c.r[k] ? "checked" : ""} ${dis ? "disabled" : ""}></label>`; }).join("")}
         <div class="row" style="gap:16px;flex-wrap:wrap;margin-top:10px"><label class="small">Pausa tras dos pérdidas <select data-cdnum="dosMin">${[10, 15, 30, 60].map(v => `<option value="${v}" ${c.dosMin === v ? "selected" : ""}>${v} min</option>`).join("")}</select></label>
           <label class="small">Margen en noticias <select data-cdnum="newsMin">${[5, 10, 15, 30].map(v => `<option value="${v}" ${c.newsMin === v ? "selected" : ""}>${v} min</option>`).join("")}</select></label></div></div>` : ""}
       ${pend ? `<div class="cd-pend">Desde mañana: ${esc(MODES.find(m => m[0] === pend.mode)[1])}${Object.keys(DEF.r).filter(k => !!pend.r[k] !== !!c.r[k]).map(k => ` · ${pend.r[k] ? "con" : "sin"} «${RULES.find(x => x[0] === k)[1].toLowerCase()}»`).join("")}. Aflojar el candado nunca vale el mismo día. <button type="button" data-cdundo>Deshacer</button></div>` : ""}

@@ -71,7 +71,7 @@
   function rules(D) {
     const p = D.p, acc = (S.accts || []).length > 0;
     return `<div class="f9-card"><h2 class="f9-lbl">Tus normas de hoy</h2><ul class="f9-rules"><li>Máximo <b>${p.maxTrades || 3} operaciones</b></li><li>Límite del día <b>${fmtLim(p.dayLimitR || 2)}</b></li><li>Horario <b>${esc(p.start)} – ${esc(p.end)}</b></li></ul>
-      ${!acc && A.moneyOn && A.moneyOn() ? `<p class="f9-note">El dinero está calculado con tus operaciones. <a href="#cartera">Añade tu cuenta</a> para que sea exacto.</p>` : ""}<a class="f9-link" href="#plan">Ver mi plan →</a></div>`;
+      ${A.moneyOn && A.moneyOn() && A.oneRSrc && A.oneRSrc() !== "plan" ? `<p class="f9-note">Tickora aún no sabe tu saldo, así que el dinero es una estimación. <a href="#cartera">Añade tu cuenta</a> o conecta tu MT5 para que salga de tu plan.</p>` : A.oneRSrc && A.oneRSrc() === "plan" && A.planRiskBal() ? `<p class="f9-note">1 R = ${A.num(A.planRiskBal().risk, 2).replace(/,?0+$/, "")} % de tu saldo (${esc(A.money(A.planRiskBal().bal, A.planRiskBal().cur))}).</p>` : ""}<a class="f9-link" href="#plan">Ver mi plan →</a></div>`;
   }
   /* ---------- tu mañana (versión sencilla; la «parte de la mañana» completa llegará después) ---------- */
   function morning(D) {

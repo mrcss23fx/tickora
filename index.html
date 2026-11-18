@@ -947,11 +947,21 @@ function fx(v,from,to){if(v==null||!isFinite(v))return null;from=(from||"").toUp
 function tradeCur(){const c={};((typeof S!=="undefined"&&S.trades)||[]).forEach(t=>{if(t.currency)c[t.currency.toUpperCase()]=(c[t.currency.toUpperCase()]||0)+1});const k=Object.keys(c).sort((a,b)=>c[b]-c[a])[0];return k||null}
 function dispCur(){const p=prefU(),tc=tradeCur();if(p.cur!=="auto"){if(tc&&tc!==p.cur&&!(FXR&&FXR[tc]&&FXR[p.cur]))return tc;return p.cur}return tc||"EUR"}
 let ONER={k:"",v:null};
-function oneR(){const T=(typeof S!=="undefined"&&S.trades)||[],c=dispCur(),k=c+"|"+T.length+"|"+(S.selAcct||"")+"|"+(FXR?1:0);if(ONER.k===k)return ONER.v;
-  const rm=T.filter(t=>t.risk_money!=null&&+t.risk_money>0).slice(0,30).map(t=>fx(+t.risk_money,t.currency,c)).filter(v=>v!=null).sort((a,b)=>a-b);
-  let v=rm.length?rm[Math.floor(rm.length/2)]:null;
-  if(v==null){const st=T.filter(t=>t.profit!=null&&t.r!=null&&Math.abs(+t.r)>.2).slice(0,30).map(t=>fx(Math.abs(+t.profit/+t.r),t.currency,c)).filter(v=>v!=null).sort((a,b)=>a-b);if(st.length)v=st[Math.floor(st.length/2)]}
-  if(v==null&&typeof acctList==="function"){try{const A=acctList().map(x=>x.a).filter(a=>a&&+a.size>0);const a=A[0];if(a){const rp=+a.risk||(S.plan&&S.plan.riskPct)||.5;v=fx(+a.size*rp/100,a.currency||"USD",c)}}catch(e){}}
+/* 1 R = el riesgo de tu plan (o de la cuenta) × tu saldo real (MT5 o el tamaño de la cuenta). Así el límite del día
+   no crece si arriesgas de más. Solo si Tickora aún no sabe tu saldo se estima con tus operaciones (oneRSrc() = "estimado"). */
+let ONERS=null;
+let PRB={t:0,v:null};function planRiskBal(){if(Date.now()-PRB.t<400)return PRB.v;PRB={t:Date.now(),v:planRiskBal0()};return PRB.v}
+function planRiskBal0(){const P=S.basePlan||S.plan||{},L=[];try{const sa=selAcct();if(sa&&sa.a)L.push(sa.a);acctList().forEach(x=>{if(x&&x.a&&!/archivada|perdida/.test(x.a.status||""))L.push(x.a)})}catch(e){}
+  for(const a of L){const br=bridgeOf(a.number),i=(br&&br.last_info)||{},bal=+i.balance>0?+i.balance:(+a.size>0?+a.size:0);if(bal)return{risk:+a.risk||+P.riskPct||.5,bal,cur:i.currency||a.currency||"USD"}}
+  const b=(S.bridges||[]).find(x=>x.last_info&&+x.last_info.balance>0);if(b)return{risk:+P.riskPct||.5,bal:+b.last_info.balance,cur:b.last_info.currency||"USD"};return null}
+function oneRSrc(){oneR();return ONERS}
+function oneR(){const T=(typeof S!=="undefined"&&S.trades)||[],c=dispCur(),pr=planRiskBal(),k=c+"|"+T.length+"|"+(S.selAcct||"")+"|"+(FXR?1:0)+"|"+JSON.stringify(pr);if(ONER.k===k)return ONER.v;
+  let v=null;ONERS=null;
+  if(pr){v=fx(pr.bal*pr.risk/100,pr.cur,c);if(v!=null)ONERS="plan"}
+  if(v==null){const rm=T.filter(t=>t.risk_money!=null&&+t.risk_money>0).slice(0,30).map(t=>fx(+t.risk_money,t.currency,c)).filter(v=>v!=null).sort((a,b)=>a-b);
+    v=rm.length?rm[Math.floor(rm.length/2)]:null;
+    if(v==null){const st=T.filter(t=>t.profit!=null&&t.r!=null&&Math.abs(+t.r)>.2).slice(0,30).map(t=>fx(Math.abs(+t.profit/+t.r),t.currency,c)).filter(v=>v!=null).sort((a,b)=>a-b);if(st.length)v=st[Math.floor(st.length/2)]}
+    if(v!=null)ONERS="estimado"}
   ONER={k,v};return v}
 function mOf(t){if(!t)return null;const c=dispCur();
   if(t.profit!=null&&t.profit!==""&&isFinite(+t.profit))return fx((+t.profit)+(+t.commission||0)+(+t.swap||0),t.currency||c,c);
@@ -2277,7 +2287,7 @@ if(SB_OK){
   sb.auth.onAuthStateChange((event,session)=>{setTimeout(()=>onSession(session,event),0)});
   sb.auth.getSession().then(({data})=>onSession(data.session,"INIT"));
 }else render();
-window.viewPlan=viewPlan;window.viewProgreso=viewProgreso;window.TKAPP={S,sb,esc,SVG,fmtR,fmtV,fmtVt,fmtMoney,mOf,sumM,oneR,dispCur,moneyOn,prefU,CURS,fmtVabs,fmtLim,fmtMs,num,fmtPct,dayKey,todayKey,evaluate,tradeStats,toast,render,spark,MARKETS,symbolsInfo,lsGet,lsSet,acctName,selAcct,FEELS,greet,initials,minOf,minOfDate,money,inSession,MESES_L,NAV_APPS,appOf,ico,isDark,refreshWidgets,effectivePlan,applyAcct,thumb};
+window.viewPlan=viewPlan;window.viewProgreso=viewProgreso;window.TKAPP={S,sb,esc,SVG,fmtR,fmtV,fmtVt,fmtMoney,mOf,sumM,oneR,oneRSrc,planRiskBal,dispCur,moneyOn,prefU,CURS,fmtVabs,fmtLim,fmtMs,num,fmtPct,dayKey,todayKey,evaluate,tradeStats,toast,render,spark,MARKETS,symbolsInfo,lsGet,lsSet,acctName,selAcct,FEELS,greet,initials,minOf,minOfDate,money,inSession,MESES_L,NAV_APPS,appOf,ico,isDark,refreshWidgets,effectivePlan,applyAcct,thumb};
 })();
 </script>
 <link rel="stylesheet" href="extra2.css?v=1102">
@@ -2288,7 +2298,7 @@ window.viewPlan=viewPlan;window.viewProgreso=viewProgreso;window.TKAPP={S,sb,esc
 <script src="extra5.js?v=2"></script>
 <script src="extra6.js?v=3"></script>
 <script src="extra7.js?v=2"></script>
-<script src="extra8.js?v=2"></script>
-<script src="extra9.js?v=4"></script>
+<script src="extra8.js?v=3"></script>
+<script src="extra9.js?v=5"></script>
 </body>
 </html>
