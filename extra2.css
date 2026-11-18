@@ -2916,3 +2916,24 @@ html[data-theme="light"] .f9-tag.t{color:#1f8f80}
 .f9 .f9-carw .hx-car{margin-top:4px}
 .f9 .f9-carw .hx-cats{margin-top:14px;align-self:center}
 .f9{overflow-x:clip}.f9 .hx-q{max-width:100%;box-sizing:border-box}.f9 .hx-qt{white-space:normal;min-width:0}
+/* ---------- Fondos nuevos (nov 2026): Niebla de día y Aurora de noche; en Estilo se puede volver a los clásicos ---------- */
+@media (prefers-color-scheme:light){:root[data-bgd="niebla"]:not([data-theme="dark"]){--papel:#eef2f7;--card:#ffffff;--sub:#e8edf4;--linea:#dbe2ec;--linea2:#e5eaf1;--borde:#c9d3e1;--bar:#dbe2ec;--seg:#e3e9f1;--hatch:#dde4ee;--weekend:#e6ebf2;--tinta:#14213a;--tinta2:#26324a;--suave:#5d6a82;--gris:#8794aa;--cobaltoC:#e6ebf3;--glow:rgba(120,150,210,.10);
+--hb-bg:radial-gradient(1100px 560px at 50% -12%,#ffffff 0%,transparent 60%),linear-gradient(180deg,#f1f4f9 0%,#ebeff5 60%,#e5eaf2 100%);--hb-t:rgba(255,255,255,.88);--hb-t2:#ffffff;--hb-line:#d8e0eb;--hb-ink:#14213a;--hb-ink2:#5d6a82;--hb-track:rgba(20,33,58,.1);--cardS:#f6f8fb}}
+:root[data-bgd="niebla"][data-theme="light"]{--papel:#eef2f7;--card:#ffffff;--sub:#e8edf4;--linea:#dbe2ec;--linea2:#e5eaf1;--borde:#c9d3e1;--bar:#dbe2ec;--seg:#e3e9f1;--hatch:#dde4ee;--weekend:#e6ebf2;--tinta:#14213a;--tinta2:#26324a;--suave:#5d6a82;--gris:#8794aa;--cobaltoC:#e6ebf3;--glow:rgba(120,150,210,.10);
+--hb-bg:radial-gradient(1100px 560px at 50% -12%,#ffffff 0%,transparent 60%),linear-gradient(180deg,#f1f4f9 0%,#ebeff5 60%,#e5eaf2 100%);--hb-t:rgba(255,255,255,.88);--hb-t2:#ffffff;--hb-line:#d8e0eb;--hb-ink:#14213a;--hb-ink2:#5d6a82;--hb-track:rgba(20,33,58,.1);--cardS:#f6f8fb}
+@media (prefers-color-scheme:light){:root[data-bgd="niebla"]:not([data-theme="dark"]) .nv2{--nv-bg:rgba(246,248,252,.86);--nv-ln:rgba(20,33,58,.09)}}
+:root[data-bgd="niebla"][data-theme="light"] .nv2{--nv-bg:rgba(246,248,252,.86);--nv-ln:rgba(20,33,58,.09)}
+@media (prefers-color-scheme:dark){:root[data-bgn="aurora"]:not([data-theme="light"]){--papel:#121218;--card:#1a1a22;--sub:#16161d;--seg:#16161d;--weekend:#16161d;--linea:#2a2a35;--linea2:#20202a;--bar:#2a2a35;--hatch:#2a2a35;--borde:#363643;--cobaltoC:#262631;--glow:transparent;--cardS:#1d1d26;--hx-qbg:#1a1a22;
+--au:radial-gradient(700px 480px at 8% 4%,rgba(241,181,94,.22),transparent 60%),radial-gradient(800px 520px at 95% 0%,rgba(110,150,255,.28),transparent 60%),radial-gradient(900px 600px at 70% 100%,rgba(170,120,255,.24),transparent 60%),radial-gradient(700px 500px at 0% 95%,rgba(80,210,190,.18),transparent 60%);
+--hb-bg:transparent;--hb-t:rgba(255,255,255,.055);--hb-t2:rgba(255,255,255,.1);--hb-line:rgba(255,255,255,.1);--hb-ink:#f4f4f7;--hb-ink2:#a9a9b6;--hb-sh:none}}
+:root[data-bgn="aurora"][data-theme="dark"]{--papel:#121218;--card:#1a1a22;--sub:#16161d;--seg:#16161d;--weekend:#16161d;--linea:#2a2a35;--linea2:#20202a;--bar:#2a2a35;--hatch:#2a2a35;--borde:#363643;--cobaltoC:#262631;--glow:transparent;--cardS:#1d1d26;--hx-qbg:#1a1a22;
+--au:radial-gradient(700px 480px at 8% 4%,rgba(241,181,94,.22),transparent 60%),radial-gradient(800px 520px at 95% 0%,rgba(110,150,255,.28),transparent 60%),radial-gradient(900px 600px at 70% 100%,rgba(170,120,255,.24),transparent 60%),radial-gradient(700px 500px at 0% 95%,rgba(80,210,190,.18),transparent 60%);
+--hb-bg:transparent;--hb-t:rgba(255,255,255,.055);--hb-t2:rgba(255,255,255,.1);--hb-line:rgba(255,255,255,.1);--hb-ink:#f4f4f7;--hb-ink2:#a9a9b6;--hb-sh:none}
+:root[data-bgn="aurora"] body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:var(--au,none)}
+:root[data-bgn="aurora"] body{background-color:transparent}
+@media (prefers-color-scheme:dark){:root[data-bgn="aurora"]:not([data-theme="light"]) .nv2{--nv-bg:rgba(26,26,34,.8)}}
+:root[data-bgn="aurora"][data-theme="dark"] .nv2{--nv-bg:rgba(26,26,34,.8)}
+.stc.bgc{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left}
+.stc.bgc small{font-size:11.5px;line-height:1.3}
+.bgsw{display:block;width:100%;height:46px;border-radius:10px;border:1px solid var(--linea);position:relative;overflow:hidden;margin-bottom:4px}
+.bgsw i{position:absolute;left:10px;right:10px;bottom:-6px;height:24px;border-radius:7px;border:1px solid rgba(127,127,140,.25)}

@@ -1230,6 +1230,12 @@
   /* paso único a la paleta negra: quien tenía guardado el azul por defecto pasa al negro (lo pidió Marcos, nov 2026) */
   try { const st0 = lsGet("tk-style", null); if (st0 && st0.id === "cobalto" && !lsGet("tk-pal2", null)) lsSet("tk-style", { id: "tinta" }); lsSet("tk-pal2", 1); } catch (e) {}
   applyStyle();
+  const BGS = { d: [["niebla", "Niebla", "Blanco azulado", "#eef2f7", "#ffffff"], ["gris", "Gris clásico", "El de siempre", "#f3f3f4", "#ffffff"]], n: [["aurora", "Aurora", "Gris oscuro con luces de color", "linear-gradient(135deg,#3a3020,#121218 45%,#1f2540 75%,#2a2140)", "#1a1a22"], ["negro", "Negro clásico", "El de siempre", "#0a0a0b", "#141416"]] };
+  function bgSec() {
+    const cur = lsGet("tk-bg", {}) || {}, val = { d: cur.d || "niebla", n: cur.n || "aurora" };
+    const row = (k, t) => `<div class="xsec">${t}</div><div class="stgrid">${BGS[k].map(([id, n, sub, bg, card]) => `<button type="button" class="stc bgc" data-bgk="${k}" data-bgv="${id}" aria-pressed="${val[k] === id}"><span class="bgsw" style="background:${bg}"><i style="background:${card}"></i></span><b>${n}</b><small class="muted">${sub}</small></button>`).join("")}</div>`;
+    return row("d", "Fondo en modo claro") + row("n", "Fondo en modo oscuro");
+  }
   function stylePanel() {
     const cur = lsGet("tk-style", { id: "tinta" }); let tab = cur.id === "custom" ? "custom" : "pre", pick = cur.id, cl = cur.l || "#2443c7", cd = cur.d || "#4f7dff";
     const box = document.createElement("div"); box.className = "xdrawer"; box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true"); box.setAttribute("aria-label", "Estilo y colores");
@@ -1237,7 +1243,7 @@
     const paint = () => {
       box.innerHTML = `<div class="xdrawer-p">
         <div class="xdr-h"><div class="xdr-tabs" role="tablist"><button type="button" role="tab" data-st="pre" aria-selected="${tab === "pre"}">Estilos predefinidos</button><button type="button" role="tab" data-st="custom" aria-selected="${tab === "custom"}">Estilo personalizado</button></div><button type="button" class="xib" data-x aria-label="Cerrar">${I(IC.x, 18, 2)}</button></div>
-        <div class="xdr-b">${tab === "pre" ? PRESETS.map(([g, gl, L]) => `<div class="xsec">${gl}</div><div class="stgrid">${L.map(([id, n, l, d]) => `<button type="button" class="stc" data-pick="${id}" aria-pressed="${pick === id}"><b>${n}</b><span class="stline" style="--a:${isDark() ? d : l}"></span>${sw(l, d)}</button>`).join("")}</div>`).join("")
+        <div class="xdr-b">${tab === "pre" ? bgSec() + PRESETS.map(([g, gl, L]) => `<div class="xsec">${gl}</div><div class="stgrid">${L.map(([id, n, l, d]) => `<button type="button" class="stc" data-pick="${id}" aria-pressed="${pick === id}"><b>${n}</b><span class="stline" style="--a:${isDark() ? d : l}"></span>${sw(l, d)}</button>`).join("")}</div>`).join("")
           : `<div class="xsec">Color principal en modo claro</div><div class="stcp"><input type="color" data-cl value="${cl}" aria-label="Color en modo claro"><input class="input mono" data-clt value="${cl}" maxlength="7" aria-label="Código del color en modo claro"><span class="stprev" style="background:${cl}"></span></div>
              <div class="xsec">Color principal en modo oscuro</div><div class="stcp"><input type="color" data-cd value="${cd}" aria-label="Color en modo oscuro"><input class="input mono" data-cdt value="${cd}" maxlength="7" aria-label="Código del color en modo oscuro"><span class="stprev" style="background:${cd}"></span></div>
              <div class="small muted">Se usa en botones, enlaces, el menú y los gráficos.</div>`}
@@ -1261,6 +1267,7 @@
       const b = e.target.closest("button"); if (!b) return;
       if (b.dataset.st) { tab = b.dataset.st; paint(); preview(); }
       else if (b.dataset.pick) { pick = b.dataset.pick; paint(); preview(); }
+      else if (b.dataset.bgk) { const v = lsGet("tk-bg", {}) || {}; v[b.dataset.bgk] = b.dataset.bgv; lsSet("tk-bg", v); if (window.tkApplyBg) window.tkApplyBg(); paint(); }
       else if (b.hasAttribute("data-reset")) { lsSet("tk-style", { id: "tinta" }); applyStyle(); close(true); toast("Estilo restablecido"); }
       else if (b.hasAttribute("data-save")) { lsSet("tk-style", tab === "custom" ? { id: "custom", l: cl, d: cd } : { id: pick }); applyStyle(); close(true); toast("Estilo guardado"); }
     });
