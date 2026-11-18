@@ -787,7 +787,7 @@
   const k = n => n >= 1000 ? (n / 1000).toLocaleString("es-ES") + " mil" : String(n);
   const symList = () => { const mine = symbolsInfo().map(x => x.s); return Array.from(new Set(mine.concat(MARKETS.flatMap(g => g[1])))); };
   async function loadSessions() {
-    const [a, b] = await Promise.all([sb.from("docs").select("id,data").eq("col", "bts"), sb.from("sim_trades").select("id,session_id,symbol,tf,side,entry_time,entry,stop,tp,exit_time,exit,r,created_at").order("created_at", { ascending: false }).limit(3000)]);
+    const [a, b] = await Promise.all([sb.from("docs").select("id,data").eq("col", "bts"), sb.from("sim_trades").select("id,session_id,symbol,tf,side,entry_time,entry,stop,tp,exit_time,exit,r,created_at,x").order("created_at", { ascending: false }).limit(3000)]);
     if (!a.error) S.bts = (a.data || []).map(d => Object.assign({ id: d.id }, d.data));
     if (!b.error) S.btTrades = b.data || [];
     S.btLoaded = true;
