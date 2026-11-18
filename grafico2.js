@@ -208,7 +208,7 @@
           ${f.kind === "price" ? `<label>Precio<input class="gx-in" data-af="value" inputmode="decimal" value="${fmtP(f.value)}"></label>` : f.kind === "line" ? `<label>Tu línea<input class="gx-in" disabled value="${ln ? "Sigue la línea en el tiempo" : "—"}"></label>` : `<label>Nivel del RSI<input class="gx-in" data-af="level" inputmode="decimal" value="${f.level}"></label><label>Longitud<input class="gx-in" data-af="len" inputmode="numeric" value="${f.len}"></label><label>Marco<select class="gx-in" data-af="tf">${["1m", "5m", "15m", "30m", "1h", "4h", "1d"].map(k => `<option value="${k}" ${f.tf === k ? "selected" : ""}>${U.TF_SHORT[k]}</option>`).join("")}</select></label>`}
           <label>Avisar<select class="gx-in" data-af="freq"><option value="once" ${f.freq === "once" ? "selected" : ""}>Solo una vez</option><option value="bar" ${f.freq === "bar" ? "selected" : ""}>Cada vez (como mucho una por vela)</option></select></label></div>
           <label style="display:grid;gap:4px;font-size:12px;color:var(--suave)">Nota (opcional)<input class="gx-in" data-af="note" maxlength="120" placeholder="Ej.: mira si rompe con fuerza antes de entrar" value="${esc(f.note)}"></label>
-          <p class="gx-muted" style="margin:0">Se comprueba cada minuto en el servidor, aunque cierres Tickora. Te avisamos aquí y, si lo activas, con una notificación en este dispositivo.${/publico/.test((st.prov || {}).id || "") || !/mt5|binance/i.test((st.prov || {}).id || "") ? " Usa el precio público (puede ir 10–15 min retrasado en índices y materias primas)." : ""}</p>
+          <p class="gx-muted" style="margin:0">Se comprueba cada minuto en el servidor, aunque cierres Tickora. Te avisamos aquí y, si lo activas, con una notificación en este dispositivo.${/publico/.test((st.prov || {}).id || "") ? " Usa el precio público de contado (el mismo que ves en el gráfico)." : ""}</p>
           <div class="gx-dact"><button type="button" class="gx-btn" data-x>Cancelar</button><button type="button" class="gx-btn gx-pri" data-ago>Crear alerta</button></div></div>`, () => { const D = $(".gx-dlg"); D.onclick = onClick; D.onchange = onChange; });
       const onChange = e => { const k = e.target.dataset.af; if (!k) return; let v = e.target.value; if (["value", "level", "len"].includes(k)) { v = parseFloat(String(v).replace(",", ".")); if (!isFinite(v)) return; } f[k] = v; };
       const onClick = async e => { const b = e.target.closest("button"); if (!b) return; if (b.dataset.x != null) { X.closeModal(); return; } if (b.dataset.ak && !b.disabled) { f.kind = b.dataset.ak; paint(); return; }
@@ -251,7 +251,7 @@
       const p = st.prov || {}; if (R.on) return "Práctica · " + ((p.label || "").split(" · ")[0] || "");
       if (/binance/i.test(p.id || p.label || "")) return "Binance · en vivo";
       if (/mt5/i.test(p.id || "") || /MT5/.test(p.label || "")) return "Tu MT5 · en vivo";
-      return "Precio público · 10–15 min de retraso";
+      return p.delayed ? "Precio público · 10–15 min de retraso" : "Precio público · al momento";
     }
     function indLabel(x) { const meta = U.IND_BY[x.n]; return (meta ? meta[1] : x.n) + (x.p && x.p.length ? " " + x.p.join(", ") : ""); }
     function paintLegend() {

@@ -819,14 +819,14 @@
     };
   }
   function publico(invoke, digits) {
-    let delayed = false;
+    let delayed = false, deep = false;
     const round = v => +(+v).toFixed(digits);
     const p = {
-      id: "publico", get label() { return delayed ? "Precio público · con retraso" : "Precio público"; },
+      id: "publico", get label() { return delayed ? "Precio público · con retraso" : "Precio público"; }, get delayed() { return delayed; }, get deep() { return deep; },
       async bars(sym, tf, to, last) {
         const { data, error } = await invoke("velas", { sym, tf, to: to ? Math.floor(to / 1000) - 1 : undefined, last: last ? 1 : undefined });
         if (error || !data || data.error) throw new Error((data && data.error) || (error && error.message) || "sin datos");
-        delayed = !!data.delayed;
+        delayed = !!data.delayed; deep = !!data.deep;
         return { bars: tidyBars(data.bars.map(b => ({ timestamp: b[0], open: round(b[1]), high: round(b[2]), low: round(b[3]), close: round(b[4]), volume: b[5] || 0 })), tf), more: !!data.more };
       },
       subscribe(sym, tf, cb) {
@@ -994,7 +994,7 @@
           msg(type === "init" && !r.bars.length ? "No hay velas para este mercado en este marco." : "");
           const nb = XFORM.includes(CFG.type) ? xform(r.bars) : r.bars;
           callback(nb, { forward: r.more && r.bars.length > 0 && !["renko", "lbreak"].includes(CFG.type), backward: false });
-          if (type === "forward" && !r.more && prov.id === "publico" && st.limTold !== st.tf) { // al llegar al principio de lo que guarda la fuente pública
+          if (type === "forward" && !r.more && prov.id === "publico" && !prov.deep && st.limTold !== st.tf) { // al llegar al principio de lo que guarda la fuente pública
             st.limTold = st.tf; const d = { "1m": "un mes", "3m": "un mes", "5m": "dos meses", "15m": "dos meses", "30m": "dos meses", "45m": "dos meses", "1h": "dos años", "2h": "dos años", "4h": "dos años" }[st.tf];
             if (d) { hint(`El precio público solo guarda ${d} de velas de ${tfName(st.tf)}. Para ver más atrás, usa un marco mayor o conecta tu MT5.`); setTimeout(() => hint(""), 6000); }
           }
@@ -1418,7 +1418,7 @@
     const PUB_DAYS = { "1m": 29, "3m": 29, "5m": 59, "15m": 59, "30m": 59, "45m": 59, "1h": 729, "2h": 729, "4h": 729 };
     const PUB_TXT = { 29: "el último mes", 59: "los dos últimos meses", 729: "los dos últimos años" };
     function tfNoData(k) {
-      if (!R.on || R.picking || !st.prov || st.prov.id !== "publico" || !PUB_DAYS[k]) return "";
+      if (!R.on || R.picking || !st.prov || st.prov.id !== "publico" || st.prov.deep || !PUB_DAYS[k]) return "";
       const at = bar() ? bar().timestamp : R.at; if (!at) return "";
       if (Date.now() - at < (PUB_DAYS[k] - 1) * 864e5) return "";
       const alt = TFS.map(t => t[0]).find(x => TF_MS[x] > TF_MS[k] && (!PUB_DAYS[x] || Date.now() - at < (PUB_DAYS[x] - 1) * 864e5));

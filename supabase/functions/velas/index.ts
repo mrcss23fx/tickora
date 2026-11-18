@@ -1,4 +1,7 @@
-// Velas públicas (respaldo cuando MT5 está cerrado). Fuente: Yahoo Finance (uso en pruebas; sustituir por un proveedor con licencia antes de cobrar).
+// Velas públicas (respaldo cuando MT5 está cerrado).
+// v5 (18-nov-2026): divisas, oro, plata, petróleo e índices desde Dukascopy (precio de contado, al momento, con mechas reales
+// y años de historial en todos los marcos). Yahoo Finance queda de respaldo. Uso en pruebas: sustituir por un proveedor
+// con licencia antes de cobrar.
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -31,6 +34,66 @@ function resolve(sym: string): string | null {
   if (/^[A-Z]{6}$/.test(c)) return c + "=X";
   return null;
 }
+/* ---------- Dukascopy ---------- */
+const DMAP: Record<string, [string, number]> = {
+  XAUUSD: ["XAU/USD", 2], XAGUSD: ["XAG/USD", 3], USOIL: ["LIGHT.CMD/USD", 2], WTI: ["LIGHT.CMD/USD", 2], UKOIL: ["BRENT.CMD/USD", 2], BRENT: ["BRENT.CMD/USD", 2],
+  NAS100: ["USATECH.IDX/USD", 1], US100: ["USATECH.IDX/USD", 1], USTEC: ["USATECH.IDX/USD", 1], US500: ["USA500.IDX/USD", 1], SPX500: ["USA500.IDX/USD", 1],
+  US30: ["USA30.IDX/USD", 1], DJ30: ["USA30.IDX/USD", 1], GER40: ["DEU.IDX/EUR", 1], DE40: ["DEU.IDX/EUR", 1], UK100: ["GBR.IDX/GBP", 1],
+  SPA35: ["ESP.IDX/EUR", 1], FRA40: ["FRA.IDX/EUR", 1], JPN225: ["JPN.IDX/JPY", 0],
+};
+const DTF: Record<string, [string, number]> = { "1m": ["1MIN", 60], "5m": ["5MIN", 300], "15m": ["15MIN", 900], "30m": ["30MIN", 1800], "1h": ["1HOUR", 3600], "4h": ["4HOUR", 14400], "1d": ["1DAY", 86400], "1w": ["1WEEK", 604800] };
+function dukaOf(sym: string): [string, number] | null {
+  const c = clean(sym);
+  if (DMAP[c]) return DMAP[c];
+  for (const k of Object.keys(DMAP)) if (c.startsWith(k)) return DMAP[k];
+  if (/^[A-Z]{6}$/.test(c) && !/^(BTC|ETH|SOL|XRP|BNB|ADA|DOG|LTC)/.test(c)) return [c.slice(0, 3) + "/" + c.slice(3), /JPY$/.test(c) ? 3 : 5];
+  return null;
+}
+async function duka(inst: string, iv: string, toMs: number, limit: number): Promise<number[][]> {
+  const url = `https://freeserv.dukascopy.com/2.0/index.php?path=chart%2Fjson3&instrument=${encodeURIComponent(inst)}&offer_side=B&interval=${iv}&splits=true&stocks=true&limit=${limit}&time_direction=P&timestamp=${toMs}&jsonp=_callbacks____1`;
+  const ac = new AbortController(); const tm = setTimeout(() => ac.abort(), 9000);
+  try {
+    const r = await fetch(url, { signal: ac.signal, headers: { "User-Agent": "Mozilla/5.0 (compatible; Tickora/1.0)", "Referer": "https://freeserv.dukascopy.com/" } });
+    if (!r.ok) throw new Error("dukascopy " + r.status);
+    const t = await r.text(), i = t.indexOf("("), j = t.lastIndexOf(")");
+    const a = JSON.parse(t.slice(i + 1, j));
+    if (!Array.isArray(a)) throw new Error("dukascopy sin datos");
+    return a.filter((b: number[]) => Array.isArray(b) && b.length >= 5 && b.slice(1, 5).every(v => typeof v === "number" && isFinite(v))).map((b: number[]) => [b[0], b[1], b[2], b[3], b[4], b[5] || 0]).sort((x: number[], y: number[]) => x[0] - y[0]);
+  } finally { clearTimeout(tm); }
+}
+async function fromDuka(sym: string, tf: string, toSec: number | null, last: boolean) {
+  const d = dukaOf(sym), cfg = DTF[tf]; if (!d || !cfg) return null;
+  const nowMs = Date.now(), toMs = toSec ? toSec * 1000 : nowMs;
+  const limit = last ? 120 : tf === "1m" ? 1500 : 1000;
+  let bars = await duka(d[0], cfg[0], toMs, limit);
+  if (!bars.length && toSec) return { bars: [], more: false, digits: d[1] };
+  if (!bars.length) throw new Error("dukascopy vacío");
+  const more = bars.length >= limit * 0.9;
+  /* la vela diaria o semanal que aún se está formando: Dukascopy solo da las cerradas; se hace con las de 1 hora */
+  if (!toSec && (tf === "1d" || tf === "1w")) {
+    const n = new Date(nowMs), day = Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate());
+    const start = tf === "1d" ? day : day - ((n.getUTCDay() + 6) % 7) * 864e5;
+    const lastB = bars[bars.length - 1];
+    if (lastB[0] < start) {
+      const H = (await duka(d[0], "1HOUR", nowMs, tf === "1d" ? 30 : 180)).filter(b => b[0] >= start);
+      if (H.length) bars.push([start, H[0][1], Math.max(...H.map(b => b[2])), Math.min(...H.map(b => b[3])), H[H.length - 1][4], H.reduce((s, b) => s + b[5], 0)]);
+    }
+  }
+  /* la vela intradía que se está formando: Dukascopy solo da las cerradas; se hace con las de 1 minuto */
+  if (!toSec && tf !== "1m" && tf !== "1d" && tf !== "1w") {
+    const step = cfg[1] * 1000, next = bars[bars.length - 1][0] + step;
+    if (nowMs > next) {
+      const Mn = (await duka(d[0], "1MIN", nowMs, Math.min(300, cfg[1] / 60 + 5))).filter(b => b[0] >= next);
+      for (const m of Mn) {
+        const k = Math.floor(m[0] / step) * step, L = bars[bars.length - 1];
+        if (L[0] === k) { L[2] = Math.max(L[2], m[2]); L[3] = Math.min(L[3], m[3]); L[4] = m[4]; L[5] += m[5]; }
+        else if (k > L[0]) bars.push([k, m[1], m[2], m[3], m[4], m[5]]);
+      }
+    }
+  }
+  if (tf !== "1d" && tf !== "1w") bars = tidy(bars, cfg[1] * 1000, true);
+  return { bars, more, digits: d[1] };
+}
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "max-age=15" } });
 }
@@ -61,6 +124,12 @@ Deno.serve(async (req) => {
   let q: Record<string, unknown> = {};
   try { q = req.method === "POST" ? await req.json() : Object.fromEntries(new URL(req.url).searchParams); } catch { /* vacío */ }
   const sym = String(q.sym || ""), tf = String(q.tf || "5m");
+  if (q.src !== "yahoo") {
+    try {
+      const D = await fromDuka(sym, tf, Number(q.to) > 0 ? Math.min(Number(q.to), Math.floor(Date.now() / 1000)) : null, !!q.last);
+      if (D) return json({ sym, src: "dukascopy", tf, bars: D.bars, more: D.more, delayed: false, deep: true, digits: D.digits });
+    } catch (_e) { /* si Dukascopy falla, se usa Yahoo */ }
+  }
   const y = resolve(sym), cfg = TF[tf];
   if (!y || !cfg) return json({ error: "Mercado o marco no disponible", sym, tf }, 400);
   const now = Math.floor(Date.now() / 1000);
@@ -94,5 +163,5 @@ Deno.serve(async (req) => {
     }
     bars = out;
   }
-  return json({ sym, yahoo: y, tf, bars, more: from > oldest, delayed: DELAYED.has(y), digits: res.meta?.priceHint ?? null });
+  return json({ sym, src: "yahoo", yahoo: y, tf, bars, more: from > oldest, delayed: DELAYED.has(y), digits: res.meta?.priceHint ?? null });
 });

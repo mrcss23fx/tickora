@@ -1,6 +1,6 @@
 // Alertas de Tickora (18-nov-2026): se comprueban en el servidor cada minuto, aunque tengas la web cerrada.
 // Precio, línea dibujada (horizontal o de tendencia) e indicador (RSI). Avisa en la app y con notificación al móvil u ordenador.
-// La llama pg_cron cada minuto con la cabecera x-cron (el secreto vive en la tabla privada app_secrets). Fuente de precios: Yahoo (pruebas) y Binance (cripto).
+// La llama pg_cron cada minuto con la cabecera x-cron (el secreto vive en la tabla privada app_secrets). Fuente de precios: Dukascopy (la misma que el gráfico), Yahoo de respaldo y Binance (cripto).
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3";
 
@@ -16,6 +16,8 @@ const TFY: Record<string, [string, string, number]> = { "1m": ["1m", "1d", 60], 
 const clean = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/(PRO|ECN|RAW|MICRO|CASH|SPOT|M)$/, "");
 function yahoo(sym: string): string | null { const c = clean(sym); if (MAP[c]) return MAP[c]; for (const k of Object.keys(MAP)) if (c.startsWith(k)) return MAP[k]; if (/^[A-Z]{6}$/.test(c)) return c + "=X"; return null; }
 type Bar = [number, number, number, number, number]; // t (ms), o, h, l, c
+const DMAP: Record<string, string> = { XAUUSD: "XAU/USD", XAGUSD: "XAG/USD", USOIL: "LIGHT.CMD/USD", UKOIL: "BRENT.CMD/USD", NAS100: "USATECH.IDX/USD", US100: "USATECH.IDX/USD", USTEC: "USATECH.IDX/USD", US500: "USA500.IDX/USD", SPX500: "USA500.IDX/USD", US30: "USA30.IDX/USD", DJ30: "USA30.IDX/USD", GER40: "DEU.IDX/EUR", DE40: "DEU.IDX/EUR", UK100: "GBR.IDX/GBP", SPA35: "ESP.IDX/EUR", FRA40: "FRA.IDX/EUR", JPN225: "JPN.IDX/JPY" };
+function dukaOf(sym: string): string | null { const c = clean(sym); if (DMAP[c]) return DMAP[c]; for (const k of Object.keys(DMAP)) if (c.startsWith(k)) return DMAP[k]; if (/^[A-Z]{6}$/.test(c) && !CRYPTO.test(c)) return c.slice(0, 3) + "/" + c.slice(3); return null; }
 
 async function bars(sym: string, tf: string): Promise<Bar[]> {
   const c = clean(sym), cm = c.match(CRYPTO);
@@ -23,6 +25,13 @@ async function bars(sym: string, tf: string): Promise<Bar[]> {
     const iv = tf === "4h" ? "4h" : tf === "1d" ? "1d" : tf === "1h" ? "1h" : tf;
     const r = await fetch(`https://api.binance.com/api/v3/klines?symbol=${cm[1]}USDT&interval=${iv}&limit=200`);
     if (!r.ok) return []; const j = await r.json(); return j.map((k: any[]) => [k[0], +k[1], +k[2], +k[3], +k[4]]);
+  }
+  const di = dukaOf(sym), dv: Record<string, string> = { "1m": "1MIN", "5m": "5MIN", "15m": "15MIN", "30m": "30MIN", "1h": "1HOUR", "4h": "4HOUR", "1d": "1DAY" };
+  if (di && dv[tf]) {
+    try {
+      const r = await fetch(`https://freeserv.dukascopy.com/2.0/index.php?path=chart%2Fjson3&instrument=${encodeURIComponent(di)}&offer_side=B&interval=${dv[tf]}&splits=true&stocks=true&limit=200&time_direction=P&timestamp=${Date.now()}&jsonp=_cb`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; Tickora/1.0)", "Referer": "https://freeserv.dukascopy.com/" } });
+      if (r.ok) { const t = await r.text(); const a = JSON.parse(t.slice(t.indexOf("(") + 1, t.lastIndexOf(")"))); if (Array.isArray(a) && a.length) return a.map((k: number[]) => [k[0], k[1], k[2], k[3], k[4]] as Bar).sort((x: Bar, y: Bar) => x[0] - y[0]); }
+    } catch (_e) { /* Yahoo de respaldo */ }
   }
   const y = yahoo(sym); if (!y) return [];
   const [iv, range, step] = TFY[tf] || TFY["1m"];
