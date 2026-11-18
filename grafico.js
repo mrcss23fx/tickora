@@ -660,6 +660,7 @@
 
   /* ---------- iconos propios ---------- */
   const IC = {
+    clock: '<circle cx="10" cy="10" r="7"/><path d="M10 6v4l2.5 2"/>',
     cursor: '<path d="M5.5 2.8v12.6l3.1-2.9 2.2 4.8 2.1-1-2.2-4.7h4.3z"/>',
     segment: '<path d="M5 15L15 5"/><circle cx="4" cy="16" r="1.7" fill="var(--card,#fff)"/><circle cx="16" cy="4" r="1.7" fill="var(--card,#fff)"/>',
     rayLine: '<path d="M5.2 14.8L18.5 1.5"/><circle cx="4" cy="16" r="1.7" fill="var(--card,#fff)"/><circle cx="10" cy="10" r="1.7" fill="var(--card,#fff)"/>',
@@ -895,6 +896,7 @@
             <label class="gx-fill"><input type="checkbox" data-f="fill"> Relleno</label>
             <button type="button" class="gx-tb gx-ic" data-fa="txt" title="Opciones de texto: tamaño, negrita, cursiva, color y posición" aria-label="Opciones de texto">${icon("textOpt", 17)}</button>
             <button type="button" class="gx-tb gx-ic" data-fa="tpl" title="Plantillas: guarda este estilo y úsalo en otros dibujos" aria-label="Plantillas de estilo">${icon("tplMark", 17)}</button>
+            <button type="button" class="gx-tb gx-ic" data-fa="tfs" title="En qué marcos de tiempo se ve este dibujo" aria-label="Marcos en los que se ve">${icon("clock", 17)}</button>
             <span class="gx-vs"></span>
             <button type="button" class="gx-tb gx-ic" data-fa="lock" aria-pressed="false" title="Bloquear" aria-label="Bloquear dibujo">${icon("lock", 17)}</button>
             <button type="button" class="gx-tb gx-ic" data-fa="dup" title="Duplicar" aria-label="Duplicar dibujo">${icon("dup", 17)}</button>
@@ -1081,11 +1083,15 @@
       }
     }
     const getOv = id => ch.getOverlays({ id })[0];
-    function serial() { return ch.getOverlays({ groupId: "draw" }).map(o => ({ name: o.name, points: o.points.map(p => ({ timestamp: p.timestamp, value: p.value })), extendData: o.extendData, styles: o.styles, lock: o.lock })); }
+    const tfOk = tfs => !tfs || !tfs.length || tfs.includes(st.tf);
+    function serial() { return ch.getOverlays({ groupId: "draw" }).map(o => Object.assign({ name: o.name, points: o.points.map(p => ({ timestamp: p.timestamp, value: p.value })), extendData: o.extendData, styles: o.styles, lock: o.lock }, (st.tfsById || {})[o.id] ? { tfs: st.tfsById[o.id] } : {})); }
+    function applyTfVis() { const m = st.tfsById || {}; ch.getOverlays({ groupId: "draw" }).forEach(o => { if (m[o.id]) ch.overrideOverlay({ id: o.id, visible: !st.hidden && tfOk(m[o.id]) }); }); }
     let saveT = null;
     let pend = null, qT = null;
     function flushRemote() { clearTimeout(saveT); if (!pend) return; const p = pend; pend = null; try { opts.saveDrawings && opts.saveDrawings(p.sym, p.list, p.t); } catch (e) { /* lo reintenta la copia local */ } }
-    function persist(list) { const sym = st.sym, t = Date.now(); ls.set("tk-draw-" + sym, { t, list }); pend = { sym, list, t }; clearTimeout(saveT); saveT = setTimeout(flushRemote, 500); }
+    function persist(list) { const sym = st.sym, t = Date.now(); ls.set("tk-draw-" + sym, { t, list }); pend = { sym, list, t }; clearTimeout(saveT); saveT = setTimeout(flushRemote, 500);
+      ls.set("tk-hist-" + sym, { h: st.hist.slice(-30), f: st.fut.slice(-30) }); // deshacer que sigue al recargar
+      ALL.forEach(x => { if (x !== me && x.sym === sym && x.reloadDraw) x.reloadDraw(list); }); } // los demás gráficos del mismo mercado
     const queueSave = () => { clearTimeout(qT); qT = setTimeout(() => { if (!st.quiet) save(); }, 0); };
     const onHide = () => { if (document.visibilityState === "hidden") flushRemote(); };
     document.addEventListener("visibilitychange", onHide); window.addEventListener("pagehide", flushRemote);
@@ -1096,7 +1102,8 @@
     }
     function build(list) {
       st.quiet = true; ch.removeOverlay({ groupId: "draw" }); st.quiet = false;
-      (list || []).forEach(d => { if (d && d.name && d.points) ch.createOverlay(Object.assign({ name: d.name, groupId: "draw", points: d.points, extendData: d.extendData, styles: d.styles, lock: !!d.lock || st.locked, visible: !st.hidden, mode: magMode() }, evs(d.name))); });
+      st.tfsById = {};
+      (list || []).forEach(d => { if (d && d.name && d.points) { const id = ch.createOverlay(Object.assign({ name: d.name, groupId: "draw", points: d.points, extendData: d.extendData, styles: d.styles, lock: !!d.lock || st.locked, visible: !st.hidden && tfOk(d.tfs), mode: magMode() }, evs(d.name))); if (id && d.tfs && d.tfs.length) st.tfsById[id] = d.tfs.slice(); } });
     }
     async function restore() {
       const loc = ls.get("tk-draw-" + st.sym, null), lt = loc && !Array.isArray(loc) ? loc.t || 0 : 0;
@@ -1107,7 +1114,8 @@
           if (rem) { const rl = Array.isArray(rem) ? rem : rem.list, rt = Array.isArray(rem) ? 0 : rem.t || 0; if (!loc || rt > lt || (!lt && !rt && rl)) list = rl; else if (lt > rt && loc) { pend = { sym: st.sym, list, t: lt }; flushRemote(); } }
         } catch (e) { /* uso la copia local */ }
       }
-      build(list); st.hist = [JSON.stringify(serial())]; st.fut = [];
+      build(list); const cur = JSON.stringify(serial()), hs = ls.get("tk-hist-" + st.sym, null);
+      if (hs && hs.h && hs.h.length && hs.h[hs.h.length - 1] === cur) { st.hist = hs.h; st.fut = hs.f || []; } else { st.hist = [cur]; st.fut = []; }
     }
     function undo() { if (st.hist.length < 2) return; st.fut.push(st.hist.pop()); const l = JSON.parse(st.hist[st.hist.length - 1]); build(l); persist(l); hideFloat(); }
     function redo() { if (!st.fut.length) return; const j = st.fut.pop(); st.hist.push(j); const l = JSON.parse(j); build(l); persist(l); hideFloat(); }
@@ -1481,7 +1489,7 @@
       const anchor = R.on ? null : viewAnchor();
       if (R.on) exitReplay();
       st.anchor = anchor ? anchor.ts : null;
-      st.tf = k; CUR_TF = k; ls.set(TFK, k); opts.onTf && opts.onTf(k); $(".gx-tfname").textContent = TF_SHORT[k]; renderTfq();
+      st.tf = k; CUR_TF = k; ls.set(TFK, k); opts.onTf && opts.onTf(k); $(".gx-tfname").textContent = TF_SHORT[k]; renderTfq(); applyTfVis();
       st.prov = pickProv(); setSrc(); ch.setPeriod(TFS.find(x => x[0] === k)[2]);
       if (anchor) whenLoaded(() => setTimeout(() => goAnchor(anchor), 30));
       if (was) { enterReplay(); if (keep) whenLoaded(() => { startAt(keep); if (hadPos) { hint("La simulada abierta se ha cerrado al cambiar de marco."); setTimeout(() => hint(""), 3000); } }); }
@@ -1623,7 +1631,7 @@
       begin(list, idx);
     }
     /* cambiar de marco en mitad del backtesting: se queda en el mismo momento, sin ver el futuro */
-    function tfUI(k) { st.tf = k; CUR_TF = k; ls.set(TFK, k); opts.onTf && opts.onTf(k); $(".gx-tfname").textContent = TF_SHORT[k]; renderTfq(); st.prov = pickProv(); setSrc(); ch.setDataLoader(replayLoader); ch.setPeriod(TFS.find(x => x[0] === k)[2]); }
+    function tfUI(k) { st.tf = k; CUR_TF = k; ls.set(TFK, k); applyTfVis(); opts.onTf && opts.onTf(k); $(".gx-tfname").textContent = TF_SHORT[k]; renderTfq(); st.prov = pickProv(); setSrc(); ch.setDataLoader(replayLoader); ch.setPeriod(TFS.find(x => x[0] === k)[2]); }
     async function replayTf(k) {
       const old = st.tf, oldMs = TF_MS[old] || 3e5, now = R.at || (R.clock && R.clockIdx === R.idx ? R.clock : bar().timestamp + oldMs), hadPos = !!R.pos, tok = ++R.tok;
       if (R.all.length) R.snap = { tf: old, all: R.all, idx: R.idx, more: R.more }; // para volver tal cual si no llegan las velas
@@ -1792,6 +1800,10 @@
       if (t.dataset.fa === "del") { removeSel(); return; }
       if (t.dataset.fa === "txt") { menuText(t); return; }
       if (t.dataset.fa === "tpl") { menuTpl(t); return; }
+      if (t.dataset.fa === "tfs") { const id = st.sel; if (!id) return; const cur = (st.tfsById || {})[id] || [];
+        openPop(t, `<div class="gx-mh">Se ve en estos marcos</div><div class="gx-tfs">${TFS.map(([k]) => `<label class="gx-chk"><input type="checkbox" data-tfv="${k}" ${cur.includes(k) ? "checked" : ""}> ${TF_SHORT[k]}</label>`).join("")}</div><div class="gx-muted" style="padding:6px 10px 4px;font-size:12px">Sin marcar ninguno: se ve en todos.</div>`);
+        POP.onchange = e => { const k = e.target.dataset.tfv; if (!k) return; st.tfsById = st.tfsById || {}; const s2 = new Set(st.tfsById[id] || []); e.target.checked ? s2.add(k) : s2.delete(k); if (s2.size) st.tfsById[id] = Array.from(s2); else delete st.tfsById[id]; ch.overrideOverlay({ id, visible: !st.hidden && tfOk(st.tfsById[id]) }); save(); };
+        return; }
       if (t.dataset.fa === "dup") { dupSel(); return; }
       if (t.dataset.fa === "lock") { const o = st.sel && getOv(st.sel); if (o) { ch.overrideOverlay({ id: o.id, lock: !o.lock }); t.setAttribute("aria-pressed", String(!o.lock)); save(); } return; }
       if (t.dataset.back) { startAt(Date.now() - (+t.dataset.back) * 864e5); return; }
@@ -1900,6 +1912,7 @@
       setSymbol(sym) { if (sym === st.sym) return; flushRemote(); const was = R.on; if (R.on) exitReplay(); st.sym = sym; F.hidden = true; load(); restore(); if (was) enterReplay(); },
       setTheme(dark) { DARK = !!dark; ch.setStyles(styles()); applyInd(); paintBg(); applyCursor(); },
       price: () => st.price,
+      reloadDraw(list) { build(list); st.hist.push(JSON.stringify(serial())); },
       stop() { pause(); if (st.unsub) { st.unsub(); st.unsub = null; } }
     };
     me.hk = HK;

@@ -7,6 +7,7 @@
 <meta name="description" content="Tickora: tu diario de trading. Tus operaciones se apuntan solas desde MT5 y la app te ayuda a cumplir tu plan.">
 <meta name="theme-color" content="#f2f4f7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0e1526" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%2314213a'/%3E%3Crect x='15' y='6' width='2' height='20' fill='%23fff'/%3E%3Crect x='12' y='11' width='8' height='10' rx='2' fill='%23fbe27a'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -619,6 +620,14 @@ textarea.input{height:auto;padding:9px 11px;resize:vertical;line-height:1.5}
 .tkgrid[data-k="2v"]{grid-template:1fr/1fr 1fr}
 .tkgrid[data-k="2h"]{grid-template:1fr 1fr/1fr}
 .tkgrid[data-k="4"]{grid-template:1fr 1fr/1fr 1fr}
+.tkgrid[data-k="3v"]{grid-template:1fr/1fr 1fr 1fr}.tkgrid[data-k="3t"]{grid-template:1fr 1fr/1.6fr 1fr}.tkgrid[data-k="3t"]>.tkpane:first-child{grid-row:1/3}
+.tkgrid[data-k="6"]{grid-template:1fr 1fr/1fr 1fr 1fr}.tkgrid[data-k="8"]{grid-template:1fr 1fr/1fr 1fr 1fr 1fr}
+.tkgrid[data-k="6"] .gx-src,.tkgrid[data-k="8"] .gx-src,.tkgrid[data-k="3v"] .gx-src{display:none}
+.tkgrid[data-k="6"] .gx-top [data-act="settings"],.tkgrid[data-k="6"] .gx-top [data-act="shot"],.tkgrid[data-k="8"] .gx-top [data-act="settings"],.tkgrid[data-k="8"] .gx-top [data-act="shot"],.tkgrid[data-k="8"] .gx-tfq,.tkgrid[data-k="8"] .gx-top [data-act="undo"],.tkgrid[data-k="8"] .gx-top [data-act="redo"]{display:none}
+.lay-h{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--suave);font-weight:600;padding:10px 10px 4px;border-top:1px solid var(--linea);margin-top:4px}
+.lay-c{display:flex;align-items:center;gap:8px;padding:5px 10px;font-size:13px;cursor:pointer}
+.lay-n{display:flex;align-items:center}.lay-n button:first-child{flex:1;text-align:left;display:grid}.lay-n small{color:var(--suave);font-size:11px}.lay-x{flex:none!important;width:30px;justify-content:center}
+.lay-save{color:var(--tinta);font-weight:600}
 .tkpane{min-width:0;min-height:0;background:var(--card);position:relative}
 .tkgrid:not([data-k="1"]) .tkpane.tk-act::after{content:"";position:absolute;inset:0;border:2px solid var(--cobalto);pointer-events:none;z-index:6}
 .tkgrid:not([data-k="1"]) .tkpane:not(.tk-act) .gx-tools{display:none}
@@ -629,7 +638,7 @@ textarea.input{height:auto;padding:9px 11px;resize:vertical;line-height:1.5}
 .rail button:hover{background:var(--sub);color:var(--tinta)}
 .rail button[aria-pressed="true"],.rail button[aria-expanded="true"]{background:var(--cobaltoC);color:var(--cobalto2)}
 .rail-lay{position:relative}
-.laymenu{position:absolute;right:42px;top:0;z-index:30;background:var(--card);border:1px solid var(--borde);border-radius:12px;padding:6px;box-shadow:0 18px 40px -12px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:2px;min-width:180px}
+.laymenu{max-height:82vh;overflow:auto;position:absolute;right:42px;top:0;z-index:30;background:var(--card);border:1px solid var(--borde);border-radius:12px;padding:6px;box-shadow:0 18px 40px -12px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:2px;min-width:180px}
 .laymenu button{width:auto;height:36px;justify-content:flex-start;gap:10px;padding:0 10px;font:inherit;font-size:13.5px;color:var(--tinta2)}
 .laymenu button[aria-checked="true"]{background:var(--cobaltoC);color:var(--tinta)}
 .wl{width:290px;flex:none;border-left:1px solid var(--linea);display:flex;flex-direction:column;background:var(--card);min-height:0}
@@ -908,8 +917,8 @@ body.bt-mode .live-only{display:none!important}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/klinecharts@10.1.0/dist/umd/klinecharts.min.js"></script>
-<script src="grafico.js?v=20"></script>
-<script src="grafico2.js?v=2"></script>
+<script src="grafico.js?v=21"></script>
+<script src="grafico2.js?v=3"></script>
 </head>
 <body>
 <div id="app" aria-live="polite"></div>
@@ -1673,11 +1682,14 @@ function tvSymbol(s){
 const MARKETS=[["Divisas",["EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","EURJPY","GBPJPY"]],["Índices",["NAS100","US500","US30","GER40","UK100"]],["Materias primas",["XAUUSD","XAGUSD","USOIL"]],["Cripto",["BTCUSD","ETHUSD","SOLUSD"]]];
 /* ---------- varios gráficos y lista de seguimiento ---------- */
 const lsGet=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}, lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
-const LAYS=[["1","1 gráfico",'<rect x="3" y="4" width="14" height="12" rx="1.5"/>'],["2v","2 en columnas",'<rect x="3" y="4" width="14" height="12" rx="1.5"/><path d="M10 4v12"/>'],["2h","2 en filas",'<rect x="3" y="4" width="14" height="12" rx="1.5"/><path d="M3 10h14"/>'],["4","4 gráficos",'<rect x="3" y="4" width="14" height="12" rx="1.5"/><path d="M10 4v12M3 10h14"/>']];
-function layState(){if(!S.lay)S.lay=Object.assign({k:"1",syms:["EURUSD","XAUUSD","NAS100","BTCUSD"]},lsGet("tk-lay",{}));return S.lay}
+const LAYS=[["1","1 gráfico",'<rect x="3" y="4" width="14" height="12" rx="1.5"/>'],["2v","2 en columnas",'<rect x="3" y="4" width="14" height="12" rx="1.5"/><path d="M10 4v12"/>'],["2h","2 en filas",'<rect x="3" y="4" width="14" height="12" rx="1.5"/><path d="M3 10h14"/>'],["4","4 gráficos",'<rect x="3" y="4" width="14" height="12" rx="1.5"/><path d="M10 4v12M3 10h14"/>'],["3v","3 en columnas",'<rect x="3" y="4" width="14" height="12" rx="1.5"/><path d="M7.7 4v12M12.3 4v12"/>'],["3t","1 grande y 2",'<rect x="3" y="4" width="14" height="12" rx="1.5"/><path d="M11 4v12M11 10h6"/>'],["6","6 gráficos",'<rect x="3" y="4" width="14" height="12" rx="1.5"/><path d="M7.7 4v12M12.3 4v12M3 10h14"/>'],["8","8 gráficos",'<rect x="3" y="4" width="14" height="12" rx="1.5"/><path d="M6.5 4v12M10 4v12M13.5 4v12M3 10h14"/>']];
+const PANES={"1":1,"2v":2,"2h":2,"4":4,"3v":3,"3t":3,"6":6,"8":8};
+function layState(){if(!S.lay){S.lay=Object.assign({k:"1",syms:["EURUSD","XAUUSD","NAS100","BTCUSD"],sync:{}},lsGet("tk-lay",{}));const d=["EURUSD","XAUUSD","NAS100","BTCUSD","GBPUSD","US500","USDJPY","GER40"];d.forEach((x,i)=>{if(!S.lay.syms[i])S.lay.syms[i]=x});S.lay.sync=S.lay.sync||{}}return S.lay}
+function saveLay(){const L=layState();lsSet("tk-lay",{k:L.k,syms:L.syms,sync:L.sync})}
+window.TkSync=()=>(layState().sync||{});
 function watchState(){if(!S.watch){const mine=symbolsInfo().map(x=>x.s).slice(0,4);S.watch=Object.assign({open:false,list:Array.from(new Set(mine.concat(["EURUSD","GBPUSD","XAUUSD","NAS100","US500","BTCUSD"])))},lsGet("tk-watch",{}))}return S.watch}
 const isNarrow=()=>window.matchMedia("(max-width:1023px)").matches;
-function paneCount(){const k=isNarrow()?"1":layState().k;return k==="4"?4:k.startsWith("2")?2:1}
+function paneCount(){const k=isNarrow()?"1":layState().k;return PANES[k]||1}
 function wlRows(){const w=watchState(),cur=window.TkChart&&TkChart.current?TkChart.current.sym:S.an&&S.an.sym;
   return w.list.map(sym=>{const q=(S.quotes||{})[sym];return `<div class="wl-row" role="listitem"><button type="button" class="wl-pick" data-wl="${esc(sym)}" aria-current="${sym===cur}"><b>${esc(sym)}</b><span class="wl-p">${q&&q.last!=null?esc(fmtQ(sym,q.last)):"—"}</span><span class="wl-c ${q&&q.chg!=null?(q.chg>=0?"up":"dn"):""}">${q&&q.chg!=null?(q.chg>=0?"+":"−")+num(Math.abs(q.chg),2)+" %":""}</span></button><button type="button" class="wl-del" data-wl-del="${esc(sym)}" aria-label="Quitar ${esc(sym)} de la lista">${SVG('<path d="M5 5l10 10M15 5L5 15"/>',14,2)}</button></div>`}).join("")||`<div class="small muted" style="padding:14px">Tu lista está vacía. Pulsa + para añadir mercados.</div>`}
 function fmtQ(sym,v){const i=symbolsInfo().find(x=>x.s===sym),d=i&&i.d!=null?i.d:/JPY/.test(sym)?3:/^(XAU|NAS|US|GER|UK|BTC|ETH)/.test(sym)?2:5;return Number(v).toLocaleString("es-ES",{minimumFractionDigits:d,maximumFractionDigits:d})}
@@ -1695,7 +1707,9 @@ function anLayout(){
     <nav class="rail" aria-label="Herramientas del espacio de trabajo">
       <button type="button" data-wl-toggle aria-pressed="${w.open}" title="Lista de seguimiento" aria-label="Lista de seguimiento">${SVG('<path d="M4 5h12M4 10h12M4 15h8"/><circle cx="16" cy="15" r="1.4" fill="currentColor"/>',18)}</button>
       <div class="rail-lay"><button type="button" id="layBtn" aria-haspopup="true" aria-expanded="false" title="Varios gráficos" aria-label="Varios gráficos">${SVG((LAYS.find(x=>x[0]===L.k)||LAYS[0])[2],18)}</button>
-        <div class="laymenu" id="layMenu" hidden role="menu">${LAYS.map(([key,l,ic])=>`<button type="button" role="menuitemradio" data-lay="${key}" aria-checked="${L.k===key}">${SVG(ic,18)}<span>${l}</span></button>`).join("")}</div></div>
+        <div class="laymenu" id="layMenu" hidden role="menu">${LAYS.map(([key,l,ic])=>`<button type="button" role="menuitemradio" data-lay="${key}" aria-checked="${L.k===key}">${SVG(ic,18)}<span>${l}</span></button>`).join("")}
+          <div class="lay-h">Sincronizar entre gráficos</div>${[["sym","Mercado"],["tf","Marco de tiempo"],["cross","Cursor"],["range","Fechas que se ven"]].map(([k,l])=>`<label class="lay-c"><input type="checkbox" data-sync="${k}" ${L.sync&&L.sync[k]?"checked":""}> ${l}</label>`).join("")}
+          <div class="lay-h">Mis diseños</div><div id="layNamed">${layNamedRows()}</div><button type="button" class="lay-save" id="laySave">${SVG('<path d="M10 4v12M4 10h12"/>',15,2)} Guardar este diseño</button></div></div>
       <button type="button" id="fullBtn" aria-pressed="false" title="Pantalla completa" aria-label="Pantalla completa">${SVG('<path d="M3 8V3h5M12 3h5v5M17 12v5h-5M8 17H3v-5"/>',18)}</button>
     </nav></div>`;
 }
@@ -1716,7 +1730,8 @@ async function refreshQuotes(force){
 function setPaneSym(inst,sym){
   if(!inst)return;
   if(inst.key==="main"){const a=S.an;a.sym=sym;a.entry="";a.stop="";a.tp="";inst.setSymbol(sym);syncBoleto()}
-  else{const L=layState(),i=+inst.key.slice(1);L.syms[i]=sym;lsSet("tk-lay",{k:L.k,syms:L.syms});inst.setSymbol(sym)}
+  else{const L=layState(),i=+inst.key.slice(1);L.syms[i]=sym;saveLay();inst.setSymbol(sym)}
+  if(layState().sync.sym&&!S.symSyncing){S.symSyncing=true;try{TkChart.all.filter(x=>x!==inst&&x.sym!==sym).forEach(x=>setPaneSym(x,sym))}finally{S.symSyncing=false}}
   const el=document.getElementById("wlList");if(el){el.innerHTML=wlRows();bindWatch()}
 }
 function syncBoleto(){
@@ -1744,13 +1759,25 @@ function bindLayout(){
   const lb=document.getElementById("layBtn"),lm=document.getElementById("layMenu");
   lb.onclick=e=>{e.stopPropagation();lm.hidden=!lm.hidden;lb.setAttribute("aria-expanded",String(!lm.hidden))};
   document.addEventListener("click",function close(e){if(!lm.isConnected){document.removeEventListener("click",close);return}if(!e.target.closest(".rail-lay")){lm.hidden=true;lb.setAttribute("aria-expanded","false")}});
-  lm.querySelectorAll("[data-lay]").forEach(b=>b.onclick=()=>{const L=layState();L.k=b.dataset.lay;lsSet("tk-lay",{k:L.k,syms:L.syms});if(window.TkChart)TkChart.destroy();S.lastView=null;render();if(isNarrow()&&L.k!=="1")toast("En el móvil se ve un gráfico; los demás aparecen en el ordenador")});
+  lm.querySelectorAll("[data-sync]").forEach(c=>c.onchange=()=>{const L=layState();L.sync[c.dataset.sync]=c.checked?1:0;saveLay();if(c.checked&&c.dataset.sync==="sym"&&TkChart.current)setPaneSym(TkChart.current,TkChart.current.sym);if(c.checked&&c.dataset.sync==="tf"&&TkChart.current&&TkChart.current.X)TkChart.all.forEach(x=>{if(x!==TkChart.current&&x.X&&x.tf!==TkChart.current.tf)x.X.setTf(TkChart.current.tf)})});
+  const ls2=document.getElementById("laySave");if(ls2)ls2.onclick=()=>{const n=(prompt("Nombre del diseño (por ejemplo: «Oro en 3 marcos»)")||"").trim().slice(0,40);if(!n)return;const d=layNamed();d[n]=layCapture();lsSet("tk-layouts",d);layPush();document.getElementById("layNamed").innerHTML=layNamedRows();bindLayNamed();toast("Diseño guardado")};
+  bindLayNamed();layPull();
+  lm.querySelectorAll("[data-lay]").forEach(b=>b.onclick=()=>{const L=layState();L.k=b.dataset.lay;saveLay();if(window.TkChart)TkChart.destroy();S.lastView=null;render();if(isNarrow()&&L.k!=="1")toast("En el móvil se ve un gráfico; los demás aparecen en el ordenador")});
   const card=document.getElementById("tvcard"),fb=document.getElementById("fullBtn");
   const full=on=>{card.classList.toggle("full",on);document.body.style.overflow=on?"hidden":"";fb.setAttribute("aria-pressed",String(on));fb.title=on?"Salir de pantalla completa (Esc)":"Pantalla completa";setTimeout(()=>TkChart.all.forEach(x=>x.ch.resize()),40)};
   fb.onclick=()=>full(!card.classList.contains("full"));
   document.onkeydown=e=>{if(e.key==="Escape"&&card.classList.contains("full")&&!document.querySelector(".gx-modal:not([hidden]),.gx-pop:not([hidden])"))full(false)};
   if(w.open)refreshQuotes();
   clearInterval(S.qTimer);S.qTimer=setInterval(()=>{if(location.hash.startsWith("#analizar"))refreshQuotes()},90000);
+}
+function layNamed(){return lsGet("tk-layouts",{})}
+function layNamedRows(){const d=layNamed(),k=Object.keys(d).sort();return k.length?k.map(n=>`<div class="lay-n"><button type="button" data-layuse="${esc(n)}">${esc(n)}<small>${d[n].k} · ${esc((d[n].syms||[]).slice(0,PANES[d[n].k]||1).join(", "))}</small></button><button type="button" class="lay-x" data-laydel="${esc(n)}" aria-label="Borrar ${esc(n)}">${SVG('<path d="M5 5l10 10M15 5L5 15"/>',13,2)}</button></div>`).join(""):`<div class="small muted" style="padding:4px 10px 6px">Guarda tus combinaciones: gráficos, mercados, marcos, indicadores y tipo de vela.</div>`}
+function layCapture(){const L=layState(),n=PANES[L.k]||1,tfs={};for(let i=0;i<n;i++)tfs[i]=lsGet(i?"tk-tf-p"+i:"tk-tf","5m");return {k:L.k,syms:L.syms.slice(),sync:Object.assign({},L.sync),tfs,ind:lsGet("tk-ind2",[]),cfg:lsGet("tk-cfg",{}),t:Date.now()}}
+async function layPush(){const d=layNamed();try{await sb.from("docs").upsert({user_id:S.user.id,col:"layouts",id:"mine",data:{list:d,t:Date.now()},updated_at:new Date().toISOString()})}catch(e){}}
+async function layPull(){if(S.layPulled)return;S.layPulled=1;try{const {data}=await sb.from("docs").select("data").eq("col","layouts").eq("id","mine").maybeSingle();if(data&&data.data&&data.data.list){const loc=layNamed();lsSet("tk-layouts",Object.assign({},data.data.list,loc));const el=document.getElementById("layNamed");if(el){el.innerHTML=layNamedRows();bindLayNamed()}}}catch(e){}}
+function bindLayNamed(){
+  document.querySelectorAll("[data-layuse]").forEach(b=>b.onclick=()=>{const x=layNamed()[b.dataset.layuse];if(!x)return;const L=layState();L.k=x.k;L.syms=(x.syms||L.syms).slice();L.sync=Object.assign({},x.sync||{});saveLay();Object.entries(x.tfs||{}).forEach(([i,tf])=>lsSet(+i?"tk-tf-p"+i:"tk-tf",tf));if(x.ind)lsSet("tk-ind2",x.ind);if(x.cfg)lsSet("tk-cfg",x.cfg);S.an.sym=L.syms[0]||S.an.sym;toast("Diseño «"+b.dataset.layuse+"» cargado");setTimeout(()=>location.reload(),300)});
+  document.querySelectorAll("[data-laydel]").forEach(b=>b.onclick=e=>{e.stopPropagation();const d=layNamed();delete d[b.dataset.laydel];lsSet("tk-layouts",d);layPush();document.getElementById("layNamed").innerHTML=layNamedRows();bindLayNamed()});
 }
 function symbolsInfo(){return ((S.bridge&&S.bridge.last_info&&S.bridge.last_info.symbols)||[]).filter(x=>x&&x.s)}
 function viewAnalizar(){
@@ -1897,6 +1924,7 @@ function chartOpts(i){
     onMode:main?m=>{document.body.classList.toggle("bt-mode",m==="bt");if(m==="live"&&S.btRun&&S.btRun.started)setTimeout(()=>{if(S.btRun&&!document.body.classList.contains("bt-mode")){S.btRun=null;const b=document.getElementById("bsBand");if(b)b.remove()}},120)}:null,
     onReplay:main?ts=>{if(window.tkSessionHooks)tkSessionHooks.step(ts)}:null,
     onActive:inst=>{const el=document.getElementById("wlList");if(el){el.innerHTML=wlRows();bindWatch()}},
+    onTf:k=>{if(!layState().sync.tf||S.tfSyncing)return;S.tfSyncing=true;try{TkChart.all.forEach(x=>{if(x.key!==(main?"main":"p"+i)&&x.X&&x.tf!==k)x.X.setTf(k)})}finally{setTimeout(()=>{S.tfSyncing=false},50)}},
     digits:sym=>{const x=symbolsInfo().find(y=>y.s===sym);return x&&x.d!=null?x.d:null},
     invoke:(name,body)=>sb.functions.invoke(name,{body}),
     mt5:{has:mt5Live,provider:mt5Provider},
@@ -2293,7 +2321,7 @@ if(SB_OK){
 window.viewPlan=viewPlan;window.viewProgreso=viewProgreso;window.TKAPP={savePlan,S,sb,esc,SVG,fmtR,fmtV,fmtVt,fmtMoney,mOf,sumM,oneR,oneRSrc,planRiskBal,dispCur,moneyOn,prefU,CURS,fmtVabs,fmtLim,fmtMs,num,fmtPct,dayKey,todayKey,evaluate,tradeStats,toast,render,spark,MARKETS,symbolsInfo,lsGet,lsSet,acctName,selAcct,FEELS,greet,initials,minOf,minOfDate,money,inSession,MESES_L,NAV_APPS,appOf,ico,isDark,refreshWidgets,effectivePlan,applyAcct,thumb};
 })();
 </script>
-<link rel="stylesheet" href="extra2.css?v=1109">
+<link rel="stylesheet" href="extra2.css?v=1110">
 <script src="extra.js?v=21"></script>
 <script src="extra2.js?v=73"></script>
 <script src="extra3.js?v=7"></script>
@@ -2305,5 +2333,6 @@ window.viewPlan=viewPlan;window.viewProgreso=viewProgreso;window.TKAPP={savePlan
 <script src="extra9.js?v=7"></script>
 <script src="extra10.js?v=1"></script>
 <script src="extra11.js?v=1"></script>
+<script src="extra12.js?v=1"></script>
 </body>
 </html>

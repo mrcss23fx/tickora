@@ -3069,3 +3069,9 @@ html[data-theme="light"] .f9-tag.t{color:#1f8f80}
 .rp details summary,.rp details>summary{cursor:pointer}
 @media (max-width:1100px){.rp-kp{grid-template-columns:repeat(3,minmax(0,1fr))}.rp-g2,.rp-g3{grid-template-columns:1fr}}
 @media (max-width:560px){.rp-kp{grid-template-columns:1fr 1fr}.rp-k b{font-size:20px}.rp-io{grid-template-columns:1fr}}
+.gx-tfs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 10px;padding:4px 10px}
+.tkgrid[data-k="6"] .gx-qo,.tkgrid[data-k="8"] .gx-qo,.tkgrid[data-k="3v"] .gx-qo,.tkgrid[data-k="6"] .gx-bp,.tkgrid[data-k="8"] .gx-bp,.tkgrid[data-k="6"] .gx-lgr,.tkgrid[data-k="8"] .gx-lgr,.tkgrid[data-k="4"] .gx-lgr{display:none}.tkgrid:not([data-k="1"]) .gx-lg0 .src,.tkgrid:not([data-k="1"]) .gx-qi,.tkgrid:not([data-k="1"]) .gx-qtag{display:none}
+.gx-alr{padding:8px 0}.gx-alrh{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:4px 12px 10px}.gx-alrh .gx-btn{display:inline-flex;gap:6px;align-items:center}
+.gx-alre{display:grid;grid-template-columns:110px 1fr;gap:10px;padding:6px 12px;border-top:1px solid var(--linea);font-size:12.5px}.gx-alre span{color:var(--suave)}
+.gx-top [data-alr]{display:inline-flex;align-items:center;gap:6px}.tkgrid:not([data-k="1"]) .gx-top [data-alr] span{display:none}
+.gx-seg button:disabled{opacity:.4;cursor:not-allowed}

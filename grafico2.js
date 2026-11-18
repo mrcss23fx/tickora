@@ -129,6 +129,100 @@
     HK.indSourceSet = (x, z) => { const k = z.dataset.isrc; if (k === "sm") x.sm = Math.max(0, Math.min(200, Math.round(+z.value || 0))); else x[k] = z.value; };
   }]);
 
+  /* ---------- varios gráficos: cursor y fechas sincronizados ---------- */
+  let SYNCING = false;
+  window.TkChartExt2 = (window.TkChartExt2 || []).concat([(me, X) => {
+    const sync = () => (window.TkSync ? window.TkSync() : {});
+    X.ch.subscribeAction("onCrosshairChange", d => {
+      if (SYNCING || !sync().cross || TK.all.length < 2) return; const ts = d && d.kLineData ? d.kLineData.timestamp : null;
+      SYNCING = true; try { TK.all.forEach(o => { if (o === me) return; if (ts == null) { o.ch.executeAction("onCrosshairChange", { x: -1, y: -1, paneId: "candle_pane" }); return; }
+        const l = o.ch.getDataList(); let idx = -1; for (let i = l.length - 1; i >= 0; i--) if (l[i].timestamp <= ts) { idx = i; break; } if (idx < 0) return;
+        const c = o.ch.convertToPixel({ dataIndex: idx, value: l[idx].close }, { paneId: "candle_pane" }); if (c && c.x != null) o.ch.executeAction("onCrosshairChange", { x: c.x, y: c.y, paneId: "candle_pane" }); }); } catch (e) { /* sin cursor */ } finally { SYNCING = false; }
+    });
+    const range = () => {
+      if (SYNCING || !sync().range || TK.all.length < 2) return; const l = X.ch.getDataList(), vr = X.ch.getVisibleRange(); if (!l.length) return; const last = l[Math.min(l.length - 1, Math.max(0, vr.to - 1))]; if (!last) return;
+      SYNCING = true; try { const bs = X.ch.getBarSpace(); TK.all.forEach(o => { if (o === me || o.tf !== me.tf) return; try { o.ch.setBarSpace(bs.bar); o.ch.scrollToTimestamp(last.timestamp, 0); } catch (e) { /* fuera de rango */ } }); } finally { setTimeout(() => { SYNCING = false; }, 30); }
+    };
+    let rt = null; const rq = () => { clearTimeout(rt); rt = setTimeout(range, 60); };
+    X.ch.subscribeAction("onScroll", rq); X.ch.subscribeAction("onZoom", rq);
+  }]);
+
+  /* ---------- alertas (se comprueban en el servidor cada minuto) ---------- */
+  KC.registerOverlay({
+    name: "tkAlertLine", totalStep: 1, lock: true, needDefaultPointFigure: false, needDefaultXAxisFigure: false, needDefaultYAxisFigure: false,
+    createPointFigures: ({ coordinates: c, bounding: b, overlay: o }) => { if (!c.length) return []; const y = c[0].y, dark = U.DARK, col = dark ? "#5fd4c0" : "#0e8f7e", t = (o.extendData && o.extendData.t) || "Alerta";
+      return [{ type: "line", ignoreEvent: true, attrs: { coordinates: [{ x: 0, y }, { x: b.width, y }] }, styles: { color: col, size: 1, style: "dashed", dashedValue: [2, 4] } },
+        { type: "text", ignoreEvent: true, attrs: { x: b.width - 8, y, text: t, align: "right", baseline: "middle" }, styles: { color: col, size: 10.5, family: "Inter, sans-serif", backgroundColor: dark ? "#16161d" : "#ffffff", borderColor: col, borderSize: 1, borderRadius: 4, paddingLeft: 6, paddingRight: 6, paddingTop: 3, paddingBottom: 3 } }]; }
+  });
+  const ALR = { list: null, ev: [], loading: false, subs: new Set() };
+  async function loadAlerts(force) {
+    const A = APP(); if (!A || !A.S.user || (ALR.loading && !force)) return; ALR.loading = true;
+    try { const [a, e] = await Promise.all([A.sb.from("alerts").select("*").order("created_at", { ascending: false }).limit(200), A.sb.from("alert_events").select("*").order("created_at", { ascending: false }).limit(30)]);
+      if (!a.error) ALR.list = a.data || []; if (!e.error) ALR.ev = e.data || []; } catch (er) { /* sin conexión */ }
+    ALR.loading = false; ALR.subs.forEach(f => { try { f(); } catch (er) { /* gráfico cerrado */ } });
+  }
+  window.tkAlertsChanged = () => loadAlerts(true);
+  const COND = [["cross", "Cruza"], ["up", "Sube por encima de"], ["down", "Baja por debajo de"], ["above", "Está por encima de"], ["below", "Está por debajo de"]];
+  const LINES = ["segment", "rayLine", "straightLine", "horizontalStraightLine", "horizontalRayLine", "priceLine", "tkInfoLine", "tkArrow"];
+  window.TkChartExt2 = (window.TkChartExt2 || []).concat([(me, X, HK) => {
+    const { st, ch, $ } = X, A = APP(); if (!A) return;
+    const top = $(".gx-top"), sp = top && top.querySelector(".gx-sp");
+    if (sp) { const b = document.createElement("button"); b.type = "button"; b.className = "gx-tb"; b.dataset.alr = "1"; b.title = "Crear una alerta (Alt + A)"; b.innerHTML = I(IC.bell, 17) + "<span>Alerta</span>"; top.insertBefore(b, sp); b.addEventListener("click", e => { e.stopPropagation(); dialog(); }); }
+    const F = $(".gx-float"); if (F) { const b = document.createElement("button"); b.type = "button"; b.className = "gx-tb gx-ic"; b.title = "Alerta en este dibujo"; b.setAttribute("aria-label", "Alerta en este dibujo"); b.innerHTML = I(IC.bell, 17); const del = F.querySelector('[data-fa="del"]'); F.insertBefore(b, del); b.addEventListener("click", e => { e.stopPropagation(); dialog({ fromSel: true }); }); }
+    const fmtP = v => v == null || !isFinite(v) ? "—" : nf(v, X.digits());
+    function paintLines() {
+      try { ch.removeOverlay({ groupId: "alerts" }); } catch (e) { /* nada */ }
+      (ALR.list || []).filter(a => a.active && a.sym === st.sym && a.kind !== "ind").forEach(a => {
+        let v = a.value != null ? +a.value : null; if (a.kind === "line" && a.p1 && a.p1.t1 && a.p1.t2 && a.p1.t1 !== a.p1.t2) v = +a.p1.v1 + (+a.p1.v2 - +a.p1.v1) * (Date.now() - a.p1.t1) / (a.p1.t2 - a.p1.t1);
+        if (v == null || !isFinite(v)) return; const l = ch.getDataList(); if (!l.length) return;
+        try { ch.createOverlay({ name: "tkAlertLine", groupId: "alerts", lock: true, points: [{ timestamp: l[l.length - 1].timestamp, value: v }], extendData: { t: "Alerta " + fmtP(v) + (a.kind === "line" ? " · línea" : "") } }); } catch (e) { /* fuera */ }
+      });
+    }
+    const paintAll = () => { paintLines(); HK.repaint && HK.repaint(); };
+    ALR.subs.add(paintAll);
+    const prevDestroy = HK.destroy; HK.destroy = () => { ALR.subs.delete(paintAll); prevDestroy && prevDestroy(); };
+    const prevData = HK.onData; HK.onData = () => { prevData && prevData(); setTimeout(paintLines, 200); };
+    if (ALR.list === null) loadAlerts(); else setTimeout(paintLines, 500);
+    const selLine = () => { if (!st.sel) return null; const o = ch.getOverlays({ id: st.sel })[0]; if (!o || !LINES.includes(o.name) || !o.points.length) return null; return o; };
+    function dialog(o) {
+      o = o || {}; const px = st.price || (st.lastBar && st.lastBar.close) || 0, ln = o.fromSel ? selLine() : null;
+      const f = { kind: ln ? (ln.points.length > 1 && ln.points[0].value !== ln.points[1].value && !/^horizontal|priceLine/.test(ln.name) ? "line" : "price") : (o.kind || "price"), cond: "cross", value: ln ? ln.points[ln.points.length > 1 && /^horizontal|priceLine/.test(ln.name) ? 0 : 0].value : (o.value || px), len: 14, level: 70, tf: ["1m", "5m", "15m", "30m", "1h", "4h", "1d"].includes(st.tf) ? st.tf : "15m", freq: "once", note: "" };
+      if (o.fromSel && !ln) { X.hint("Elige antes una línea (tendencia, horizontal o rayo) para ponerle una alerta."); setTimeout(() => X.hint(""), 3000); return; }
+      const paint = () => X.openModal(`<div class="gx-dh"><h3>Nueva alerta · ${esc(st.sym)}</h3><button type="button" class="gx-tb gx-ic" data-x aria-label="Cerrar">${I(IC.x, 18)}</button></div>
+        <div class="gx-ot"><div class="gx-seg">${[["price", "Precio"], ["line", "Línea dibujada"], ["ind", "RSI"]].map(([k, l]) => `<button type="button" data-ak="${k}" aria-pressed="${f.kind === k}" ${k === "line" && !ln ? "disabled title=\"Elige antes una línea en el gráfico y pulsa la campana de su barra\"" : ""}>${l}</button>`).join("")}</div>
+          <div class="gx-og"><label>Cuando<select class="gx-in" data-af="cond">${COND.map(([k, l]) => `<option value="${k}" ${f.cond === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+          ${f.kind === "price" ? `<label>Precio<input class="gx-in" data-af="value" inputmode="decimal" value="${fmtP(f.value)}"></label>` : f.kind === "line" ? `<label>Tu línea<input class="gx-in" disabled value="${ln ? "Sigue la línea en el tiempo" : "—"}"></label>` : `<label>Nivel del RSI<input class="gx-in" data-af="level" inputmode="decimal" value="${f.level}"></label><label>Longitud<input class="gx-in" data-af="len" inputmode="numeric" value="${f.len}"></label><label>Marco<select class="gx-in" data-af="tf">${["1m", "5m", "15m", "30m", "1h", "4h", "1d"].map(k => `<option value="${k}" ${f.tf === k ? "selected" : ""}>${U.TF_SHORT[k]}</option>`).join("")}</select></label>`}
+          <label>Avisar<select class="gx-in" data-af="freq"><option value="once" ${f.freq === "once" ? "selected" : ""}>Solo una vez</option><option value="bar" ${f.freq === "bar" ? "selected" : ""}>Cada vez (como mucho una por vela)</option></select></label></div>
+          <label style="display:grid;gap:4px;font-size:12px;color:var(--suave)">Nota (opcional)<input class="gx-in" data-af="note" maxlength="120" placeholder="Ej.: mira si rompe con fuerza antes de entrar" value="${esc(f.note)}"></label>
+          <p class="gx-muted" style="margin:0">Se comprueba cada minuto en el servidor, aunque cierres Tickora. Te avisamos aquí y, si lo activas, con una notificación en este dispositivo.${/publico/.test((st.prov || {}).id || "") || !/mt5|binance/i.test((st.prov || {}).id || "") ? " Usa el precio público (puede ir 10–15 min retrasado en índices y materias primas)." : ""}</p>
+          <div class="gx-dact"><button type="button" class="gx-btn" data-x>Cancelar</button><button type="button" class="gx-btn gx-pri" data-ago>Crear alerta</button></div></div>`, () => { const D = $(".gx-dlg"); D.onclick = onClick; D.onchange = onChange; });
+      const onChange = e => { const k = e.target.dataset.af; if (!k) return; let v = e.target.value; if (["value", "level", "len"].includes(k)) { v = parseFloat(String(v).replace(",", ".")); if (!isFinite(v)) return; } f[k] = v; };
+      const onClick = async e => { const b = e.target.closest("button"); if (!b) return; if (b.dataset.x != null) { X.closeModal(); return; } if (b.dataset.ak && !b.disabled) { f.kind = b.dataset.ak; paint(); return; }
+        if (b.dataset.ago != null) { b.disabled = true;
+          const row = { sym: st.sym, kind: f.kind, cond: f.cond, freq: f.freq, note: f.note || null, tf: f.kind === "ind" ? f.tf : null, p1: {}, value: null, last_price: f.kind === "ind" ? null : px || null };
+          if (f.kind === "price") row.value = +f.value; if (f.kind === "ind") { row.value = +f.level; row.p1 = { len: Math.max(2, Math.min(100, Math.round(f.len))) }; }
+          if (f.kind === "line" && ln) { const a = ln.points[0], c = ln.points[1] || ln.points[0]; row.p1 = { t1: a.timestamp, v1: a.value, t2: c.timestamp, v2: c.value }; row.value = a.value; }
+          if (row.value == null || !isFinite(row.value)) { X.hint("Falta el valor de la alerta."); b.disabled = false; return; }
+          const { error } = await A.sb.from("alerts").insert(row); if (error) { X.hint("No se pudo crear la alerta: " + error.message); b.disabled = false; return; }
+          X.closeModal(); X.hint("Alerta creada. Se comprueba cada minuto."); setTimeout(() => X.hint(""), 3000); loadAlerts(true); window.tkPushOffer && window.tkPushOffer(); } };
+      paint();
+    }
+    HK.alertDialog = dialog;
+    document.addEventListener("keydown", e => { if (!document.body.contains(me.el) || TK.current !== me) return; if (e.altKey && (e.key === "a" || e.key === "A" || e.code === "KeyA") && !e.target.matches("input,textarea,select")) { e.preventDefault(); dialog(); } });
+    if (me.key === "main") {
+      HK.alertTab = () => { const n = (ALR.list || []).filter(a => a.active).length; return "Alertas" + (n ? " (" + n + ")" : ""); };
+      HK.alertBody = () => { const L = ALR.list || [], ev = ALR.ev || [];
+        const push = window.tkPushState ? window.tkPushState() : "";
+        return `<div class="gx-alr"><div class="gx-alrh"><button type="button" class="gx-btn gx-pri" data-pa="newalert">${I(IC.bell, 14)} Nueva alerta</button>${push}</div>
+          ${L.length ? `<table><tr><th>Mercado</th><th>Condición</th><th>Avisar</th><th>Estado</th><th></th></tr>${L.map(a => `<tr><td><b>${esc(a.sym)}</b></td><td>${a.kind === "ind" ? `RSI ${esc((a.p1 || {}).len || 14)} (${esc(a.tf || "")}) ` : a.kind === "line" ? "Tu línea: " : ""}${esc((COND.find(c => c[0] === a.cond) || [0, ""])[1].toLowerCase())} ${a.kind === "line" ? "" : esc(a.kind === "ind" ? String(a.value) : nf(+a.value, X.digits()))}${a.note ? `<small class="gx-muted"> · ${esc(a.note)}</small>` : ""}</td><td>${a.freq === "bar" ? "Cada vez" : "Una vez"}</td><td>${a.active ? "Activa" : a.fired ? "Saltó " + new Date(a.last_fired).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "Pausada"}</td><td class="gx-pa"><button type="button" data-alt="${a.id}">${a.active ? "Pausar" : "Activar"}</button><button type="button" data-ald="${a.id}">Borrar</button></td></tr>`).join("")}</table>` : `<p class="gx-bpe">Aún no tienes alertas. Pulsa «Nueva alerta», la campana de arriba, Alt + A, o la campana de la barra de una línea dibujada.</p>`}
+          ${ev.length ? `<div class="gx-mh" style="padding:10px 12px 4px">Últimos avisos</div>${ev.slice(0, 8).map(x => `<div class="gx-alre"><span>${new Date(x.created_at).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>${esc(x.msg)}</div>`).join("")}` : ""}</div>`; };
+      HK.afterPanel = (bp) => { bp.querySelectorAll("[data-alt]").forEach(b => b.onclick = async e => { e.stopPropagation(); const a = (ALR.list || []).find(x => x.id === b.dataset.alt); if (!a) return; await A.sb.from("alerts").update({ active: !a.active, last_price: st.price || a.last_price }).eq("id", a.id); loadAlerts(true); });
+        bp.querySelectorAll("[data-ald]").forEach(b => b.onclick = async e => { e.stopPropagation(); await A.sb.from("alerts").delete().eq("id", b.dataset.ald); loadAlerts(true); });
+        const n = bp.querySelector('[data-pa="newalert"]'); if (n) n.onclick = e => { e.stopPropagation(); dialog(); };
+        bp.querySelectorAll("[data-push]").forEach(b => b.onclick = e => { e.stopPropagation(); window.tkPushOn && window.tkPushOn().then(() => HK.repaint && HK.repaint()); }); };
+    }
+  }]);
+
   /* ---------- la extensión de cada gráfico ---------- */
   function ext(me, X, HK) {
     const { st, R, ch, $, $$ } = X, opts = X.opts, main = me.key === "main";
