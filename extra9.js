@@ -129,7 +129,7 @@
     return `<div class="f9" data-ph="${ph}"><div class="hx-top"><span class="hx-pill"><i class="f9-ph ${ph}"></i>${pill}</span>${sw("fase")}</div>
       <header class="f9-hero hx"><h1 class="f9-hi">${title}</h1><p class="f9-sub">${sub}${nameAsk}</p>
         ${ph !== "despues" ? `<div class="hx-q" id="hxq" aria-live="polite">${X2.heroQ(D)}</div>` : ""}</header>
-      <div class="f9-body">
+      <div class="f9-body">${window.tkSaveStrip ? window.tkSaveStrip() : ""}
       ${ph === "antes" ? `${steps()}<div class="f9-g2">${morning(D)}${rules(D)}</div>${carousel(D)}${learn(D)}`
         : ph === "en" ? `${during(D)}${steps()}${carousel(D)}`
         : `${after(D)}${steps()}${carousel(D)}${learn(D)}`}
