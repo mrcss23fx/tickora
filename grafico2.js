@@ -147,6 +147,18 @@
     X.ch.subscribeAction("onScroll", rq); X.ch.subscribeAction("onZoom", rq);
   }]);
 
+  /* ---------- gráfico más grande: en el móvil las herramientas van tras un lápiz ---------- */
+  try { if (!localStorage.getItem("tk-bigA")) { localStorage.setItem("tk-bpopen", "false"); localStorage.setItem("tk-bigA", "1"); } } catch (e) { /* sin almacenamiento */ }
+  window.TkChartExt2 = (window.TkChartExt2 || []).concat([(me, X) => {
+    const top = X.$(".gx-top"), gx = X.$(".gx") || me.el.querySelector(".gx") || me.el; if (!top || me.key !== "main") return;
+    const b = document.createElement("button"); b.type = "button"; b.className = "gx-pen"; b.title = "Herramientas de dibujo"; b.setAttribute("aria-label", "Herramientas de dibujo");
+    b.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4.5-1L19 8.5 15.5 5 5 15.5z"/><path d="M13.5 7l3.5 3.5"/></svg>';
+    const host = gx.classList && gx.classList.contains("gx") ? gx : gx.closest(".gx") || gx;
+    const set = on => { host.classList.toggle("tools-on", on); b.setAttribute("aria-pressed", String(on)); try { localStorage.setItem("tk-penon", on ? "1" : ""); } catch (e) { /* nada */ } setTimeout(() => { try { X.ch.resize(); } catch (e) { /* nada */ } }, 60); };
+    b.addEventListener("click", e => { e.stopPropagation(); set(!host.classList.contains("tools-on")); });
+    top.appendChild(b); let on = false; try { on = !!localStorage.getItem("tk-penon"); } catch (e) { /* nada */ } if (on) set(true);
+  }]);
+
   /* ---------- alertas (se comprueban en el servidor cada minuto) ---------- */
   KC.registerOverlay({
     name: "tkAlertLine", totalStep: 1, lock: true, needDefaultPointFigure: false, needDefaultXAxisFigure: false, needDefaultYAxisFigure: false,

@@ -148,7 +148,7 @@
   });
   function styles() {
     const p = pal(), up = upC(), down = downC();
-    const axis = { axisLine: { color: p.borde }, tickLine: { color: p.borde }, tickText: { color: p.suave, family: NUMF, size: 11 } };
+    const axis = { axisLine: { color: p.borde }, tickLine: { color: p.borde }, tickText: { color: p.suave, family: NUMF, size: matchMedia("(max-width: 760px)").matches ? 9.5 : 11 } };
     const ctext = { color: DARK ? "#0e1526" : "#ffffff", backgroundColor: p.tinta, borderColor: p.tinta, family: NUMF, size: 11 };
     return {
       grid: { show: CFG.grid, horizontal: { color: p.linea }, vertical: { color: p.linea } },
