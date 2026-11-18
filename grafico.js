@@ -54,6 +54,11 @@
     }
     return out;
   }
+  function wd(p) { // como withDerived, pero la etiqueta, el retraso y el historial siguen vivos (son getters)
+    const w = withDerived(p); if (w === p || !p) return w;
+    ["label", "delayed", "deep"].forEach(k => { const d = Object.getOwnPropertyDescriptor(p, k); if (d && d.get) Object.defineProperty(w, k, { get: () => p[k], enumerable: true, configurable: true }); });
+    return w;
+  }
   function withDerived(p) {
     if (!p || p.__der) return p;
     const native = p.native || [], seed = {};
@@ -968,9 +973,9 @@
     const digits = () => (opts.digits && opts.digits(st.sym)) || guessDigits(st.sym);
     const curColor = () => st.color || pal().cob;
     function pickProv() {
-      if (opts.mt5 && opts.mt5.has(st.sym)) return withDerived(opts.mt5.provider(st.sym));
-      if (binSym(st.sym)) return withDerived(binance());
-      return withDerived(publico(opts.invoke, digits()));
+      if (opts.mt5 && opts.mt5.has(st.sym)) return wd(opts.mt5.provider(st.sym));
+      if (binSym(st.sym)) return wd(binance());
+      return wd(publico(opts.invoke, digits()));
     }
 
     /* datos en vivo (en KLineChart 10, «forward» = velas más antiguas y «backward» = más nuevas) */

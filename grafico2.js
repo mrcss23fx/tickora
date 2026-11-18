@@ -407,7 +407,7 @@
     HK.onBack = idx => { P.list.filter(p => p.mode === "replay" && ((p.entryIdx != null && p.entryIdx > idx) || (p.status === "pending" && p.created > (R.all[idx] || {}).timestamp))).forEach(p => { undraw(p); P.list = P.list.filter(z => z !== p); }); paintPanel(); };
     HK.onReset = why => { if (why === "tf") { setTimeout(redrawAll, 300); return; } P.list.filter(p => p.mode === "replay").forEach(undraw); P.list = P.list.filter(p => p.mode !== "replay"); if (why === "exit") { P.hist = P.hist.filter(h => h.mode !== "replay"); setTimeout(() => { redrawAll(); paintNews(); }, 300); } paintPanel(); };
     HK.onBegin = () => { setTimeout(() => { redrawAll(); paintNews(); paintLegend(); }, 150); };
-    HK.onData = () => { setTimeout(() => { paintNews(); redrawAll(); paintLegend(); paintCd(); X.applyLook && X.applyLook(); }, 120); };
+    HK.onData = () => { setTimeout(() => { paintNews(); redrawAll(); paintLegend(); paintCd(); X.applyLook && X.applyLook(); try { paintPanel(); } catch (e) { /* aún sin panel */ } }, 120); };
     { const pr = HK.onRestyle; HK.onRestyle = () => { pr && pr(); paintNews(); redrawAll(); paintLegend(); paintCd(); }; }
     HK.stats = () => paintPanel(true);
     HK.place = place; HK.P = P; HK.acct = acct;
