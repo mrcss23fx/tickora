@@ -1048,8 +1048,7 @@
     if (!Zt) c1 = `<div class="nyc"><span class="nyk">Hoy en tu horario</span><b>Sin horario</b><small>Pon tu horario en <a href="#plan">Mi plan</a> y te diré cuándo apartarte.</small></div>`;
     else { const W = Zt.b - Zt.a, x = m => ((m - Zt.a) / W * 100).toFixed(2), freeMin = Zt.free.reduce((s, f) => s + f[1] - f[0], 0);
       c1 = `<div class="nyc"><span class="nyk">Hoy en tu horario</span><b>${Zt.M.length ? (Zt.M.length === 1 ? "1 zona a evitar" : Zt.M.length + " zonas a evitar") : "Horario limpio"}</b>
-        <div class="nyb">${Zt.free.map(f => `<i class="f" style="left:${x(f[0])}%;width:${(x(f[1]) - x(f[0]))}%"></i>`).join("")}${Zt.M.map(z => `<i class="z" style="left:${x(z[0])}%;width:${(x(z[1]) - x(z[0]))}%" title="${esc(z[2].map(e => e.country + " " + e.title).join(" · "))}"></i>`).join("")}${now >= Zt.a && now <= Zt.b ? `<em style="left:${x(now)}%"></em>` : ""}</div>
-        <div class="nyt"><span>${esc(p.start)}</span><span>${esc(p.end)}</span></div>
+        ${window.tkBar ? window.tkBar({ a: Zt.a, b: Zt.b, now, zones: Zt.M.map(z => [z[0], z[1], mm(Math.round((z[0] + z[1]) / 2)) + " " + z[2].map(e => e.country).filter((v, i, s) => s.indexOf(v) === i).join(", ")]) }) : ""}
         <small>${Zt.M.length ? Zt.M.map(z => `No entres de <b>${mm(z[0])} a ${mm(z[1])}</b> (${esc(z[2].map(e => e.country).filter((v, i, s) => s.indexOf(v) === i).join(", "))})`).join(" · ") + ` · Te quedan ${Math.floor(freeMin / 60) ? Math.floor(freeMin / 60) + " h " : ""}${freeMin % 60} min limpios.` : "Ninguna noticia fuerte cae en tu horario hoy."}</small></div>`; }
     // 2. tu semana
     const t0 = new Date(); t0.setHours(12, 0, 0, 0); const wd = (t0.getDay() + 6) % 7; const days = [];

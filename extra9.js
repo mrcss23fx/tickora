@@ -85,6 +85,7 @@
       <div class="f9-row">${S.planOk && S.planOk.day === todayKey() ? `<span class="f9-ok">${I('<path d="M5 10.5l3 3 7-7"/>', 14)} Te comprometiste a las ${new Date(S.planOk.ts).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</span>` : `<button type="button" class="x-ch pri" data-hc-commit>Me comprometo hoy</button>`}<a class="f9-link" href="#hoy">Ver Mi día</a></div></div>`;
   }
   /* ---------- 1 · durante tu sesión ---------- */
+  const bad1 = D => D.today.filter(t => t.status === "closed" && !evaluate(t).good).length;
   function during(D) {
     const p = D.p, mx = p.maxTrades || 3, used = D.today.length, L = p.dayLimitR || 2, dr = D.st.n ? D.st.tot : 0, margin = Math.max(0, L + Math.min(0, dr));
     const X = X2.dayX(D), last = D.today.slice().sort((a, b) => new Date(b.open_time) - new Date(a.open_time))[0];
@@ -96,8 +97,8 @@
       <div class="f9-card"><h2 class="f9-lbl">Aún puedes perder</h2><div class="f9-big">${margin > 0 ? fmtVabs(margin) : "0"}</div><div class="f9-bar"><u style="width:${Math.round(margin / L * 100)}%"></u></div></div>
       <div class="f9-card"><h2 class="f9-lbl">Resultado de hoy</h2><div class="f9-big">${fmtV(dr, D.st.mt)}</div><small class="f9-m">${last ? esc(last.symbol) + " · " + new Date(last.open_time).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : "Aún sin operaciones"}</small></div></div>
       <div class="f9-g2"><div class="f9-card"><h2 class="f9-lbl">Tu sesión · ${esc(p.start)} – ${esc(p.end)}</h2>
-        <div class="f9-tl">${zones.map(m => `<i class="z" style="left:${x(m - 15)}%;width:${x(m + 15) - x(m - 15)}%"></i>`).join("")}${D.today.map(t => `<i class="o${t.status === "closed" && !evaluate(t).good ? " bad" : ""}" style="left:${x(A.minOfDate(t.open_time))}%"></i>`).join("")}<i class="now" style="left:${x(D.now)}%"></i></div>
-        <div class="f9-tlx"><span>${esc(p.start)}</span><span>${zones.length ? `No entres de ${hm(zones[0] - 15)} a ${hm(zones[0] + 15)}` : "Sin noticias fuertes en tu horario"}</span><span>${esc(p.end)}</span></div></div>
+        ${window.tkBar ? window.tkBar({ a: D.a, b: D.b, now: D.now, ops: D.today.map(t => ({ m: A.minOfDate(t.open_time), bad: t.status === "closed" && !evaluate(t).good })), zones: (D.todayEv || []).filter(e => e.impact === "High").map(e => { const m = A.minOfDate(e.ts); return [m - 15, m + 15, hm(m) + " " + (e.country || "")]; }) }) : ""}
+        <div class="f9-tlx"><span>${D.today.length ? `${D.today.filter(t => !(t.status === "closed" && !evaluate(t).good)).length} dentro del plan${bad1(D) ? ` · <b class="f9-bad">${bad1(D)} evitable${bad1(D) > 1 ? "s" : ""}</b>` : ""}` : "Aún sin operaciones"}</span><span>${(() => { const nz = zones.filter(m => m + 15 > D.now)[0]; return nz != null ? `Próxima zona sin operar: ${hm(nz - 15)}–${hm(nz + 15)}` : "Sin noticias fuertes por delante"; })()}</span></div></div>
         <div class="f9-card f9-cand${cand && cand[0] === "on" ? " on" : ""}">${I('<rect x="4.5" y="9" width="11" height="8" rx="2"/><path d="M7 9V6.5a3 3 0 0 1 6 0V9"/>', 22)}<div><b>${!cand ? "Candado en MetaTrader apagado" : cand[0] === "on" ? "Candado cerrado" : cand[0] === "off" ? "Candado quitado hoy" : "Candado activo en tu MT5"}</b><small>${!cand ? "Puedes activarlo en Ajustes: tú decides cuándo no te deja operar." : esc(cand[1])}</small></div><a class="f9-link" href="#ajustes">${cand ? "Ajustes" : "Activar"}</a></div></div>
       <div class="f9-row f9-acts"><button type="button" class="x-ch pri" data-hx="pause">Pausa</button><button type="button" class="x-ch" data-f9="emo">Registrar emoción</button><a class="x-ch" href="#analizar">Abrir el gráfico</a><a class="x-ch" href="#hoy">Ver Mi día completo</a></div>`;
   }

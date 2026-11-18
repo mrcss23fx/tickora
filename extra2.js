@@ -563,7 +563,7 @@
       const tf = ph === "antes" ? 0 : ph === "despues" ? 1 : (D.now - D.a) / Math.max(1, D.b - D.a), chip = ph === "antes" ? `Empieza en ${durTxt(D.a - D.now)}` : ph === "en" ? `Quedan ${durTxt(D.b - D.now)}` : "Sesión terminada";
       head = `<div class="nv-hd s-${lv}"><span class="nv-glow" aria-hidden="true"></span><small>${esc(typeof greet === "function" ? greet() : "Hola")},</small><b>${esc((S.name || "").split(" ")[0] || "trader")}</b>
         <div class="nv-st"><span class="nv-dot"></span>${esc(lt || chip)}<em>${chip}</em></div>
-        <div class="nv-ses"><span>${esc(D.p.start)}</span><div><i style="width:${(tf * 100).toFixed(1)}%"></i></div><span>${esc(D.p.end)}</span></div></div>`; }
+        <div class="nv-ses"><span>${esc(D.p.start)}</span>${tkBar({ a: D.a, b: D.b, now: D.now, compact: 1, ops: (D.today || []).map(t => ({ m: A.minOfDate(t.open_time), bad: t.status === "closed" && !A.evaluate(t).good })), zones: (D.todayEv || []).filter(e => e.impact === "High").map(e => { const m = A.minOfDate(e.ts); return [m - 15, m + 15]; }) })}<span>${esc(D.p.end)}</span></div></div>`; }
     // pie: perfil, racha y objetivos
     let gl = "", st = 0; try { if (gHas()) { const ix = gIx(); st = gStreak(ix); gl = GH.filter(h => S.goals[h.k]).map(h => { const pr = gProg(S.goals[h.k], ix); return `<i style="--gc:${h.c}"><b style="width:${(pr.pct * 100).toFixed(0)}%"></b></i>`; }).join(""); } } catch (e) { }
     const ini = ((S.name || "T").trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2) || "T").toUpperCase();
@@ -1983,6 +1983,24 @@
       $$("[data-fdel]").forEach(b => b.onclick = async () => { if (!confirm("¿Borrar este movimiento?")) return; const { error } = await sb.from("docs").delete().eq("col", "fin").eq("id", b.dataset.fdel); if (error) { toast("No se pudo borrar"); return; } S.fin = S.fin.filter(x => x.id !== b.dataset.fdel); re(); });
     }
   };
+  /* ---------- barra de la sesión (una para toda la app, 18-nov-2026: «cinta con luz») ----------
+     o = {a, b, now (minutos del día), ops:[{m, bad}], zones:[[m0, m1, etiqueta]], compact} */
+  function tkBar(o) {
+    const a = o.a, b = Math.max(o.a + 1, o.b), W = b - a, pc = m => Math.max(0, Math.min(100, (m - a) / W * 100)).toFixed(2);
+    const hh = m => { m = ((Math.round(m) % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"); };
+    const zones = (o.zones || []).filter(z => z[1] > a && z[0] < b), inS = o.now >= a && o.now <= b, fill = o.now <= a ? 0 : o.now >= b ? 100 : pc(o.now);
+    let lastL = -99; const labs = o.compact ? "" : zones.map(z => { const c = +pc((z[0] + z[1]) / 2); if (c - lastL < 13 || !z[2]) return ""; lastL = c; return `<span class="sb-zl" style="left:${Math.min(92, Math.max(8, c))}%">${esc(z[2])}</span>`; }).join("");
+    let ticks = "";
+    if (!o.compact) { const step = [30, 60, 90, 120, 180, 240].find(s => W / s <= 6) || 360, first = Math.ceil(a / step) * step, T = [];
+      for (let m = first; m < b - step * .45; m += step) if (m - a > step * .45) T.push(m);
+      ticks = `<div class="sb-t"><span style="left:0">${hh(a)}</span>${T.map(m => `<span style="left:${pc(m)}%">${hh(m)}</span>`).join("")}<span class="e" style="left:100%">${hh(b)}</span></div>`; }
+    return `<div class="sb${o.compact ? " c" : ""}${labs ? " l" : ""}" role="img" aria-label="Tu sesión de ${hh(a)} a ${hh(b)}${inS ? ", ahora " + hh(o.now) : ""}"><div class="sb-r">${labs}
+      ${zones.map(z => `<i class="sb-z" style="left:${pc(z[0])}%;width:${(pc(z[1]) - pc(z[0])).toFixed(2)}%"></i>`).join("")}
+      <i class="sb-trk"></i><i class="sb-fill" style="width:${fill}%"></i>
+      ${(o.ops || []).filter(t => t.m >= a - 5 && t.m <= b + 5).map(t => `<i class="sb-o${t.bad ? " bad" : ""}" style="left:${pc(t.m)}%"></i>`).join("")}
+      ${inS ? `<i class="sb-k" style="left:${fill}%"></i>` : ""}</div>${ticks}</div>`;
+  }
+  window.tkBar = tkBar;
   window.TK_X2 = { hData, dayX, mkOf, glyph, EMOL, MK, NK, NLAB, dateOf, re, gRefresh, healthOk, loadMente, PTRIG, PCALM, PTONE, mDone, mScore, heroQ, bindHero, bindDay, psyPanel, loadPlanOk, loadAll, loadMini, bindWidgets, homeSw, homeCar, bindCar };
 })();
 
