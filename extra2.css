@@ -2915,3 +2915,4 @@ html[data-theme="light"] .f9-tag.t{color:#1f8f80}
 .f9 .f9-carw .f9-lbl{align-self:flex-start}
 .f9 .f9-carw .hx-car{margin-top:4px}
 .f9 .f9-carw .hx-cats{margin-top:14px;align-self:center}
+.f9{overflow-x:clip}.f9 .hx-q{max-width:100%;box-sizing:border-box}.f9 .hx-qt{white-space:normal;min-width:0}
