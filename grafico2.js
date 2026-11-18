@@ -184,6 +184,7 @@
     const fmtP = v => v == null || !isFinite(v) ? "—" : nf(v, X.digits());
     function paintLines() {
       try { ch.removeOverlay({ groupId: "alerts" }); } catch (e) { /* nada */ }
+      if ((U.CFG || {}).showAlerts === false) return;
       (ALR.list || []).filter(a => a.active && a.sym === st.sym && a.kind !== "ind").forEach(a => {
         let v = a.value != null ? +a.value : null; if (a.kind === "line" && a.p1 && a.p1.t1 && a.p1.t2 && a.p1.t1 !== a.p1.t2) v = +a.p1.v1 + (+a.p1.v2 - +a.p1.v1) * (Date.now() - a.p1.t1) / (a.p1.t2 - a.p1.t1);
         if (v == null || !isFinite(v)) return; const l = ch.getDataList(); if (!l.length) return;
@@ -191,6 +192,7 @@
       });
     }
     const paintAll = () => { paintLines(); HK.repaint && HK.repaint(); };
+    { const pr = HK.onRestyle; HK.onRestyle = () => { pr && pr(); paintLines(); }; }
     ALR.subs.add(paintAll);
     const prevDestroy = HK.destroy; HK.destroy = () => { ALR.subs.delete(paintAll); prevDestroy && prevDestroy(); };
     const prevData = HK.onData; HK.onData = () => { prevData && prevData(); setTimeout(paintLines, 200); };
@@ -244,7 +246,7 @@
 
     /* ===== leyenda ===== */
     const lg = document.createElement("div"); lg.className = "gx-lg"; canvas.appendChild(lg);
-    const fmtP = v => v == null || !isFinite(v) ? "—" : nf(v, X.digits());
+    const fmtP = v => v == null || !isFinite(v) ? "—" : nf(v, (X.pp || X.digits)());
     function provLabel() {
       const p = st.prov || {}; if (R.on) return "Práctica · " + ((p.label || "").split(" · ")[0] || "");
       if (/binance/i.test(p.id || p.label || "")) return "Binance · en vivo";
@@ -266,11 +268,12 @@
       }).join("");
       const nw = (HK.news || []).find(e => Math.abs(e.ts - b.timestamp) <= Math.max(15 * 6e4, (TF_MS[st.tf] || 3e5)));
       const fold = ls.get("tk-lgfold", false);
-      lg.innerHTML = `<div class="gx-lg0"><b>${esc(st.sym)} · ${esc(U.TF_SHORT[st.tf] || st.tf)}</b><span class="src">${esc(provLabel())}</span>
-        <span class="k">A</span><span>${fmtP(b.open)}</span><span class="k">M</span><span>${fmtP(b.high)}</span><span class="k">m</span><span>${fmtP(b.low)}</span><span class="k">C</span><span class="${cls}">${fmtP(b.close)}</span><span class="${cls}">${chg >= 0 ? "+" : "−"}${fmtP(Math.abs(chg))} (${chg >= 0 ? "+" : "−"}${nf(Math.abs(pct), 2)} %)</span>
-        ${inds.length ? `<button type="button" class="gx-lgf" data-lgi="fold" title="${fold ? "Ver indicadores" : "Plegar indicadores"}" aria-label="${fold ? "Ver indicadores" : "Plegar indicadores"}">${I(fold ? IC.down : IC.up, 13)}</button>` : ""}</div>
-        ${nw ? `<div class="gx-lgn">Noticia ${new Date(nw.ts).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} · ${esc(nw.country)} · ${esc(nw.title || "")}</div>` : ""}
-        ${fold ? "" : rows}`;
+      const G = (U.CFG || {}), on = k => G[k] !== false;
+      lg.innerHTML = `<div class="gx-lg0">${on("lgSym") ? `<b>${esc(st.sym)} · ${esc(U.TF_SHORT[st.tf] || st.tf)}</b>` : ""}${on("lgSrc") ? `<span class="src">${esc(provLabel())}</span>` : ""}
+        ${on("lgOhlc") ? `<span class="k">A</span><span>${fmtP(b.open)}</span><span class="k">M</span><span>${fmtP(b.high)}</span><span class="k">m</span><span>${fmtP(b.low)}</span><span class="k">C</span><span class="${cls}">${fmtP(b.close)}</span>` : ""}${on("lgChg") ? `<span class="${cls}">${chg >= 0 ? "+" : "−"}${fmtP(Math.abs(chg))} (${chg >= 0 ? "+" : "−"}${nf(Math.abs(pct), 2)} %)</span>` : ""}
+        ${inds.length && on("lgInd") ? `<button type="button" class="gx-lgf" data-lgi="fold" title="${fold ? "Ver indicadores" : "Plegar indicadores"}" aria-label="${fold ? "Ver indicadores" : "Plegar indicadores"}">${I(fold ? IC.down : IC.up, 13)}</button>` : ""}</div>
+        ${nw && on("lgNews") ? `<div class="gx-lgn">Noticia ${new Date(nw.ts).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} · ${esc(nw.country)} · ${esc(nw.title || "")}</div>` : ""}
+        ${fold || !on("lgInd") ? "" : on("lgIv") ? rows : rows.replace(/<i style="[^"]*">[^<]*<\/i>/g, "")}`;
       if (qo) qo.style.top = (lg.offsetTop + lg.offsetHeight + 6) + "px";
     }
     lg.addEventListener("click", e => {
@@ -287,7 +290,7 @@
     /* ===== cuenta atrás de la vela ===== */
     const cd = document.createElement("div"); cd.className = "gx-cd"; cd.hidden = true; canvas.appendChild(cd);
     function paintCd() {
-      const lb = st.lastBar, ms = TF_MS[st.tf]; if (R.on || !lb || !ms || !cd.isConnected) { cd.hidden = true; return; }
+      const lb = st.lastBar, ms = TF_MS[st.tf]; if ((U.CFG || {}).cd === false || R.on || !lb || !ms || !cd.isConnected) { cd.hidden = true; return; }
       let left = lb.timestamp + ms - Date.now(); if (st.tf === "1M") left = new Date(new Date(lb.timestamp).getFullYear(), new Date(lb.timestamp).getMonth() + 1, 1) - Date.now();
       if (left <= 0 || left > ms * 1.05) { cd.hidden = true; return; }
       const s = Math.floor(left / 1000), d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60), ss = s % 60, p2 = n => String(n).padStart(2, "0");
@@ -295,14 +298,14 @@
       const box = ch.getSize("candle_pane", "yAxis"); if (y == null || !box || y < 8 || y > box.height - 4) { cd.hidden = true; return; }
       cd.textContent = d ? `${d} d ${h} h` : h ? `${h}:${p2(m)}:${p2(ss)}` : `${p2(m)}:${p2(ss)}`;
       const cb = me.el.querySelector(".gx-chart"), off = cb ? cb.getBoundingClientRect().top - canvas.getBoundingClientRect().top : 0;
-      cd.style.top = (y + off + 10) + "px"; cd.style.width = box.width + "px"; cd.hidden = false;
+      cd.style.top = (y + off + 10) + "px"; cd.style.width = box.width + "px"; cd.classList.toggle("l", (U.CFG || {}).pos === "left"); cd.hidden = false;
     }
 
     /* ===== noticias en el eje ===== */
     HK.news = [];
     function paintNews() {
       try { ch.removeOverlay({ groupId: "news" }); } catch (e) { /* nada */ }
-      const list = ch.getDataList(); if (!list.length || (TF_MS[st.tf] || 0) > 864e5) { HK.news = []; return; }
+      const list = ch.getDataList(); if (!list.length || (TF_MS[st.tf] || 0) > 864e5 || (U.CFG || {}).showNews === false) { HK.news = []; return; }
       const a = list[0].timestamp, z = list[list.length - 1].timestamp + (TF_MS[st.tf] || 0);
       HK.news = newsFor(st.sym).filter(e => e.ts >= a && e.ts <= z);
       const seen = new Set();
@@ -339,7 +342,7 @@
           drawPos(q); persist(); paintPanel(); } });
     }
     function undraw(p) { if (P.ov[p.id]) { try { ch.removeOverlay({ id: P.ov[p.id] }); } catch (e) { /* ya no está */ } delete P.ov[p.id]; } }
-    function redrawAll() { Object.keys(P.ov).forEach(id => { try { ch.removeOverlay({ id: P.ov[id] }); } catch (e) { /* nada */ } }); P.ov = {}; P.list.filter(p => (p.mode === "replay") === !!R.on).forEach(drawPos); }
+    function redrawAll() { Object.keys(P.ov).forEach(id => { try { ch.removeOverlay({ id: P.ov[id] }); } catch (e) { /* nada */ } }); P.ov = {}; if ((U.CFG || {}).showPos === false) return; P.list.filter(p => (p.mode === "replay") === !!R.on).forEach(drawPos); }
     function liveR(p) { const px = nowPrice(); if (px == null || !p.risk) return 0; return Math.round((px - p.entry) / p.risk * (p.side === "buy" ? 1 : -1) * 100) / 100; }
     function place(o) {
       const a = acct(), px = nowPrice(); if (px == null) return null;
@@ -404,7 +407,8 @@
     HK.onBack = idx => { P.list.filter(p => p.mode === "replay" && ((p.entryIdx != null && p.entryIdx > idx) || (p.status === "pending" && p.created > (R.all[idx] || {}).timestamp))).forEach(p => { undraw(p); P.list = P.list.filter(z => z !== p); }); paintPanel(); };
     HK.onReset = why => { if (why === "tf") { setTimeout(redrawAll, 300); return; } P.list.filter(p => p.mode === "replay").forEach(undraw); P.list = P.list.filter(p => p.mode !== "replay"); if (why === "exit") { P.hist = P.hist.filter(h => h.mode !== "replay"); setTimeout(() => { redrawAll(); paintNews(); }, 300); } paintPanel(); };
     HK.onBegin = () => { setTimeout(() => { redrawAll(); paintNews(); paintLegend(); }, 150); };
-    HK.onData = () => { setTimeout(() => { paintNews(); redrawAll(); paintLegend(); paintCd(); }, 120); };
+    HK.onData = () => { setTimeout(() => { paintNews(); redrawAll(); paintLegend(); paintCd(); X.applyLook && X.applyLook(); }, 120); };
+    { const pr = HK.onRestyle; HK.onRestyle = () => { pr && pr(); paintNews(); redrawAll(); paintLegend(); paintCd(); }; }
     HK.stats = () => paintPanel(true);
     HK.place = place; HK.P = P; HK.acct = acct;
 

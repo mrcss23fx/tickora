@@ -104,7 +104,12 @@
 
   /* ---------- colores ---------- */
   let DARK = false, BGC = null; // BGC: color de fondo real del gráfico (para el texto «en la línea»)
-  const CFG_DEF = { up: null, down: null, bg: null, grid: true, type: "candle_solid" };
+  const CFG_DEF = { up: null, down: null, bg: null, grid: true, type: "candle_solid",
+    prevClose: false, body: true, border: true, bUp: null, bDown: null, wick: true, wUp: null, wDown: null, prec: "auto",
+    lgSym: true, lgSrc: true, lgOhlc: true, lgChg: true, lgInd: true, lgIv: true, lgNews: true,
+    pos: "right", lastLbl: true, lastLine: true, lastStyle: "dashed", cd: true, hl: true, axSize: null, axCol: null, tz: "auto",
+    bgMode: "solid", bg2: null, gridV: true, gridH: true, gridCol: null, gridStyle: "dashed", crossCol: null, crossStyle: "dashed", sepCol: null,
+    wm: false, inv: false, scale: "normal", wmOp: 8, mTop: 20, mBot: 10, mRight: 8, showPos: true, showAlerts: true, showNews: true };
   let CFG = Object.assign({}, CFG_DEF, ls.get("tk-cfg", {}));
   function pal() {
     return DARK ? { tinta: "#e9edf6", suave: "#8f9ab3", linea: "#232f4a", borde: "#33405f", card: "#141d33", cob: "#7b93ff", cobA: "rgba(123,147,255,.16)", stopA: "rgba(233,237,246,.10)", rot: "#fbe27a" }
@@ -148,21 +153,25 @@
   });
   function styles() {
     const p = pal(), up = upC(), down = downC();
-    const axis = { axisLine: { color: p.borde }, tickLine: { color: p.borde }, tickText: { color: p.suave, family: NUMF, size: matchMedia("(max-width: 760px)").matches ? 9.5 : 11 } };
+    const axis = { axisLine: { color: p.borde }, tickLine: { color: p.borde }, tickText: { color: CFG.axCol || p.suave, family: NUMF, size: +CFG.axSize || (matchMedia("(max-width: 760px)").matches ? 9.5 : 11) } };
+    const T0 = "rgba(0,0,0,0)", dashOf = k => k === "solid" ? { style: "solid" } : { style: "dashed", dashedValue: k === "dotted" ? [1, 3] : [4, 4] };
+    const bUp = CFG.body !== false ? up : T0, bDn = CFG.body !== false ? down : T0;
+    const brUp = CFG.border !== false ? (CFG.bUp || up) : bUp, brDn = CFG.border !== false ? (CFG.bDown || down) : bDn;
+    const wkUp = CFG.wick !== false ? (CFG.wUp || up) : T0, wkDn = CFG.wick !== false ? (CFG.wDown || down) : T0;
     const ctext = { color: DARK ? "#0e1526" : "#ffffff", backgroundColor: p.tinta, borderColor: p.tinta, family: NUMF, size: 11 };
     return {
-      grid: { show: CFG.grid, horizontal: { color: p.linea }, vertical: { color: p.linea } },
+      grid: { show: CFG.grid !== false, horizontal: Object.assign({ show: CFG.gridH !== false, color: CFG.gridCol || p.linea, size: 1 }, dashOf(CFG.gridStyle || "dashed")), vertical: Object.assign({ show: CFG.gridV !== false, color: CFG.gridCol || p.linea, size: 1 }, dashOf(CFG.gridStyle || "dashed")) },
       candle: {
         type: DRAWN.includes(CFG.type) || XFORM.includes(CFG.type) ? "candle_solid" : CFG.type,
-        bar: DRAWN.includes(CFG.type) ? { upColor: "rgba(0,0,0,0)", downColor: "rgba(0,0,0,0)", noChangeColor: "rgba(0,0,0,0)", upBorderColor: "rgba(0,0,0,0)", downBorderColor: "rgba(0,0,0,0)", noChangeBorderColor: "rgba(0,0,0,0)", upWickColor: "rgba(0,0,0,0)", downWickColor: "rgba(0,0,0,0)", noChangeWickColor: "rgba(0,0,0,0)" } : { upColor: up, downColor: down, noChangeColor: p.suave, upBorderColor: up, downBorderColor: down, noChangeBorderColor: p.suave, upWickColor: up, downWickColor: down, noChangeWickColor: p.suave },
+        bar: DRAWN.includes(CFG.type) ? { upColor: "rgba(0,0,0,0)", downColor: "rgba(0,0,0,0)", noChangeColor: "rgba(0,0,0,0)", upBorderColor: "rgba(0,0,0,0)", downBorderColor: "rgba(0,0,0,0)", noChangeBorderColor: "rgba(0,0,0,0)", upWickColor: "rgba(0,0,0,0)", downWickColor: "rgba(0,0,0,0)", noChangeWickColor: "rgba(0,0,0,0)" } : { compareRule: CFG.prevClose ? "previous_close" : "current_open", upColor: bUp, downColor: bDn, noChangeColor: CFG.body !== false ? p.suave : T0, upBorderColor: brUp, downBorderColor: brDn, noChangeBorderColor: p.suave, upWickColor: wkUp, downWickColor: wkDn, noChangeWickColor: CFG.wick !== false ? p.suave : T0 },
         area: { lineColor: p.cob, backgroundColor: [{ offset: 0, color: alpha(p.cob.length === 7 ? p.cob : "#2443c7", .02) }, { offset: 1, color: alpha(p.cob.length === 7 ? p.cob : "#2443c7", .22) }] },
-        priceMark: { high: { color: p.suave, textFamily: NUMF }, low: { color: p.suave, textFamily: NUMF }, last: { upColor: up, downColor: down, noChangeColor: p.suave, text: { family: NUMF, size: 11, color: "#ffffff" } } },
+        priceMark: { high: { show: CFG.hl !== false, color: p.suave, textFamily: NUMF }, low: { show: CFG.hl !== false, color: p.suave, textFamily: NUMF }, last: { show: CFG.lastLbl !== false || CFG.lastLine !== false, compareRule: CFG.prevClose ? "previous_close" : "current_open", upColor: up, downColor: down, noChangeColor: p.suave, line: Object.assign({ show: CFG.lastLine !== false, size: 1 }, dashOf(CFG.lastStyle || "dashed")), text: { show: CFG.lastLbl !== false, family: NUMF, size: 11, color: "#ffffff" } } },
         tooltip: { showRule: window.TkChartLegend ? "none" : "always", text: { color: p.suave, family: NUMF, size: 11 } }
       },
       indicator: { tooltip: { showRule: window.TkChartLegend ? "none" : "always", text: { color: p.suave, family: NUMF, size: 11 } }, lastValueMark: { text: { family: NUMF } }, lines: IND_COLORS().map(c => ({ color: c, size: 1.5, style: "solid", smooth: false, dashedValue: [2, 2] })) },
       xAxis: axis, yAxis: axis,
-      separator: { color: p.linea, activeBackgroundColor: p.cobA },
-      crosshair: { horizontal: { line: { color: p.suave }, text: ctext }, vertical: { line: { color: p.suave }, text: ctext } },
+      separator: { color: CFG.sepCol || p.linea, activeBackgroundColor: p.cobA },
+      crosshair: { horizontal: { line: Object.assign({ color: CFG.crossCol || p.suave, size: 1 }, dashOf(CFG.crossStyle || "dashed")), text: ctext }, vertical: { line: Object.assign({ color: CFG.crossCol || p.suave, size: 1 }, dashOf(CFG.crossStyle || "dashed")), text: ctext } },
       overlay: {
         point: { color: p.cob, borderColor: p.cobA, activeColor: p.cob, activeBorderColor: p.cobA },
         line: { color: p.cob, size: 1.5 }, rect: { color: p.cobA, borderColor: p.cob }, polygon: { color: p.cobA, borderColor: p.cob },
@@ -936,7 +945,7 @@
     const $ = s => el.querySelector(s), $$ = s => Array.from(el.querySelectorAll(s));
     const box = $(".gx-chart");
     const ch = KC.init(box, { locale: "es-ES", timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Madrid", styles: styles(), decimalFold: { threshold: 99 } });
-    const paintBg = () => { box.style.background = CFG.bg || ""; setTimeout(() => { let n = box, c = ""; while (n && n.nodeType === 1) { c = getComputedStyle(n).backgroundColor; if (c && !/rgba\(0, 0, 0, 0\)|transparent/.test(c)) break; n = n.parentNode; c = ""; } BGC = c || null; }, 0); };
+    const paintBg = () => { box.style.background = CFG.bgMode === "grad" ? `linear-gradient(180deg, ${CFG.bg || pal().card}, ${CFG.bg2 || (DARK ? "#1d2333" : "#e9edf6")})` : (CFG.bg || ""); if (CFG.bgMode === "grad") { BGC = CFG.bg || pal().card; return; } setTimeout(() => { let n = box, c = ""; while (n && n.nodeType === 1) { c = getComputedStyle(n).backgroundColor; if (c && !/rgba\(0, 0, 0, 0\)|transparent/.test(c)) break; n = n.parentNode; c = ""; } BGC = c || null; }, 0); };
     paintBg();
     let lastCross = null;
     ch.subscribeAction("onCrosshairChange", d => { lastCross = d; });
@@ -1013,9 +1022,15 @@
       subscribeBar: ({ callback }) => { R.cb = callback; },
       unsubscribeBar: () => { R.cb = null; }
     };
+    const pp = () => CFG.prec != null && CFG.prec !== "auto" ? +CFG.prec : digits();
+    function applyLook() {
+      try { const sy = ch.getSymbol && ch.getSymbol(); if (!sy || sy.pricePrecision !== pp()) ch.setSymbol({ ticker: st.sym, pricePrecision: pp(), volumePrecision: 0 }); } catch (e) { /* nada */ }
+      try { const tz = !CFG.tz || CFG.tz === "auto" ? Intl.DateTimeFormat().resolvedOptions().timeZone : CFG.tz; if (!ch.getTimezone || ch.getTimezone() !== tz) ch.setTimezone(tz); } catch (e) { /* nada */ }
+      let wm = box.querySelector(".gx-wm"); if (CFG.wm) { if (!wm) { wm = document.createElement("div"); wm.className = "gx-wm"; box.insertBefore(wm, box.firstChild); } wm.textContent = st.sym + " · " + (TF_SHORT[st.tf] || st.tf); wm.style.opacity = Math.max(2, Math.min(40, +CFG.wmOp || 8)) / 100; } else if (wm) wm.remove();
+    }
     function load() {
       st.prov = pickProv(); setSrc(); CUR_DIGITS = digits(); CUR_TF = st.tf;
-      ch.setSymbol({ ticker: st.sym, pricePrecision: digits(), volumePrecision: 0 });
+      ch.setSymbol({ ticker: st.sym, pricePrecision: pp(), volumePrecision: 0 }); setTimeout(applyLook, 0);
       ch.setPeriod(TFS.find(t => t[0] === st.tf)[2]);
       $(".gx-symname").textContent = st.sym;
     }
@@ -1045,7 +1060,8 @@
     }
     function applyType() { try { ch.removeIndicator({ name: "TKTYPE" }); } catch (e) { /* no estaba */ } if (DRAWN.includes(CFG.type)) ch.createIndicator({ name: "TKTYPE", paneId: "candle_pane", extendData: { t: CFG.type } }, true); }
     function saveInd(a) { ls.set("tk-ind2", a); applyInd(); }
-    function applyScale() { try { ch.overrideYAxis({ paneId: "candle_pane", name: CFG.scale || "normal", reverse: !!CFG.inv }); } catch (e) { /* versión sin ejes propios */ } }
+    function applyScale() { try { ch.overrideYAxis({ paneId: "candle_pane", name: CFG.scale || "normal", reverse: !!CFG.inv, position: CFG.pos === "left" ? "left" : "right", gap: { top: (+CFG.mTop >= 0 ? +CFG.mTop : 20) / 100, bottom: (+CFG.mBot >= 0 ? +CFG.mBot : 10) / 100 } }); } catch (e) { /* versión sin ejes propios */ } }
+    function applyRight() { try { const bs = ch.getBarSpace(); ch.setOffsetRightDistance(Math.max(0, +CFG.mRight || 0) * ((bs && bs.bar) || 8)); } catch (e) { /* nada */ } }
 
     /* ---------- dibujos ---------- */
     /* Mayús al dibujar o al mover un punto: líneas a 0°, 45° o 90°; rectángulos y elipses perfectos */
@@ -1535,32 +1551,92 @@
         };
       });
     }
+    /* ---------- ajustes del gráfico (como en las plataformas profesionales) ---------- */
+    let SETTAB = "velas";
+    const cfgSave = () => { CFG.t = Date.now(); ls.set("tk-cfg", CFG); clearTimeout(cfgSave.tm); cfgSave.tm = setTimeout(() => { try { opts.saveDrawings && opts.saveDrawings("__ajustes", { cfg: CFG, tpl: ls.get("tk-cfgtpl", {}) }, CFG.t); } catch (e) { /* queda en este navegador */ } }, 800); };
+    async function cfgSync() {
+      if (cfgSync.done || !opts.loadDrawings) return; cfgSync.done = true;
+      try { const r = await opts.loadDrawings("__ajustes"); const d = r && r.list; if (d && d.cfg && (d.cfg.t || 0) > (CFG.t || 0)) { Object.keys(CFG).forEach(k => delete CFG[k]); Object.assign(CFG, CFG_DEF, d.cfg); if (d.tpl) ls.set("tk-cfgtpl", d.tpl); ls.set("tk-cfg", CFG); ALL.forEach(x => x.restyle && x.restyle()); } } catch (e) { /* sin conexión */ }
+    }
+    const restyleAll = () => { ALL.forEach(x => { try { x.restyle(); } catch (e) { /* gráfico cerrado */ } }); };
     function modalSettings() {
-      const p = pal();
-      openModal(`<div class="gx-dh"><h3>Ajustes del gráfico</h3><button type="button" class="gx-tb gx-ic" data-close aria-label="Cerrar">${icon("x", 18)}</button></div>
-        <div class="gx-set">
-          <label>Vela alcista <input type="color" data-cfg="up" value="${CFG.up || (/^#/.test(p.cob) ? p.cob : "#2443c7")}"></label>
-          <label>Vela bajista <input type="color" data-cfg="down" value="${CFG.down || (DARK ? "#c6cee0" : "#14213a")}"></label>
-          <label>Fondo <input type="color" data-cfg="bg" value="${CFG.bg || p.card}"></label>
-          <label class="gx-chk"><input type="checkbox" data-cfg="grid" ${CFG.grid ? "checked" : ""}> Cuadrícula</label>
-          <div class="gx-mh">Escala de precios</div>
-          <label>Tipo <select class="gx-in" data-cfg="scale"><option value="normal" ${(CFG.scale || "normal") === "normal" ? "selected" : ""}>Normal</option><option value="logarithm" ${CFG.scale === "logarithm" ? "selected" : ""}>Logarítmica</option><option value="percentage" ${CFG.scale === "percentage" ? "selected" : ""}>En porcentaje</option></select></label>
-          <label class="gx-chk"><input type="checkbox" data-cfg="inv" ${CFG.inv ? "checked" : ""}> Invertir la escala (el gráfico al revés)</label>
-          <p class="gx-muted" style="margin:0;font-size:12px">Doble clic en la escala de precios la ajusta sola; doble clic en la de tiempo vuelve al presente.</p>
+      const p = pal(), upD = /^#/.test(p.cob) ? p.cob : "#2443c7", dnD = DARK ? "#c6cee0" : "#14213a";
+      const col = (k, def) => `<input type="color" data-cfg="${k}" value="${esc(CFG[k] || def)}" aria-label="Color">`;
+      const chk = (k, l, extra) => `<label class="gx-srow"><span class="gx-sl"><input type="checkbox" data-cfg="${k}" ${(CFG[k] ?? CFG_DEF[k]) ? "checked" : ""}> ${l}</span>${extra || ""}</label>`;
+      const sel = (k, opts2, l) => `<label class="gx-srow"><span class="gx-sl">${l}</span><select class="gx-in" data-cfg="${k}">${opts2.map(([v, t]) => `<option value="${v}" ${String(CFG[k] ?? "") === String(v) ? "selected" : ""}>${t}</option>`).join("")}</select></label>`;
+      const num = (k, l, min, max, unit) => `<label class="gx-srow"><span class="gx-sl">${l}</span><span class="gx-snum"><input class="gx-in" type="number" data-cfg="${k}" min="${min}" max="${max}" value="${esc(CFG[k] ?? "")}">${unit ? `<i>${unit}</i>` : ""}</span></label>`;
+      const LS = [["solid", "Continua"], ["dashed", "Discontinua"], ["dotted", "Puntos"]];
+      const pair = (a, ad, b, bd) => `<span class="gx-spair">${col(a, ad)}${col(b, bd)}</span>`;
+      const TZ = [["auto", "La de tu dispositivo"], ["UTC", "UTC"], ["Europe/Madrid", "Madrid"], ["Europe/London", "Londres"], ["America/New_York", "Nueva York"], ["America/Chicago", "Chicago"], ["Asia/Tokyo", "Tokio"], ["Asia/Hong_Kong", "Hong Kong"], ["Australia/Sydney", "Sídney"], ["America/Bogota", "Bogotá"], ["America/Mexico_City", "Ciudad de México"], ["America/Argentina/Buenos_Aires", "Buenos Aires"]];
+      const tpls = ls.get("tk-cfgtpl", {}), tn = Object.keys(tpls);
+      const prev = `<div class="gx-sprev">${[[1, 0, .8, .2, .9], [0, .7, .9, .4, .3], [1, .35, .6, .2, .7], [1, .55, .75, .45, .95], [0, .85, .95, .5, .6], [0, .5, .65, .1, .2]].map(([u, o, h, l, c]) => { const up = !!u, bc = up ? (CFG.body !== false ? (CFG.up || upD) : "transparent") : (CFG.body !== false ? (CFG.down || dnD) : "transparent"), br = CFG.border !== false ? (up ? CFG.bUp || CFG.up || upD : CFG.bDown || CFG.down || dnD) : bc, wk = CFG.wick !== false ? (up ? CFG.wUp || CFG.up || upD : CFG.wDown || CFG.down || dnD) : "transparent", top = (1 - Math.max(o, c)) * 100, bot = Math.min(o, c) * 100; return `<span class="gx-spc"><i class="w" style="background:${esc(wk)};top:${(1 - h) * 100}%;bottom:${l * 100}%"></i><i class="b" style="background:${esc(bc)};border-color:${esc(br)};top:${top}%;bottom:${bot}%"></i></span>`; }).join("")}</div>`;
+      const TABS = [["velas", "Velas"], ["estado", "Línea de estado"], ["escalas", "Escalas"], ["lienzo", "Lienzo"], ["grafico", "En el gráfico"]];
+      const body = {
+        velas: `${prev}
+          ${chk("prevClose", "Colorear según el cierre anterior", "")}
+          <label class="gx-srow"><span class="gx-sl"><input type="checkbox" data-cfg="body" ${CFG.body !== false ? "checked" : ""}> Cuerpo</span>${pair("up", upD, "down", dnD)}</label>
+          <label class="gx-srow"><span class="gx-sl"><input type="checkbox" data-cfg="border" ${CFG.border !== false ? "checked" : ""}> Bordes</span>${pair("bUp", CFG.up || upD, "bDown", CFG.down || dnD)}</label>
+          <label class="gx-srow"><span class="gx-sl"><input type="checkbox" data-cfg="wick" ${CFG.wick !== false ? "checked" : ""}> Mechas</span>${pair("wUp", CFG.up || upD, "wDown", CFG.down || dnD)}</label>
+          <p class="gx-muted gx-snote">Primer color: vela alcista · segundo: bajista. Sin cuerpo quedan solo los bordes (velas huecas).</p>
+          ${sel("prec", [["auto", "Automáticos"], ...[0, 1, 2, 3, 4, 5, 6, 7, 8].map(n => [String(n), String(n)])], "Decimales del precio")}
           <div class="gx-mh">Combinaciones rápidas</div>
-          <div class="gx-quick"><button type="button" class="gx-btn" data-q="tickora">Tickora</button><button type="button" class="gx-btn" data-q="clasica">Verde y rojo</button><button type="button" class="gx-btn" data-q="mono">Blanco y negro</button></div>
-          <button type="button" class="gx-btn" data-q="reset">Restablecer todo</button>
-        </div>`, () => {
-        DLG.onchange = e => { const k = e.target.dataset.cfg; if (!k) return; CFG[k] = e.target.type === "checkbox" ? e.target.checked : e.target.value; ls.set("tk-cfg", CFG); ch.setStyles(styles()); paintBg(); if (k === "scale" || k === "inv") applyScale(); };
+          <div class="gx-quick"><button type="button" class="gx-btn" data-q="tickora">Tickora</button><button type="button" class="gx-btn" data-q="clasica">Verde y rojo</button><button type="button" class="gx-btn" data-q="mono">Blanco y negro</button><button type="button" class="gx-btn" data-q="hueca">Huecas</button></div>`,
+        estado: `<p class="gx-muted gx-snote">Lo que se ve arriba a la izquierda del gráfico.</p>
+          ${chk("lgSym", "Mercado y marco")}${chk("lgSrc", "De dónde vienen los precios")}${chk("lgOhlc", "Apertura, máximo, mínimo y cierre")}${chk("lgChg", "Cambio de la vela")}${chk("lgInd", "Indicadores")}${chk("lgIv", "Valores de los indicadores")}${chk("lgNews", "Noticia de esa vela")}`,
+        escalas: `${sel("scale", [["normal", "Normal"], ["logarithm", "Logarítmica"], ["percentage", "En porcentaje"]], "Tipo de escala")}
+          ${chk("inv", "Invertir la escala (el gráfico al revés)")}
+          ${sel("pos", [["right", "Derecha"], ["left", "Izquierda"]], "Escala de precios a la")}
+          <div class="gx-mh">Último precio</div>
+          ${chk("lastLbl", "Etiqueta en la escala")}
+          <label class="gx-srow"><span class="gx-sl"><input type="checkbox" data-cfg="lastLine" ${CFG.lastLine !== false ? "checked" : ""}> Línea</span><select class="gx-in" data-cfg="lastStyle">${LS.map(([v, t]) => `<option value="${v}" ${(CFG.lastStyle || "dashed") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+          ${chk("cd", "Cuenta atrás para el cierre de la vela")}
+          ${chk("hl", "Máximo y mínimo de lo que ves")}
+          <div class="gx-mh">Texto de las escalas</div>
+          ${sel("axSize", [["", "Automático"], ...[9, 10, 11, 12, 13, 14].map(n => [String(n), n + " px"])], "Tamaño")}
+          <label class="gx-srow"><span class="gx-sl">Color</span>${col("axCol", p.suave.length === 7 ? p.suave : "#8a93a8")}</label>
+          ${sel("tz", TZ, "Zona horaria")}
+          <p class="gx-muted gx-snote">Doble clic en la escala de precios la ajusta sola; en la de tiempo vuelve al presente.</p>`,
+        lienzo: `<label class="gx-srow"><span class="gx-sl">Fondo</span><span class="gx-spair"><select class="gx-in" data-cfg="bgMode"><option value="solid" ${CFG.bgMode !== "grad" ? "selected" : ""}>Liso</option><option value="grad" ${CFG.bgMode === "grad" ? "selected" : ""}>Degradado</option></select>${col("bg", p.card.length === 7 ? p.card : (DARK ? "#16161d" : "#ffffff"))}${CFG.bgMode === "grad" ? col("bg2", DARK ? "#1d2333" : "#e9edf6") : ""}</span></label>
+          ${chk("grid", "Cuadrícula")}
+          <div class="gx-sind">${chk("gridV", "Líneas verticales")}${chk("gridH", "Líneas horizontales")}
+          <label class="gx-srow"><span class="gx-sl">Color y estilo</span><span class="gx-spair">${col("gridCol", p.linea.length === 7 ? p.linea : (DARK ? "#26262e" : "#e6e8ee"))}<select class="gx-in" data-cfg="gridStyle">${LS.map(([v, t]) => `<option value="${v}" ${(CFG.gridStyle || "dashed") === v ? "selected" : ""}>${t}</option>`).join("")}</select></span></label></div>
+          <label class="gx-srow"><span class="gx-sl">Cruz del cursor</span><span class="gx-spair">${col("crossCol", p.suave.length === 7 ? p.suave : "#8a93a8")}<select class="gx-in" data-cfg="crossStyle">${LS.map(([v, t]) => `<option value="${v}" ${(CFG.crossStyle || "dashed") === v ? "selected" : ""}>${t}</option>`).join("")}</select></span></label>
+          <label class="gx-srow"><span class="gx-sl">Separador de paneles</span>${col("sepCol", p.linea.length === 7 ? p.linea : (DARK ? "#26262e" : "#e6e8ee"))}</label>
+          <label class="gx-srow"><span class="gx-sl"><input type="checkbox" data-cfg="wm" ${CFG.wm ? "checked" : ""}> Marca de agua (mercado y marco)</span><span class="gx-snum"><input class="gx-in" type="number" data-cfg="wmOp" min="2" max="40" value="${esc(CFG.wmOp ?? 8)}"><i>%</i></span></label>
+          <div class="gx-mh">Márgenes</div>
+          ${num("mTop", "Arriba", 0, 45, "%")}${num("mBot", "Abajo", 0, 45, "%")}${num("mRight", "A la derecha", 0, 100, "velas")}`,
+        grafico: `<p class="gx-muted gx-snote">Lo que Tickora dibuja encima de tus velas.</p>
+          ${chk("showPos", "Posiciones y órdenes de práctica")}${chk("showAlerts", "Líneas de tus alertas")}${chk("showNews", "Noticias fuertes en el eje de tiempo")}`
+      };
+      openModal(`<div class="gx-dh"><h3>Ajustes del gráfico</h3><button type="button" class="gx-tb gx-ic" data-close aria-label="Cerrar">${icon("x", 18)}</button></div>
+        <div class="gx-sset"><nav class="gx-stabs" role="tablist">${TABS.map(([k, l]) => `<button type="button" role="tab" data-stab="${k}" aria-selected="${SETTAB === k}">${l}</button>`).join("")}</nav>
+        <div class="gx-set gx-sbody" role="tabpanel">${body[SETTAB]}</div></div>
+        <div class="gx-sfoot"><select class="gx-in" data-tpl aria-label="Plantillas"><option value="">Plantilla…</option>${tn.map(n => `<option value="a:${esc(n)}">Aplicar «${esc(n)}»</option>`).join("")}<option value="save">Guardar estos ajustes como plantilla…</option>${tn.map(n => `<option value="d:${esc(n)}">Borrar «${esc(n)}»</option>`).join("")}</select>
+          <button type="button" class="gx-btn" data-q="reset">Restablecer todo</button><span class="gx-sp"></span><button type="button" class="gx-btn gx-pri" data-close>Listo</button></div>`, () => {
+        DLG.onchange = e => {
+          const t = e.target;
+          if (t.dataset.tpl != null) { const v = t.value, T = ls.get("tk-cfgtpl", {}); if (v === "save") { const n = (prompt("Nombre de la plantilla:") || "").trim().slice(0, 40); if (n) { const c = Object.assign({}, CFG); delete c.t; T[n] = c; ls.set("tk-cfgtpl", T); cfgSave(); } }
+            else if (v.startsWith("a:") && T[v.slice(2)]) { const keep = CFG.type; Object.keys(CFG).forEach(k => delete CFG[k]); Object.assign(CFG, CFG_DEF, T[v.slice(2)]); if (!CFG.type) CFG.type = keep; cfgSave(); restyleAll(); }
+            else if (v.startsWith("d:")) { delete T[v.slice(2)]; ls.set("tk-cfgtpl", T); cfgSave(); }
+            modalSettings(); return; }
+          const k = t.dataset.cfg; if (!k) return;
+          let v = t.type === "checkbox" ? t.checked : t.value;
+          if (t.type === "number") { v = parseFloat(v); if (!isFinite(v)) return; v = Math.max(+t.min, Math.min(+t.max, v)); }
+          if (k === "axSize" && v === "") v = null;
+          CFG[k] = v; cfgSave(); restyleAll(); if (k === "mRight") applyRight();
+          if (["body", "border", "wick", "up", "down", "bUp", "bDown", "wUp", "wDown", "bgMode"].includes(k)) modalSettings();
+        };
         DLG.onclick = e => {
-          const t = e.target.closest("[data-q],[data-close]"); if (!t) return;
+          const t = e.target.closest("[data-q],[data-close],[data-stab]"); if (!t) return;
+          if (t.dataset.stab) { SETTAB = t.dataset.stab; return modalSettings(); }
           if (t.hasAttribute("data-close")) return closeModal();
           const q = t.dataset.q;
-          if (q === "tickora") Object.assign(CFG, { up: null, down: null });
-          if (q === "clasica") Object.assign(CFG, { up: "#26a69a", down: "#ef5350" });
-          if (q === "mono") Object.assign(CFG, { up: DARK ? "#e9edf6" : "#ffffff", down: DARK ? "#5e6a85" : "#14213a", type: q === "mono" ? "candle_stroke" : CFG.type });
-          if (q === "reset") CFG = Object.assign({}, CFG_DEF);
-          ls.set("tk-cfg", CFG); ch.setStyles(styles()); paintBg(); $(".gx-typeic").innerHTML = icon(typeIcon(CFG.type), 18); modalSettings();
+          if (q === "tickora") Object.assign(CFG, { up: null, down: null, bUp: null, bDown: null, wUp: null, wDown: null, body: true, border: true, wick: true });
+          if (q === "clasica") Object.assign(CFG, { up: "#26a69a", down: "#ef5350", bUp: null, bDown: null, wUp: null, wDown: null, body: true, border: true, wick: true });
+          if (q === "mono") Object.assign(CFG, { up: DARK ? "#e9edf6" : "#ffffff", down: DARK ? "#5e6a85" : "#14213a", bUp: DARK ? "#e9edf6" : "#14213a", bDown: DARK ? "#5e6a85" : "#14213a", wUp: DARK ? "#e9edf6" : "#14213a", wDown: DARK ? "#5e6a85" : "#14213a", body: true, border: true, wick: true });
+          if (q === "hueca") Object.assign(CFG, { body: false, border: true, wick: true });
+          if (q === "reset") { if (!confirm("¿Volver a los ajustes de siempre en todos los gráficos?")) return; Object.keys(CFG).forEach(k => delete CFG[k]); Object.assign(CFG, CFG_DEF); }
+          cfgSave(); restyleAll(); applyRight(); modalSettings();
         };
       });
     }
@@ -1911,14 +1987,15 @@
       get replayTs() { return R.on && !R.picking && bar() ? bar().timestamp : null; },
       setSymbol(sym) { if (sym === st.sym) return; flushRemote(); const was = R.on; if (R.on) exitReplay(); st.sym = sym; F.hidden = true; load(); restore(); if (was) enterReplay(); },
       setTheme(dark) { DARK = !!dark; ch.setStyles(styles()); applyInd(); paintBg(); applyCursor(); },
+      restyle() { ch.setStyles(styles()); paintBg(); applyScale(); applyLook(); try { $(".gx-typeic").innerHTML = icon(typeIcon(CFG.type), 18); } catch (e) { /* nada */ } HK.onRestyle && HK.onRestyle(); },
       price: () => st.price,
       reloadDraw(list) { build(list); st.hist.push(JSON.stringify(serial())); },
       stop() { pause(); if (st.unsub) { st.unsub(); st.unsub = null; } }
     };
     me.hk = HK;
-    me.X = { st, R, ch, $, $$, hint, msg, digits, bar, applyInd, activeInd, saveInd, openModal, closeModal, openPop, closePop, stats, setSrc, opts, tfName, fmtWhen, load, setTf, live, replayLoader, pause, step, get MODE() { return MODE; } };
+    me.X = { st, R, ch, $, $$, hint, msg, digits, pp, applyLook, bar, applyInd, activeInd, saveInd, openModal, closeModal, openPop, closePop, stats, setSrc, opts, tfName, fmtWhen, load, setTf, live, replayLoader, pause, step, get MODE() { return MODE; } };
     ALL.add(me); ALL.forEach(x => x.el.classList.toggle("tk-act", x === me));
-    load(); applyInd(); applyScale(); restore(); renderFav(); applyCursor(); renderTfq();
+    load(); applyInd(); applyScale(); setTimeout(applyRight, 600); restore(); cfgSync(); renderFav(); applyCursor(); renderTfq();
     if (ls.get("tk-notools", false)) el.querySelector(".gx").classList.add("notools");
     if (st.last.cursor === "eraser" || !st.last.cursor) showInGroup("cursor", st.baseCur);
     st.tool = st.baseCur; $$("[data-tool]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.tool === st.baseCur)));
