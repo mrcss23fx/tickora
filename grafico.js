@@ -16,6 +16,18 @@
   /* marcos que se construyen juntando velas de uno menor (si la fuente no los da tal cual) */
   const DERIV = { "3m": ["1m", 3], "45m": ["15m", 3], "2h": ["1h", 2] };
   const bucketOf = (ts, ms) => { const d = Math.floor(ts / 864e5) * 864e5; return d + Math.floor((ts - d) / ms) * ms; };
+  const monthOf = ts => { const d = new Date(ts); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1); };
+  /* marcos a tu medida (7 min, 54 min, 3 h…) y mensual: se construyen juntando velas de uno menor */
+  function addTf(k) {
+    if (TF_MS[k]) return true;
+    if (k === "1M") { TFS.push(["1M", "1 mes", { type: "month", span: 1 }]); TF_SHORT["1M"] = "1M"; TF_MS["1M"] = 30 * 864e5; DERIV["1M"] = ["1d", 31]; return true; }
+    const m = String(k).match(/^(\d+)(m|h)$/); if (!m) return false; const n = +m[1], mins = m[2] === "h" ? n * 60 : n;
+    if (!(mins >= 2 && mins <= 1440)) return false;
+    const base = [["1h", 60], ["15m", 15], ["5m", 5], ["1m", 1]].find(([, b]) => mins % b === 0 && mins / b <= 24 && mins > b) || ["1m", 1];
+    TFS.push([k, m[2] === "h" ? n + " horas" : n + " minutos", m[2] === "h" ? { type: "hour", span: n } : { type: "minute", span: n }]);
+    TF_SHORT[k] = m[2] === "h" ? n + "h" : n + "m"; TF_MS[k] = mins * 6e4; DERIV[k] = [base[0], mins / base[1]];
+    TFS.sort((a, b) => TF_MS[a[0]] - TF_MS[b[0]]); return true;
+  }
   /* cada vela en su sitio: ordenadas, sin repetidas y con la hora de su marco (la fuente pública añadía al final un
      punto con la hora exacta de ahora, y el gráfico lo pintaba como otra vela cada 15 segundos) */
   function tidyBars(list, tf) {
@@ -36,7 +48,7 @@
   function aggBars(list, tf) {
     const ms = TF_MS[tf], out = []; let cur = null;
     for (const b of list) {
-      const k = bucketOf(b.timestamp, ms);
+      const k = tf === "1M" ? monthOf(b.timestamp) : bucketOf(b.timestamp, ms);
       if (!cur || cur.timestamp !== k) { cur = { timestamp: k, open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume || 0 }; out.push(cur); }
       else { cur.high = Math.max(cur.high, b.high); cur.low = Math.min(cur.low, b.low); cur.close = b.close; cur.volume += b.volume || 0; }
     }
@@ -62,9 +74,10 @@
         const d = DERIV[tf]; if (!d || native.includes(tf)) return p.subscribe(sym, tf, cb);
         const ms = TF_MS[tf], base = new Map(); (seed[sym + "|" + tf] || []).forEach(b => base.set(b.timestamp, b));
         return p.subscribe(sym, d[0], b => {
-          base.set(b.timestamp, Object.assign({}, b)); const k = bucketOf(b.timestamp, ms);
-          for (const t of Array.from(base.keys())) if (bucketOf(t, ms) < k) base.delete(t);
-          const parts = Array.from(base.values()).filter(x => bucketOf(x.timestamp, ms) === k).sort((x, y) => x.timestamp - y.timestamp);
+          const bk = t => tf === "1M" ? monthOf(t) : bucketOf(t, ms);
+          base.set(b.timestamp, Object.assign({}, b)); const k = bk(b.timestamp);
+          for (const t of Array.from(base.keys())) if (bk(t) < k) base.delete(t);
+          const parts = Array.from(base.values()).filter(x => bk(x.timestamp) === k).sort((x, y) => x.timestamp - y.timestamp);
           const a = aggBars(parts, tf)[0]; if (a) cb(a);
         });
       }
@@ -77,7 +90,8 @@
   const ls = {
     get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* sin almacenamiento */ } }
-  };
+  };  addTf("1M"); ls.get("tk-tfcustom", []).forEach(addTf);
+
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const nf = (v, d) => Number(v).toLocaleString("es-ES", { minimumFractionDigits: d, maximumFractionDigits: d });
   const fmtR = r => (r > 0 ? "+" : r < 0 ? "−" : "") + nf(Math.abs(r), 1) + " R";
@@ -97,6 +111,41 @@
       : { tinta: "#14213a", suave: "#556079", linea: "#e9edf3", borde: "#c9d1de", card: "#ffffff", cob: "#2443c7", cobA: "rgba(36,67,199,.12)", stopA: "rgba(20,33,58,.10)", rot: "#fbe27a" };
   }
   const upC = () => CFG.up || pal().cob, downC = () => CFG.down || (DARK ? "#c6cee0" : "#14213a");
+  /* tipos de gráfico propios: los de línea se dibujan con un indicador sobre el precio; Heikin Ashi, Renko y ruptura de líneas transforman las velas */
+  const DRAWN = ["line", "linemk", "step", "base", "cols", "hl"], XFORM = ["ha", "renko", "lbreak"];
+  const haList = (list, prev) => { const out = []; let p = prev || null; for (const b of list) { const c = (b.open + b.high + b.low + b.close) / 4, o = p ? (p.open + p.close) / 2 : (b.open + b.close) / 2; p = { timestamp: b.timestamp, open: o, high: Math.max(b.high, o, c), low: Math.min(b.low, o, c), close: c, volume: b.volume }; out.push(p); } return out; };
+  function boxOf(list) { const n = Math.min(14, list.length - 1); if (n < 2) return null; let a = 0; for (let i = list.length - n; i < list.length; i++) { const c = list[i], pc = list[i - 1].close; a += Math.max(c.high - c.low, Math.abs(c.high - pc), Math.abs(c.low - pc)); } return a / n; }
+  function renkoList(list) {
+    const box = boxOf(list); if (!box || !list.length) return list; const out = []; let top = list[0].close, bot = top - box, t = 0;
+    for (const b of list) { let k = 0;
+      while (b.close >= top + box) { out.push({ timestamp: Math.max(b.timestamp + k++, t + 1), open: top, high: top + box, low: top, close: top + box, volume: 0 }); t = out[out.length - 1].timestamp; bot = top; top += box; }
+      while (b.close <= bot - box) { out.push({ timestamp: Math.max(b.timestamp + k++, t + 1), open: bot, high: bot, low: bot - box, close: bot - box, volume: 0 }); t = out[out.length - 1].timestamp; top = bot; bot -= box; } }
+    return out.length ? out : list.slice(-1);
+  }
+  function lbreakList(list, n) {
+    n = n || 3; if (!list.length) return list; const out = [{ timestamp: list[0].timestamp, open: list[0].open, high: Math.max(list[0].open, list[0].close), low: Math.min(list[0].open, list[0].close), close: list[0].close, volume: 0 }];
+    for (const b of list.slice(1)) { const last = out[out.length - 1], up = last.close >= last.open, recent = out.slice(-n), hi = Math.max(...recent.map(x => Math.max(x.open, x.close))), lo = Math.min(...recent.map(x => Math.min(x.open, x.close)));
+      if (b.close > (up ? last.close : hi)) out.push({ timestamp: b.timestamp, open: up ? last.close : last.open, high: b.close, low: up ? last.close : last.open, close: b.close, volume: 0 });
+      else if (b.close < (up ? lo : last.close)) out.push({ timestamp: b.timestamp, open: up ? last.open : last.close, high: up ? last.open : last.close, low: b.close, close: b.close, volume: 0 }); }
+    return out;
+  }
+  const xform = list => CFG.type === "ha" ? haList(list) : CFG.type === "renko" ? renkoList(list) : CFG.type === "lbreak" ? lbreakList(list, 3) : list;
+  KC.registerIndicator({
+    name: "TKTYPE", shortName: "", series: "price", calcParams: [], figures: [], calc: l => l.map(() => ({})),
+    draw: ({ ctx, chart, indicator, xAxis, yAxis, bounding }) => {
+      const t = (indicator.extendData || {}).t, list = chart.getDataList(), vr = chart.getVisibleRange(); if (!t || !list.length) return true;
+      const p = pal(), up = upC(), down = downC(), bs = chart.getBarSpace(), from = Math.max(0, vr.from - 1), to = Math.min(list.length, vr.to + 1);
+      const X = i => xAxis.convertToPixel(i), Y = v => yAxis.convertToPixel(v);
+      ctx.save(); ctx.setLineDash([]); ctx.lineWidth = 1.6; ctx.lineJoin = "round";
+      if (t === "line" || t === "linemk" || t === "step") { ctx.strokeStyle = p.cob; ctx.beginPath(); for (let i = from; i < to; i++) { const x = X(i), y = Y(list[i].close); if (i === from) ctx.moveTo(x, y); else if (t === "step") { ctx.lineTo(x, Y(list[i - 1].close)); ctx.lineTo(x, y); } else ctx.lineTo(x, y); } ctx.stroke();
+        if (t === "linemk" && bs.bar > 3) { ctx.fillStyle = p.cob; for (let i = from; i < to; i++) { ctx.beginPath(); ctx.arc(X(i), Y(list[i].close), Math.min(3, bs.bar / 3), 0, Math.PI * 2); ctx.fill(); } } }
+      if (t === "base") { const bv = list[Math.max(0, from)].close, by = Y(bv); ctx.setLineDash([3, 4]); ctx.strokeStyle = p.suave; ctx.beginPath(); ctx.moveTo(0, by); ctx.lineTo(bounding.width, by); ctx.stroke(); ctx.setLineDash([]);
+        for (let i = Math.max(from, 1); i < to; i++) { const a = list[i - 1].close, b = list[i].close; ctx.strokeStyle = (a + b) / 2 >= bv ? up : down; ctx.beginPath(); ctx.moveTo(X(i - 1), Y(a)); ctx.lineTo(X(i), Y(b)); ctx.stroke(); } }
+      if (t === "cols") { const w = Math.max(1, bs.bar * .8), by = bounding.height; for (let i = from; i < to; i++) { const k = list[i], y = Y(k.close); ctx.fillStyle = alpha(k.close >= (list[i - 1] || k).close ? up : down, .75); ctx.fillRect(X(i) - w / 2, y, w, by - y); } }
+      if (t === "hl") { const w = Math.max(1, bs.bar * .7); for (let i = from; i < to; i++) { const k = list[i], y1 = Y(k.high), y2 = Y(k.low); ctx.fillStyle = alpha(k.close >= k.open ? up : down, .85); ctx.fillRect(X(i) - w / 2, y1, w, Math.max(1, y2 - y1)); } }
+      ctx.restore(); return true;
+    }
+  });
   function styles() {
     const p = pal(), up = upC(), down = downC();
     const axis = { axisLine: { color: p.borde }, tickLine: { color: p.borde }, tickText: { color: p.suave, family: NUMF, size: 11 } };
@@ -104,8 +153,8 @@
     return {
       grid: { show: CFG.grid, horizontal: { color: p.linea }, vertical: { color: p.linea } },
       candle: {
-        type: CFG.type,
-        bar: { upColor: up, downColor: down, noChangeColor: p.suave, upBorderColor: up, downBorderColor: down, noChangeBorderColor: p.suave, upWickColor: up, downWickColor: down, noChangeWickColor: p.suave },
+        type: DRAWN.includes(CFG.type) || XFORM.includes(CFG.type) ? "candle_solid" : CFG.type,
+        bar: DRAWN.includes(CFG.type) ? { upColor: "rgba(0,0,0,0)", downColor: "rgba(0,0,0,0)", noChangeColor: "rgba(0,0,0,0)", upBorderColor: "rgba(0,0,0,0)", downBorderColor: "rgba(0,0,0,0)", noChangeBorderColor: "rgba(0,0,0,0)", upWickColor: "rgba(0,0,0,0)", downWickColor: "rgba(0,0,0,0)", noChangeWickColor: "rgba(0,0,0,0)" } : { upColor: up, downColor: down, noChangeColor: p.suave, upBorderColor: up, downBorderColor: down, noChangeBorderColor: p.suave, upWickColor: up, downWickColor: down, noChangeWickColor: p.suave },
         area: { lineColor: p.cob, backgroundColor: [{ offset: 0, color: alpha(p.cob.length === 7 ? p.cob : "#2443c7", .02) }, { offset: 1, color: alpha(p.cob.length === 7 ? p.cob : "#2443c7", .22) }] },
         priceMark: { high: { color: p.suave, textFamily: NUMF }, low: { color: p.suave, textFamily: NUMF }, last: { upColor: up, downColor: down, noChangeColor: p.suave, text: { family: NUMF, size: 11, color: "#ffffff" } } },
         tooltip: { showRule: window.TkChartLegend ? "none" : "always", text: { color: p.suave, family: NUMF, size: 11 } }
@@ -932,7 +981,8 @@
             st.anchor = null;
           }
           msg(type === "init" && !r.bars.length ? "No hay velas para este mercado en este marco." : "");
-          callback(r.bars, { forward: r.more && r.bars.length > 0, backward: false });
+          const nb = XFORM.includes(CFG.type) ? xform(r.bars) : r.bars;
+          callback(nb, { forward: r.more && r.bars.length > 0 && !["renko", "lbreak"].includes(CFG.type), backward: false });
           if (type === "forward" && !r.more && prov.id === "publico" && st.limTold !== st.tf) { // al llegar al principio de lo que guarda la fuente pública
             st.limTold = st.tf; const d = { "1m": "un mes", "3m": "un mes", "5m": "dos meses", "15m": "dos meses", "30m": "dos meses", "45m": "dos meses", "1h": "dos años", "2h": "dos años", "4h": "dos años" }[st.tf];
             if (d) { hint(`El precio público solo guarda ${d} de velas de ${tfName(st.tf)}. Para ver más atrás, usa un marco mayor o conecta tu MT5.`); setTimeout(() => hint(""), 6000); }
@@ -946,12 +996,18 @@
       },
       subscribeBar: ({ callback }) => {
         if (st.unsub) st.unsub();
-        st.unsub = st.prov.subscribe(st.sym, st.tf, bar => { callback(bar); st.price = bar.close; st.lastBar = bar; opts.onPrice && opts.onPrice(bar.close, st.sym); HK.onBar && HK.onBar(bar, "live"); });
+        st.unsub = st.prov.subscribe(st.sym, st.tf, bar => { feedLive(bar, callback); st.price = bar.close; st.lastBar = bar; opts.onPrice && opts.onPrice(bar.close, st.sym); HK.onBar && HK.onBar(bar, "live"); });
       },
       unsubscribeBar: () => { if (st.unsub) { st.unsub(); st.unsub = null; } }
     };
+    function feedLive(bar, cb) {
+      if (CFG.type === "ha") { const dl = ch.getDataList(), last = dl[dl.length - 1], prev = last && last.timestamp === bar.timestamp ? dl[dl.length - 2] : last; cb(haList([bar], prev)[0]); return; }
+      if (CFG.type === "renko" || CFG.type === "lbreak") { if (!st.xfT || Date.now() - st.xfT > 60000) { st.xfT = Date.now(); setTimeout(() => { if (!R.on) ch.resetData(); }, 0); } return; } // se rehacen cada minuto
+      cb(bar);
+    }
+    const feedReplay = b => { if (!R.cb) return; if (CFG.type === "ha") { const dl = ch.getDataList(), last = dl[dl.length - 1], prev = last && last.timestamp === b.timestamp ? dl[dl.length - 2] : last; R.cb(haList([b], prev)[0]); } else R.cb(b); };
     const replayLoader = {
-      getBars: ({ type, callback }) => { if (type === "init") callback(R.all.slice(0, R.idx + 1), { backward: false, forward: false }); else callback([], false); },
+      getBars: ({ type, callback }) => { if (type === "init") callback(CFG.type === "ha" ? haList(R.all.slice(0, R.idx + 1)) : R.all.slice(0, R.idx + 1), { backward: false, forward: false }); else callback([], false); },
       subscribeBar: ({ callback }) => { R.cb = callback; },
       unsubscribeBar: () => { R.cb = null; }
     };
@@ -982,8 +1038,12 @@
         if (HK.indCreate) HK.indCreate(v, x);
         if (meta[4] || x.ov) { v.paneId = "candle_pane"; ch.createIndicator(v, true); } else ch.createIndicator(v, false);
       });
+      applyType();
+      HK.afterInd && HK.afterInd();
     }
+    function applyType() { try { ch.removeIndicator({ name: "TKTYPE" }); } catch (e) { /* no estaba */ } if (DRAWN.includes(CFG.type)) ch.createIndicator({ name: "TKTYPE", paneId: "candle_pane", extendData: { t: CFG.type } }, true); }
     function saveInd(a) { ls.set("tk-ind2", a); applyInd(); }
+    function applyScale() { try { ch.overrideYAxis({ paneId: "candle_pane", name: CFG.scale || "normal", reverse: !!CFG.inv }); } catch (e) { /* versión sin ejes propios */ } }
 
     /* ---------- dibujos ---------- */
     /* Mayús al dibujar o al mover un punto: líneas a 0°, 45° o 90°; rectángulos y elipses perfectos */
@@ -1328,7 +1388,7 @@
     function closePop() { POP.hidden = true; POP.innerHTML = ""; delete POP.dataset.kind; }
     function openModal(html, bind) { DLG.onclick = null; DLG.onchange = null; DLG.innerHTML = html; MOD.hidden = false; bind && bind(); const f = DLG.querySelector("input,button"); f && f.focus(); }
     function closeModal() { MOD.hidden = true; DLG.innerHTML = ""; }
-    function typeIcon(t) { return t === "candle_stroke" ? "candlesH" : t === "ohlc" ? "bars" : t === "area" ? "area" : "candles"; }
+    function typeIcon(t) { return t === "candle_stroke" || t === "candle_up_stroke" ? "candlesH" : t === "ohlc" || t === "hl" || t === "cols" || t === "renko" || t === "lbreak" ? "bars" : ["area", "line", "linemk", "step", "base"].includes(t) ? "area" : "candles"; }
     st.tfFav = ls.get("tk-tffav", ["1m", "5m", "15m", "1h", "4h", "1d"]);
     /* en backtesting con el precio público, los marcos pequeños solo existen para fechas recientes */
     const PUB_DAYS = { "1m": 29, "3m": 29, "5m": 59, "15m": 59, "30m": 59, "45m": 59, "1h": 729, "2h": 729, "4h": 729 };
@@ -1355,10 +1415,13 @@
     function parseTf(v) {
       v = v.trim().toLowerCase(); if (!v) return null;
       if (v === "d" || v === "1d") return "1d"; if (v === "w" || v === "s" || v === "1w" || v === "1s") return "1w";
+      if (v === "1mes" || v === "mes" || v === "1mo" || v === "mo") { addTf("1M"); return "1M"; }
       const m = v.match(/^(\d+)\s*([mhdws]?)$/); if (!m) return null; let n = +m[1], u = m[2] || "m";
       if (u === "m" && n % 60 === 0 && n >= 60) { u = "h"; n = n / 60; }
       if (u === "h" && n === 24) { u = "d"; n = 1; }
-      const k = n + (u === "s" ? "w" : u); return TFS.some(x => x[0] === k) ? k : null;
+      const k = n + (u === "s" ? "w" : u); if (TFS.some(x => x[0] === k)) return k;
+      if ((u === "m" || u === "h") && addTf(k)) { const c = ls.get("tk-tfcustom", []); if (!c.includes(k)) { c.push(k); ls.set("tk-tfcustom", c); } return k; }
+      return null;
     }
     function tfKey(e) {
       if (e.metaKey || e.ctrlKey || e.altKey) return false;
@@ -1371,8 +1434,13 @@
       return false;
     }
     function menuType(btn) {
-      const t = [["candle_solid", "Velas", "candles"], ["candle_stroke", "Velas huecas", "candlesH"], ["ohlc", "Barras", "bars"], ["area", "Área", "area"]];
-      openPop(btn, `<div class="gx-mh">Tipo de gráfico</div>` + t.map(([k, l, i]) => `<button type="button" class="gx-mi" data-pick="${k}" aria-pressed="${k === CFG.type}">${icon(i, 18)}<span>${l}</span></button>`).join(""), k => { CFG.type = k; ls.set("tk-cfg", CFG); ch.setStyles(styles()); $(".gx-typeic").innerHTML = icon(typeIcon(k), 18); });
+      const t = [["Velas", [["candle_solid", "Velas", "candles"], ["candle_stroke", "Velas huecas", "candlesH"], ["candle_up_stroke", "Velas huecas alcistas", "candlesH"], ["ha", "Heikin Ashi", "candles"], ["ohlc", "Barras", "bars"], ["hl", "Alto y bajo", "bars"]]],
+        ["Líneas", [["line", "Línea", "area"], ["linemk", "Línea con puntos", "area"], ["step", "Escalones", "area"], ["area", "Área", "area"], ["base", "Línea base", "area"], ["cols", "Columnas", "bars"]]],
+        ["Sin tiempo fijo", [["renko", "Renko (cajas de 1 ATR)", "bars"], ["lbreak", "Ruptura de 3 líneas", "bars"]]]];
+      openPop(btn, t.map(([g, l]) => `<div class="gx-mh">${g}</div>` + l.map(([k, n, i]) => `<button type="button" class="gx-mi${R.on && (k === "renko" || k === "lbreak") ? " off" : ""}" data-pick="${k}" aria-pressed="${k === CFG.type}"${R.on && (k === "renko" || k === "lbreak") ? ' aria-disabled="true" title="No disponible en backtesting"' : ""}>${icon(i, 18)}<span>${n}</span></button>`).join("")).join(""), k => {
+        if (R.on && (k === "renko" || k === "lbreak")) { hint("Renko y ruptura de líneas no funcionan en backtesting."); setTimeout(() => hint(""), 3000); return; }
+        const was = CFG.type; CFG.type = k; ls.set("tk-cfg", CFG); ch.setStyles(styles()); applyType(); $(".gx-typeic").innerHTML = icon(typeIcon(k), 18);
+        if (XFORM.includes(was) || XFORM.includes(k)) { if (R.on) ch.resetData(); else ch.resetData(); } });
     }
     function showInGroup(gid, k) {
       st.last[gid] = k; ls.set("tk-lasttool", st.last);
@@ -1436,7 +1504,7 @@
       const row = m => `<div class="gx-row gx-irow"><span class="gx-badge">${esc(m[1])}</span><span class="gx-in2"><b>${esc(m[2])}</b><span>${esc(m[6])}</span></span>${on.has(m[0]) ? `<button type="button" class="gx-btn" data-del="${m[0]}">Quitar</button>` : `<button type="button" class="gx-btn gx-add" data-add="${m[0]}">Añadir</button>`}</div>`;
       const mine = () => act.length ? act.map((x, i) => { const m = IND_BY[x.n]; return `<div class="gx-row gx-irow"><span class="gx-badge">${esc(m[1])}</span><span class="gx-in2"><b>${esc(m[2])}</b>
           <span class="gx-pr">${m[5].length ? `<label>Valores <input class="gx-in" data-par="${i}" value="${esc((x.p && x.p.length ? x.p : m[5]).join(", "))}" inputmode="decimal"></label>` : ""}<label>Color <input type="color" data-col="${i}" value="${x.c || IND_COLORS()[0]}"></label></span></span>
-          <button type="button" class="gx-btn" data-del="${x.n}">Quitar</button></div>`; }).join("") : `<div class="gx-empty">Aún no tienes indicadores. Añádelos desde las otras pestañas.</div>`;
+          <button type="button" class="gx-btn" data-iset="${i}">Ajustes</button><button type="button" class="gx-btn" data-del="${x.n}">Quitar</button></div>`; }).join("") : `<div class="gx-empty">Aún no tienes indicadores. Añádelos desde las otras pestañas.</div>`;
       const body = q => tab === "En el gráfico" ? mine() : IND.filter(m => (tab === "Todos" || m[3] === tab) && (!q || (m[1] + " " + m[2] + " " + m[0]).toLowerCase().includes(q))).map(row).join("") || `<div class="gx-empty">Ningún indicador con ese nombre.</div>`;
       openModal(`<div class="gx-dh"><h3>Indicadores</h3><button type="button" class="gx-tb gx-ic" data-close aria-label="Cerrar">${icon("x", 18)}</button></div>
         <label class="gx-search">${icon("search", 16)}<input type="search" placeholder="Buscar: RSI, medias, Fibonacci…" aria-label="Buscar indicador" autocomplete="off"></label>
@@ -1445,7 +1513,8 @@
         const i = DLG.querySelector('input[type="search"]'), L = DLG.querySelector(".gx-list");
         i.oninput = () => { L.innerHTML = body(i.value.trim().toLowerCase()); };
         DLG.onclick = e => {
-          const t = e.target.closest("[data-tab],[data-add],[data-del],[data-close]"); if (!t) return;
+          const t = e.target.closest("[data-tab],[data-add],[data-del],[data-close],[data-iset]"); if (!t) return;
+          if (t.dataset.iset != null && HK.indDialog) { closeModal(); HK.indDialog(+t.dataset.iset); return; }
           if (t.dataset.tab) return modalInd(t.dataset.tab);
           if (t.dataset.add) { const a = activeInd(); a.push({ n: t.dataset.add, p: IND_BY[t.dataset.add][5].slice(), c: null }); saveInd(a); return modalInd(tab); }
           if (t.dataset.del) { saveInd(activeInd().filter(x => x.n !== t.dataset.del)); return modalInd(tab); }
@@ -1466,11 +1535,15 @@
           <label>Vela bajista <input type="color" data-cfg="down" value="${CFG.down || (DARK ? "#c6cee0" : "#14213a")}"></label>
           <label>Fondo <input type="color" data-cfg="bg" value="${CFG.bg || p.card}"></label>
           <label class="gx-chk"><input type="checkbox" data-cfg="grid" ${CFG.grid ? "checked" : ""}> Cuadrícula</label>
+          <div class="gx-mh">Escala de precios</div>
+          <label>Tipo <select class="gx-in" data-cfg="scale"><option value="normal" ${(CFG.scale || "normal") === "normal" ? "selected" : ""}>Normal</option><option value="logarithm" ${CFG.scale === "logarithm" ? "selected" : ""}>Logarítmica</option><option value="percentage" ${CFG.scale === "percentage" ? "selected" : ""}>En porcentaje</option></select></label>
+          <label class="gx-chk"><input type="checkbox" data-cfg="inv" ${CFG.inv ? "checked" : ""}> Invertir la escala (el gráfico al revés)</label>
+          <p class="gx-muted" style="margin:0;font-size:12px">Doble clic en la escala de precios la ajusta sola; doble clic en la de tiempo vuelve al presente.</p>
           <div class="gx-mh">Combinaciones rápidas</div>
           <div class="gx-quick"><button type="button" class="gx-btn" data-q="tickora">Tickora</button><button type="button" class="gx-btn" data-q="clasica">Verde y rojo</button><button type="button" class="gx-btn" data-q="mono">Blanco y negro</button></div>
           <button type="button" class="gx-btn" data-q="reset">Restablecer todo</button>
         </div>`, () => {
-        DLG.onchange = e => { const k = e.target.dataset.cfg; if (!k) return; CFG[k] = e.target.type === "checkbox" ? e.target.checked : e.target.value; ls.set("tk-cfg", CFG); ch.setStyles(styles()); paintBg(); };
+        DLG.onchange = e => { const k = e.target.dataset.cfg; if (!k) return; CFG[k] = e.target.type === "checkbox" ? e.target.checked : e.target.value; ls.set("tk-cfg", CFG); ch.setStyles(styles()); paintBg(); if (k === "scale" || k === "inv") applyScale(); };
         DLG.onclick = e => {
           const t = e.target.closest("[data-q],[data-close]"); if (!t) return;
           if (t.hasAttribute("data-close")) return closeModal();
@@ -1514,6 +1587,7 @@
     }
     function enterReplay() {
       if (R.on) return;
+      if (CFG.type === "renko" || CFG.type === "lbreak") { st.typeBefore = CFG.type; CFG.type = "candle_solid"; ch.setStyles(styles()); applyType(); $(".gx-typeic").innerHTML = icon(typeIcon(CFG.type), 18); setTimeout(() => { hint("Renko y ruptura de líneas no tienen tiempo fijo: en backtesting se usan velas."); setTimeout(() => hint(""), 4000); }, 300); }
       R.on = true; R.picking = true; R.trades = R.trades || [];
       $(".gx-replay").hidden = false; $(".gx-start").hidden = false; $(".gx-play").hidden = true; $(".gx-stats").innerHTML = "";
       syncMode();
@@ -1606,7 +1680,7 @@
         pause(); hint("Has llegado al presente."); setTimeout(() => hint(""), 2500); return false;
       }
       if (R.end && bar() && bar().timestamp >= R.end) { pause(); hint("Has llegado al final del periodo de esta sesión."); setTimeout(() => hint(""), 3500); opts.onSessionEnd && opts.onSessionEnd(); return false; }
-      R.idx++; const b = bar(); R.cb && R.cb(b); if (HK.onBar) HK.onBar(b, "replay"); else checkSim(b); stats(); opts.onReplay && opts.onReplay(b.timestamp);
+      R.idx++; const b = bar(); feedReplay(b); if (HK.onBar) HK.onBar(b, "replay"); else checkSim(b); stats(); opts.onReplay && opts.onReplay(b.timestamp);
       if (R.more && R.all.length - 1 - R.idx < 150) ahead();
       return true;
     }
@@ -1623,6 +1697,7 @@
       pause(); if (R.cut) { R.cut = false; ch.removeOverlay({ id: "tkfog" }); el.querySelector(".gx").classList.remove("cut"); $('[data-act="cut"]').setAttribute("aria-pressed", "false"); } if (R.pos) { ch.removeOverlay({ id: R.pos.id }); R.pos = null; }
       ch.removeOverlay({ groupId: "sim" });
       R.on = false; R.picking = false; hint(""); HK.onReset && HK.onReset("exit");
+      if (st.typeBefore) { CFG.type = st.typeBefore; st.typeBefore = null; ch.setStyles(styles()); applyType(); $(".gx-typeic").innerHTML = icon(typeIcon(CFG.type), 18); }
       $(".gx-replay").hidden = true; syncMode(); renderTfq();
       ch.setDataLoader(live); ch.resetData(); setSrc(); setTimeout(() => ch.resize(), 0);
     }
@@ -1808,6 +1883,11 @@
     tplSync();
     if (MODE === "bt") whenLoaded(() => enterReplay()); else if (opts.onMode) opts.onMode("live");
     const ro = new ResizeObserver(() => ch.resize()); ro.observe(box);
+    box.addEventListener("dblclick", e => { // doble clic en las escalas: ajustar el precio o volver al presente
+      const r = box.getBoundingClientRect(), yA = ch.getSize("candle_pane", "yAxis"), xA = ch.getSize("x_axis_pane", "main") || ch.getSize("x_axis_pane");
+      if (yA && e.clientX - r.left > r.width - yA.width - 2) { applyScale(); ch.resize(); return; }
+      if (e.clientY - r.top > r.height - 28) { ch.scrollToRealTime(200); }
+    });
 
     const activate = () => { if (inst === me) return; inst = me; CUR_TF = st.tf; CUR_DIGITS = digits(); ALL.forEach(x => x.el.classList.toggle("tk-act", x === me)); opts.onActive && opts.onActive(me); };
     el.addEventListener("pointerdown", activate, true);
@@ -1825,7 +1905,7 @@
     me.hk = HK;
     me.X = { st, R, ch, $, $$, hint, msg, digits, bar, applyInd, activeInd, saveInd, openModal, closeModal, openPop, closePop, stats, setSrc, opts, tfName, fmtWhen, load, setTf, live, replayLoader, pause, step, get MODE() { return MODE; } };
     ALL.add(me); ALL.forEach(x => x.el.classList.toggle("tk-act", x === me));
-    load(); applyInd(); restore(); renderFav(); applyCursor(); renderTfq();
+    load(); applyInd(); applyScale(); restore(); renderFav(); applyCursor(); renderTfq();
     if (ls.get("tk-notools", false)) el.querySelector(".gx").classList.add("notools");
     if (st.last.cursor === "eraser" || !st.last.cursor) showInGroup("cursor", st.baseCur);
     st.tool = st.baseCur; $$("[data-tool]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.tool === st.baseCur)));

@@ -57,6 +57,78 @@
   const savePaper = p => { ls.set("tk-paper", p); const A = APP(); if (A && A.S.user) A.sb.from("docs").upsert({ user_id: A.S.user.id, col: "paper", id: "acct", data: p, updated_at: new Date().toISOString() }).then(() => {}, () => {}); };
   const pipOf = (digits, sym) => /^(BTC|ETH)/.test(sym) ? 1 : digits >= 3 ? Math.pow(10, -(digits - 1)) : Math.pow(10, -digits) * (digits === 0 ? 1 : 1);
 
+  /* ---------- indicadores nuevos ---------- */
+  const sma = (v, n) => v.map((x, i) => { if (i < n - 1) return null; let s = 0; for (let j = 0; j < n; j++) { if (v[i - j] == null) return null; s += v[i - j]; } return s / n; });
+  const wma = (v, n) => v.map((x, i) => { if (i < n - 1) return null; let s = 0, w = 0; for (let j = 0; j < n; j++) { if (v[i - j] == null) return null; s += v[i - j] * (n - j); w += n - j; } return s / w; });
+  const emaA = (v, n) => { const k = 2 / (n + 1); let e = null; return v.map(x => x == null ? e : (e = e == null ? x : x * k + e * (1 - k))); };
+  const dayK = ts => new Date(ts).toDateString();
+  KC.registerIndicator({ name: "HMA", shortName: "HMA", calcParams: [21], figures: [{ key: "h", title: "HMA: ", type: "line" }], calc: (l, ind) => { const n = ind.calcParams[0] || 21, c = l.map(k => k.close), a = wma(c, Math.max(1, Math.round(n / 2))), b = wma(c, n), d = a.map((x, i) => x == null || b[i] == null ? null : 2 * x - b[i]), h = wma(d, Math.max(1, Math.round(Math.sqrt(n)))); return h.map(x => x == null ? {} : { h: x }); } });
+  KC.registerIndicator({ name: "VWMA", shortName: "VWMA", calcParams: [20], figures: [{ key: "v", title: "VWMA: ", type: "line" }], calc: (l, ind) => { const n = ind.calcParams[0] || 20; return l.map((k, i) => { if (i < n - 1) return {}; let s = 0, w = 0; for (let j = 0; j < n; j++) { const q = l[i - j], vol = q.volume > 0 ? q.volume : 1; s += q.close * vol; w += vol; } return { v: s / w }; }); } });
+  KC.registerIndicator({ name: "MFI", shortName: "MFI", calcParams: [14], precision: 2, figures: [{ key: "m", title: "MFI: ", type: "line" }], minValue: 0, maxValue: 100,
+    calc: (l, ind) => { const n = ind.calcParams[0] || 14, tp = l.map(k => (k.high + k.low + k.close) / 3); return l.map((k, i) => { if (i < n) return {}; let up = 0, dn = 0; for (let j = i - n + 1; j <= i; j++) { const mf = tp[j] * (l[j].volume > 0 ? l[j].volume : 1); if (tp[j] > tp[j - 1]) up += mf; else if (tp[j] < tp[j - 1]) dn += mf; } return { m: dn ? 100 - 100 / (1 + up / dn) : 100 }; }); } });
+  KC.registerIndicator({ name: "PIVOT", shortName: "Pivotes", series: "price", calcParams: [], figures: [{ key: "r2", title: "R2: ", type: "line" }, { key: "r1", title: "R1: ", type: "line" }, { key: "p", title: "P: ", type: "line" }, { key: "s1", title: "S1: ", type: "line" }, { key: "s2", title: "S2: ", type: "line" }],
+    calc: l => { const days = {}; l.forEach(k => { const d = dayK(k.timestamp), x = days[d] || (days[d] = { h: -Infinity, lo: Infinity, c: 0 }); x.h = Math.max(x.h, k.high); x.lo = Math.min(x.lo, k.low); x.c = k.close; }); const keys = Object.keys(days), prev = {}; keys.forEach((d, i) => { if (i) prev[d] = days[keys[i - 1]]; });
+      return l.map(k => { const y = prev[dayK(k.timestamp)]; if (!y) return {}; const p = (y.h + y.lo + y.c) / 3; return { p, r1: 2 * p - y.lo, s1: 2 * p - y.h, r2: p + (y.h - y.lo), s2: p - (y.h - y.lo) }; }); } });
+  KC.registerIndicator({ name: "SESSHL", shortName: "Máx/mín del día", series: "price", calcParams: [], figures: [{ key: "pdh", title: "Máx. ayer: ", type: "line" }, { key: "pdl", title: "Mín. ayer: ", type: "line" }, { key: "hod", title: "Máx. hoy: ", type: "line" }, { key: "lod", title: "Mín. hoy: ", type: "line" }],
+    calc: l => { let d = "", hh = -Infinity, lo = Infinity, ph = null, pl = null; return l.map(k => { const dk = dayK(k.timestamp); if (dk !== d) { if (d) { ph = hh; pl = lo; } d = dk; hh = -Infinity; lo = Infinity; } hh = Math.max(hh, k.high); lo = Math.min(lo, k.low); const o = { hod: hh, lod: lo }; if (ph != null) { o.pdh = ph; o.pdl = pl; } return o; }); } });
+  const pivots = (l, n) => { const H = [], L = []; for (let i = n; i < l.length - n; i++) { let isH = true, isL = true; for (let j = 1; j <= n; j++) { if (l[i - j].high > l[i].high || l[i + j].high > l[i].high) isH = false; if (l[i - j].low < l[i].low || l[i + j].low < l[i].low) isL = false; } if (isH) H.push(i); if (isL) L.push(i); } return { H, L }; };
+  KC.registerIndicator({ name: "ZIGZAG", shortName: "ZigZag", series: "price", calcParams: [5], figures: [], calc: l => l.map(() => ({})),
+    draw: ({ ctx, chart, indicator, xAxis, yAxis }) => { const l = chart.getDataList(), n = indicator.calcParams[0] || 5; if (l.length < n * 2 + 2) return true; const { H, L } = pivots(l, n); const pts = H.map(i => [i, l[i].high, 1]).concat(L.map(i => [i, l[i].low, -1])).sort((a, b) => a[0] - b[0]);
+      const z = []; pts.forEach(p => { const last = z[z.length - 1]; if (!last || last[2] !== p[2]) z.push(p); else if ((p[2] === 1 && p[1] > last[1]) || (p[2] === -1 && p[1] < last[1])) z[z.length - 1] = p; });
+      ctx.save(); ctx.setLineDash([]); ctx.strokeStyle = (indicator.styles && indicator.styles.lines && indicator.styles.lines[0] && indicator.styles.lines[0].color) || (U.DARK ? "#c49dff" : "#7b4fd6"); ctx.lineWidth = 1.5; ctx.beginPath(); z.forEach((p, i) => { const x = xAxis.convertToPixel(p[0]), y = yAxis.convertToPixel(p[1]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke(); ctx.restore(); return true; } });
+  const rsiArr = (l, n) => { let g = 0, s = 0; return l.map((k, i) => { if (!i) return null; const d = k.close - l[i - 1].close; if (i <= n) { g += Math.max(d, 0); s += Math.max(-d, 0); if (i < n) return null; g /= n; s /= n; } else { g = (g * (n - 1) + Math.max(d, 0)) / n; s = (s * (n - 1) + Math.max(-d, 0)) / n; } return s ? 100 - 100 / (1 + g / s) : 100; }); };
+  KC.registerIndicator({ name: "DIVER", shortName: "Divergencias RSI", series: "price", calcParams: [14, 5], figures: [], calc: l => l.map(() => ({})),
+    draw: ({ ctx, chart, indicator, xAxis, yAxis }) => { const l = chart.getDataList(), [n, w] = indicator.calcParams; if (l.length < 60) return true; const r = rsiArr(l, n || 14), { H, L } = pivots(l, w || 5), dark = U.DARK;
+      const lines = []; for (let k = 1; k < H.length; k++) { const a = H[k - 1], b = H[k]; if (b - a < 4 || b - a > 80 || r[a] == null) continue; if (l[b].high > l[a].high && r[b] < r[a] - 2) lines.push([a, l[a].high, b, l[b].high, "Divergencia bajista", dark ? "#ff8c8c" : "#d6363c"]); }
+      for (let k = 1; k < L.length; k++) { const a = L[k - 1], b = L[k]; if (b - a < 4 || b - a > 80 || r[a] == null) continue; if (l[b].low < l[a].low && r[b] > r[a] + 2) lines.push([a, l[a].low, b, l[b].low, "Divergencia alcista", dark ? "#86a9ff" : "#2443c7"]); }
+      ctx.save(); ctx.lineWidth = 1.5; ctx.font = "600 10px Inter, sans-serif"; lines.forEach(([a, va, b, vb, t, c]) => { const x1 = xAxis.convertToPixel(a), y1 = yAxis.convertToPixel(va), x2 = xAxis.convertToPixel(b), y2 = yAxis.convertToPixel(vb); ctx.strokeStyle = c; ctx.fillStyle = c; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.setLineDash([]); ctx.fillText(t, x2 + 4, y2 + (t.includes("bajista") ? -6 : 14)); }); ctx.restore(); return true; } });
+  KC.registerIndicator({ name: "VPVR", shortName: "Perfil de volumen", series: "price", calcParams: [24], figures: [], calc: l => l.map(() => ({})),
+    draw: ({ ctx, chart, indicator, yAxis, bounding }) => { const l = chart.getDataList(), vr = chart.getVisibleRange(), bins = indicator.calcParams[0] || 24; const v = l.slice(Math.max(0, vr.from), Math.min(l.length, vr.to)); if (v.length < 5) return true;
+      const hi = Math.max(...v.map(k => k.high)), lo = Math.min(...v.map(k => k.low)), st = (hi - lo) / bins || 1, up = Array(bins).fill(0), dn = Array(bins).fill(0);
+      v.forEach(k => { const i = Math.min(bins - 1, Math.floor(((k.high + k.low) / 2 - lo) / st)), vol = k.volume > 0 ? k.volume : 1; (k.close >= k.open ? up : dn)[i] += vol; });
+      const mx = Math.max(...up.map((x, i) => x + dn[i])), W = bounding.width * 0.22, poc = up.map((x, i) => x + dn[i]).indexOf(mx), dark = U.DARK;
+      ctx.save(); for (let i = 0; i < bins; i++) { const y1 = yAxis.convertToPixel(lo + (i + 1) * st), y2 = yAxis.convertToPixel(lo + i * st), h = Math.max(1, Math.abs(y2 - y1) - 1), wu = up[i] / mx * W, wd = dn[i] / mx * W, x0 = bounding.width - wu - wd;
+        ctx.fillStyle = i === poc ? (dark ? "rgba(196,157,255,.55)" : "rgba(123,79,214,.45)") : (dark ? "rgba(134,169,255,.28)" : "rgba(36,67,199,.18)"); ctx.fillRect(x0, Math.min(y1, y2), wu, h); ctx.fillStyle = i === poc ? (dark ? "rgba(196,157,255,.35)" : "rgba(123,79,214,.3)") : (dark ? "rgba(200,200,215,.18)" : "rgba(20,33,58,.12)"); ctx.fillRect(x0 + wu, Math.min(y1, y2), wd, h); }
+      ctx.restore(); return true; } });
+  /* media sobre otro indicador y media de otro marco: leen datos del gráfico que los pinta */
+  const CHARTS = {};
+  KC.registerIndicator({ name: "TKMAON", shortName: "Media", calcParams: [9], figures: [{ key: "m", title: "Media: ", type: "line" }],
+    calc: (l, ind) => { const e = ind.extendData || {}, c = CHARTS[e.key]; if (!c) return l.map(() => ({})); const src = c.ch.getIndicators({ name: e.src })[0];
+      const ready = src && src.result && src.result.length === l.length && src.result.some(x => x && Object.keys(x).length);
+      if (!ready || (src.result[l.length - 1] && !Object.keys(src.result[l.length - 1]).length && (e.try || 0) < 12)) { const t = (e.try || 0) + 1; if (t <= 12) setTimeout(() => { try { e.try = t; c.ch.overrideIndicator({ name: "TKMAON", calcParams: [ind.calcParams[0] || 9, t] }); } catch (er) { /* ya no está */ } }, 120); if (!ready) return l.map(() => ({})); }
+      const fk = (src.figures && src.figures[0] && src.figures[0].key) || Object.keys(src.result.find(x => x && Object.keys(x).length) || {})[0], vals = src.result.map(x => x && x[fk] != null ? x[fk] : null), n = ind.calcParams[0] || 9;
+      const m = e.kind === "ema" ? emaA(vals, n) : sma(vals, n); return m.map(x => x == null ? {} : { m: x }); } });
+  KC.registerIndicator({ name: "MTF", shortName: "Media de otro marco", series: "price", calcParams: [20], figures: [{ key: "m", title: "Media: ", type: "line" }],
+    calc: async (l, ind) => { const e = ind.extendData || {}, c = CHARTS[e.key]; if (!c || !l.length || !e.tf || !c.st.prov) return l.map(() => ({})); const n = ind.calcParams[0] || 20;
+      let hb = c.mtfCache && c.mtfCache.k === c.st.sym + e.tf ? c.mtfCache.bars : null;
+      if (!hb || Date.now() - c.mtfCache.t > 60000) { try { const r = await c.st.prov.bars(c.st.sym, e.tf, null); hb = r.bars || []; c.mtfCache = { k: c.st.sym + e.tf, bars: hb, t: Date.now() }; } catch (er) { hb = hb || []; } }
+      if (!hb.length) return l.map(() => ({})); const ms = TF_MS[e.tf] || 864e5, m = (e.kind === "sma" ? sma : emaA)(hb.map(b => b.close), n);
+      let j = 0; return l.map(k => { while (j + 1 < hb.length && hb[j + 1].timestamp + ms <= k.timestamp + 1) j++; const ok = hb[j] && hb[j].timestamp + ms <= k.timestamp + (TF_MS[c.st.tf] || 0) + 1; return ok && m[j] != null ? { m: m[j] } : {}; }); } });
+  U.CATS.push("Niveles");
+  [["HMA", "HMA", "Media de Hull", "Tendencia", true, [21], "Media rápida y suave que reacciona antes a los giros."],
+   ["VWMA", "VWMA", "Media ponderada por volumen", "Tendencia", true, [20], "Pesa más las velas con más volumen."],
+   ["MTF", "MTF", "Media de otro marco", "Tendencia", true, [20], "Una media de otro marco (por ejemplo, la diaria) pintada en tu gráfico. Elige el marco en Ajustes."],
+   ["MFI", "MFI", "Índice de flujo de dinero (MFI)", "Volumen", false, [14], "Un RSI que tiene en cuenta el volumen."],
+   ["PIVOT", "PIV", "Puntos pivote (diarios)", "Niveles", true, [], "Pivote, resistencias y soportes calculados con el día anterior."],
+   ["SESSHL", "HL", "Máximos y mínimos del día", "Niveles", true, [], "Máximo y mínimo de ayer y de hoy: niveles que mira todo el mundo."],
+   ["ZIGZAG", "ZZ", "ZigZag", "Niveles", true, [5], "Une los giros importantes y quita el ruido. El valor es cuántas velas a cada lado."],
+   ["DIVER", "DIV", "Divergencias automáticas (RSI)", "Niveles", true, [14, 5], "Marca cuándo el precio hace un máximo o mínimo nuevo y el RSI no lo confirma."],
+   ["VPVR", "VP", "Perfil de volumen visible", "Volumen", true, [24], "Dónde se ha negociado más en lo que ves; la barra violeta es el precio con más volumen."]
+  ].forEach(m => { if (!U.IND_BY[m[0]]) { U.IND.push(m); U.IND_BY[m[0]] = m; } });
+  window.TkChartExt2 = (window.TkChartExt2 || []).concat([(me, X, HK) => {
+    CHARTS[me.key] = { ch: X.ch, st: X.st };
+    const OSC = ["RSI", "CCI", "MTM", "ROC", "WR", "MFI", "AO", "TRIX", "BIAS", "PSY", "OBV", "ATR", "DMI", "KDJ", "STOCHRSI", "MACD"];
+    HK.indCreate = (v, x) => {
+      const meta = U.IND_BY[x.n] || []; if (meta[4] && v.precision == null) v.precision = X.digits();
+      if (x.n === "MTF") { v.extendData = { key: me.key, tf: x.mtf || "1d", kind: x.mk || "ema" }; v.shortName = "Media " + (U.TF_SHORT[x.mtf || "1d"] || "1D"); }
+    };
+    HK.afterInd = () => { X.activeInd().forEach(x => { if (!x.sm || !OSC.includes(x.n)) return; const src = X.ch.getIndicators({ name: x.n })[0]; if (!src) return;
+      setTimeout(() => { try { X.ch.createIndicator({ name: "TKMAON", paneId: src.paneId, calcParams: [x.sm], extendData: { key: me.key, src: x.n, kind: x.smk || "sma" }, visible: src.visible !== false, styles: { lines: [{ color: U.DARK ? "#e0a33a" : "#b7791f", size: 1.2, style: "solid", smooth: false, dashedValue: [2, 2] }] } }, true); } catch (e) { /* sin panel */ } }, 60); }); };
+    HK.indSourceUI = (x, meta) => x.n === "MTF" ? `<label class="gx-irow">Marco de la media<select class="gx-in" data-isrc="mtf">${["15m", "1h", "4h", "1d", "1w"].map(k => `<option value="${k}" ${(x.mtf || "1d") === k ? "selected" : ""}>${U.TF_SHORT[k]}</option>`).join("")}</select></label><label class="gx-irow">Tipo<select class="gx-in" data-isrc="mk"><option value="ema" ${(x.mk || "ema") === "ema" ? "selected" : ""}>Exponencial</option><option value="sma" ${x.mk === "sma" ? "selected" : ""}>Simple</option></select></label>`
+      : OSC.includes(x.n) ? `<label class="gx-irow">Media sobre el indicador<input class="gx-in" type="number" min="0" max="200" data-isrc="sm" value="${x.sm || 0}"></label><label class="gx-irow">Tipo de media<select class="gx-in" data-isrc="smk"><option value="sma" ${(x.smk || "sma") === "sma" ? "selected" : ""}>Simple</option><option value="ema" ${x.smk === "ema" ? "selected" : ""}>Exponencial</option></select></label><p class="gx-muted" style="margin:0">Pon 0 para no dibujar media. Por ejemplo, una media de 9 sobre el RSI.</p>` : "";
+    HK.indSourceSet = (x, z) => { const k = z.dataset.isrc; if (k === "sm") x.sm = Math.max(0, Math.min(200, Math.round(+z.value || 0))); else x[k] = z.value; };
+  }]);
+
   /* ---------- la extensión de cada gráfico ---------- */
   function ext(me, X, HK) {
     const { st, R, ch, $, $$ } = X, opts = X.opts, main = me.key === "main";
@@ -350,6 +422,7 @@
     HK.repaint = () => { paintLegend(); paintPanel(); paintCd(); };
     setTimeout(() => { redrawAll(); paintNews(); paintLegend(); paintPanel(); }, 400);
     (window.TkChartExt2 || []).forEach(f => { try { f(me, X, HK); } catch (e) { console.error("TkChartExt2", e); } });
+    try { X.applyInd(); } catch (e) { /* sin indicadores */ }
   }
   window.TkChartExt = (window.TkChartExt || []).concat([ext]);
   window.TkG2 = { esc, nf, fmtR, money, ls, I, IC, curOf, newsFor, paper };
