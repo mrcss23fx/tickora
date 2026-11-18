@@ -1047,7 +1047,7 @@ const NAV_APPS=[
  ["calendario","Calendario",[["historial","Historial"],["calendario","Calendario"]]],
  ["ajustes","Ajustes",[["ajustes","Ajustes"]]]];
 /* páginas que existen pero no salen en el menú (se llega desde otras) */
-const NAV_HIDDEN=["informe","btcal","grupo","conocete","comofuncionas"];
+const NAV_HIDDEN=["informe","btcal","grupo","conocete","comofuncionas","bienvenida"];
 const NAV_GROUPS=NAV_APPS.map(a=>[a[1],a[2]]);
 const appOf=v=>NAV_APPS.find(a=>a[2].some(x=>x[0]===v));
 const NAV_SIDE=NAV_GROUPS.flatMap(g=>g[1]).concat(NAV_HIDDEN.map(k=>[k,k]));
@@ -2076,7 +2076,7 @@ function render(){
   S.lastView=key;
   if(r.view!=="analizar"&&window.TkChart&&TkChart.current){TkChart.destroy();document.body.style.overflow=""}
   const XV=window.TK_VIEWS&&TK_VIEWS[r.view];
-  const NEWV=["app","backtest","historial","emociones","diario","noticias","asistente","inicio","btanalisis","btops","btcal","btnotas","rendimiento","calendario","informe","finanzas","aprender","errores","comofuncionas"];
+  const NEWV=["app","backtest","historial","emociones","diario","noticias","asistente","inicio","btanalisis","btops","btcal","btnotas","rendimiento","calendario","informe","finanzas","aprender","errores","comofuncionas","bienvenida"];
   if(NEWV.includes(r.view)&&!XV&&document.readyState==="complete"&&!S.loadWarn){S.loadWarn=setTimeout(()=>{S.lastView=null;render()},2500)}
   const content=(window.tkCrumb&&!["analizar","inicio","app"].includes(r.view)?tkCrumb(r.view):"")+(XV?XV.view(r):NEWV.includes(r.view)?`<div class="stack" style="gap:12px;max-width:520px;padding:40px 0"><div class="muted">Cargando…</div>${document.readyState==="complete"?`<div class="small muted">Si tarda mucho, recarga la página sin caché: Ctrl + F5 (en Mac, ⌘ + Mayús + R).</div><button type="button" class="btn" onclick="location.replace(location.pathname+'?r='+Date.now()+location.hash)" style="height:40px;align-self:flex-start">Recargar ahora</button>`:""}</div>`:r.view==="mas"?viewMas():r.view==="op"?viewOp(r.id):r.view==="analizar"?viewAnalizar():r.view==="progreso"?viewProgreso():r.view==="plan"?viewPlan("plan"):r.view==="ajustes"?viewPlan("ajustes"):r.view==="cuentas"?viewCuentas():
     r.view==="grupo"?viewSoon("Grupo","Los grupos nuevos, donde solo se comparte disciplina y nunca dinero, llegan en el último paso de esta versión. Mientras tanto, tus grupos siguen en la versión anterior."):
@@ -2288,11 +2288,11 @@ if(SB_OK){
   sb.auth.onAuthStateChange((event,session)=>{setTimeout(()=>onSession(session,event),0)});
   sb.auth.getSession().then(({data})=>onSession(data.session,"INIT"));
 }else render();
-window.viewPlan=viewPlan;window.viewProgreso=viewProgreso;window.TKAPP={S,sb,esc,SVG,fmtR,fmtV,fmtVt,fmtMoney,mOf,sumM,oneR,oneRSrc,planRiskBal,dispCur,moneyOn,prefU,CURS,fmtVabs,fmtLim,fmtMs,num,fmtPct,dayKey,todayKey,evaluate,tradeStats,toast,render,spark,MARKETS,symbolsInfo,lsGet,lsSet,acctName,selAcct,FEELS,greet,initials,minOf,minOfDate,money,inSession,MESES_L,NAV_APPS,appOf,ico,isDark,refreshWidgets,effectivePlan,applyAcct,thumb};
+window.viewPlan=viewPlan;window.viewProgreso=viewProgreso;window.TKAPP={savePlan,S,sb,esc,SVG,fmtR,fmtV,fmtVt,fmtMoney,mOf,sumM,oneR,oneRSrc,planRiskBal,dispCur,moneyOn,prefU,CURS,fmtVabs,fmtLim,fmtMs,num,fmtPct,dayKey,todayKey,evaluate,tradeStats,toast,render,spark,MARKETS,symbolsInfo,lsGet,lsSet,acctName,selAcct,FEELS,greet,initials,minOf,minOfDate,money,inSession,MESES_L,NAV_APPS,appOf,ico,isDark,refreshWidgets,effectivePlan,applyAcct,thumb};
 })();
 </script>
-<link rel="stylesheet" href="extra2.css?v=1103">
-<script src="extra.js?v=18"></script>
+<link rel="stylesheet" href="extra2.css?v=1104">
+<script src="extra.js?v=19"></script>
 <script src="extra2.js?v=72"></script>
 <script src="extra3.js?v=7"></script>
 <script src="extra4.js?v=1"></script>
@@ -2300,6 +2300,7 @@ window.viewPlan=viewPlan;window.viewProgreso=viewProgreso;window.TKAPP={S,sb,esc
 <script src="extra6.js?v=3"></script>
 <script src="extra7.js?v=2"></script>
 <script src="extra8.js?v=3"></script>
-<script src="extra9.js?v=5"></script>
+<script src="extra9.js?v=6"></script>
+<script src="extra10.js?v=1"></script>
 </body>
 </html>

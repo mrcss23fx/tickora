@@ -162,9 +162,9 @@
     return rows.filter(r => r.some(x => x.trim()));
   }
   function importCsv() {
-    const inp = document.createElement("input"); inp.type = "file"; inp.accept = ".csv,text/csv";
+    const inp = document.createElement("input"); inp.type = "file"; inp.accept = ".csv,text/csv,.html,.htm,.xlsx,.xls";
     inp.onchange = async () => {
-      const fl = inp.files[0]; if (!fl) return; const rows = parseCsv(await fl.text()); if (rows.length < 2) { toast("El archivo está vacío"); return; }
+      const fl = inp.files[0]; if (!fl) return; if (/\.(html?|xlsx?)$/i.test(fl.name) && window.tkImportReport) { window.tkImportReport(fl); return; } const rows = parseCsv(await fl.text()); if (rows.length < 2) { toast("El archivo está vacío"); return; }
       const H = rows[0].map(h => norm(h).replace(/[^a-z0-9%]/g, ""));
       const col = (...names) => H.findIndex(h => names.some(n => h === n || h.startsWith(n)));
       const ix = { ot: col("fechaentrada", "opentime", "fecha", "date", "entrytime"), ct: col("fechasalida", "closetime", "exittime"), sym: col("simbolo", "symbol", "instrumento", "mercado"), side: col("direccion", "side", "tipo", "type"), r: col("r", "resultador", "rmultiple"), risk: col("riesgo", "risk"), e: col("entrada", "openprice", "entry", "precioentrada"), x: col("salida", "closeprice", "exit", "preciosalida"), sl: col("stop", "sl", "stoploss"), tp: col("objetivo", "tp", "takeprofit") };

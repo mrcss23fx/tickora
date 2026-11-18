@@ -27,7 +27,7 @@
   function steps() {
     const P = S.menteP || {}, acc = (S.accts || []).length > 0, mt5 = (S.bridges || []).length > 0, planOk = !!S.planDoc;
     const L = [["Hacer el Conócete", "#conocete", P.v === 2, "2 minutos para que Tickora te conozca"], ["Poner tu plan", "#plan", planOk, "Tus normas: operaciones, límite y horario"],
-      ["Añadir tu cuenta", "#cartera", acc, "Para que el límite del día sea exacto"], ["Conectar tu MT5", "#ajustes", mt5, "Tus operaciones llegan solas"]];
+      ["Subir tu historial", "#bienvenida", acc || (S.allTrades || []).length > 0, "30 segundos: Tickora ve cómo operas"], ["Conectar tu MT5", "#ajustes", mt5, "Se apuntan solas y activas tu candado"]];
     const done = L.filter(x => x[2]).length; if (done === L.length || lsGet("tk-steps-off", "")) return "";
     return `<section class="f9-steps" aria-label="Primeros pasos"><div class="f9-row"><span class="f9-tag t">Primeros pasos · ${done} de ${L.length}</span><span class="f9-m">Así Tickora funciona de verdad contigo</span><button type="button" class="f9-x" data-f9="stepsoff" aria-label="Ocultar primeros pasos">${I('<path d="M5 5l10 10M15 5L5 15"/>', 14)}</button></div>
       <div class="f9-sg">${L.map(([t, h, ok, d], i) => `<a class="f9-st${ok ? " ok" : ""}" href="${h}"><i>${ok ? I('<path d="M5 10.5l3 3 7-7"/>', 13) : i + 1}</i><span>${t}<small>${ok ? "Hecho" : d}</small></span></a>`).join("")}</div></section>`;
