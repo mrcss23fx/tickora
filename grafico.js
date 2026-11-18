@@ -108,9 +108,9 @@
         bar: { upColor: up, downColor: down, noChangeColor: p.suave, upBorderColor: up, downBorderColor: down, noChangeBorderColor: p.suave, upWickColor: up, downWickColor: down, noChangeWickColor: p.suave },
         area: { lineColor: p.cob, backgroundColor: [{ offset: 0, color: alpha(p.cob.length === 7 ? p.cob : "#2443c7", .02) }, { offset: 1, color: alpha(p.cob.length === 7 ? p.cob : "#2443c7", .22) }] },
         priceMark: { high: { color: p.suave, textFamily: NUMF }, low: { color: p.suave, textFamily: NUMF }, last: { upColor: up, downColor: down, noChangeColor: p.suave, text: { family: NUMF, size: 11, color: "#ffffff" } } },
-        tooltip: { text: { color: p.suave, family: NUMF, size: 11 } }
+        tooltip: { showRule: window.TkChartLegend ? "none" : "always", text: { color: p.suave, family: NUMF, size: 11 } }
       },
-      indicator: { tooltip: { text: { color: p.suave, family: NUMF, size: 11 } }, lastValueMark: { text: { family: NUMF } }, lines: IND_COLORS().map(c => ({ color: c, size: 1.5, style: "solid", smooth: false, dashedValue: [2, 2] })) },
+      indicator: { tooltip: { showRule: window.TkChartLegend ? "none" : "always", text: { color: p.suave, family: NUMF, size: 11 } }, lastValueMark: { text: { family: NUMF } }, lines: IND_COLORS().map(c => ({ color: c, size: 1.5, style: "solid", smooth: false, dashedValue: [2, 2] })) },
       xAxis: axis, yAxis: axis,
       separator: { color: p.linea, activeBackgroundColor: p.cobA },
       crosshair: { horizontal: { line: { color: p.suave }, text: ctext }, vertical: { line: { color: p.suave }, text: ctext } },
@@ -533,7 +533,7 @@
         figs.push({ type: "text", ignoreEvent: true, attrs: { x: x0 + 4, y: c[2].y + (c[2].y > c[0].y ? 2 : -2), text: "Objetivo +" + nf(rr, 1) + " R · " + fmtP(t), baseline: c[2].y > c[0].y ? "top" : "bottom" }, styles: Object.assign({}, txt, { color: p.cob }) });
       }
       figs.push({ type: "line", ignoreEvent: true, attrs: { coordinates: [{ x: x0, y: c[0].y }, { x: x1, y: c[0].y }] }, styles: { color: p.tinta, size: 1.5 } });
-      const head = ex.result != null ? label + " · " + fmtR(ex.result) : label + (ex.sim ? " · SIMULADA" : "") + " · " + fmtP(e);
+      const head = ex.result != null ? label + " · " + fmtR(ex.result) : (ex.pend ? (ex.pend === "lim" ? "LÍMITE " : "STOP ") : "") + label + (ex.lots ? " " + nf(ex.lots, 2) : "") + (ex.sim && !ex.pend ? " · PRÁCTICA" : "") + (ex.frac && ex.frac < 1 ? " · " + Math.round(ex.frac * 100) + " %" : "") + " · " + (ex.live != null ? fmtR(ex.live) : fmtP(e));
       figs.push({ type: "text", ignoreEvent: true, attrs: { x: x1 - 4, y: c[0].y - 3, text: head, align: "right", baseline: "bottom" }, styles: Object.assign({}, txt, ex.result != null ? { color: "#14213a", backgroundColor: p.rot } : {}) });
       return figs;
     }
@@ -795,6 +795,7 @@
     CUR_TF = st.tf;
     const magMode = () => st.magnet === "strong" ? "strong_magnet" : st.magnet ? "weak_magnet" : "normal";
     const magTitle = () => st.magnet === "strong" ? "Imán fuerte: pega los puntos al precio exacto de la vela" : st.magnet ? "Imán débil: pega los puntos cuando estás cerca de la vela" : "Imán apagado";
+    const HK = {}; // ganchos para grafico2.js (leyenda, práctica, informe…)
     const R = { on: false, all: [], idx: 0, timer: null, speed: ls.get("tk-speed", 2), cb: null, pos: null, trades: [], picking: false, tok: 0, more: false, fetching: false, fails: 0 };
     const groupBtn = g => { const cur = st.last[g[0]] && TOOL_NAME[st.last[g[0]]] ? st.last[g[0]] : g[2].find(x => x[0] !== "#")[0]; return `<div class="gx-grp" data-grp="${g[0]}"><button type="button" class="gx-tool" data-tool="${cur}" aria-pressed="${cur === "cursor"}" aria-label="${esc(TOOL_NAME[cur])}" title="${esc(TOOL_NAME[cur])}">${icon(cur)}</button>${g[2].length > 1 ? `<button type="button" class="gx-more" data-more="${g[0]}" aria-label="Más herramientas: ${esc(g[1])}" title="${esc(g[1])}"><svg width="6" height="6" viewBox="0 0 6 6" aria-hidden="true"><path d="M0 6L6 6 6 0z" fill="currentColor"/></svg></button>` : ""}</div>`; };
     el.innerHTML = `<div class="gx">
@@ -936,7 +937,7 @@
             st.limTold = st.tf; const d = { "1m": "un mes", "3m": "un mes", "5m": "dos meses", "15m": "dos meses", "30m": "dos meses", "45m": "dos meses", "1h": "dos años", "2h": "dos años", "4h": "dos años" }[st.tf];
             if (d) { hint(`El precio público solo guarda ${d} de velas de ${tfName(st.tf)}. Para ver más atrás, usa un marco mayor o conecta tu MT5.`); setTimeout(() => hint(""), 6000); }
           }
-          if (type === "init" && r.bars.length) { st.price = r.bars[r.bars.length - 1].close; opts.onPrice && opts.onPrice(st.price, st.sym); }
+          if (type === "init" && r.bars.length) { st.lastBar = r.bars[r.bars.length - 1]; HK.onData && HK.onData(); st.price = r.bars[r.bars.length - 1].close; opts.onPrice && opts.onPrice(st.price, st.sym); }
           setSrc();
         } catch (e) {
           if (type === "init") msg("No se pudieron cargar los precios de " + st.sym + ". " + (/no disponible/i.test(e.message) ? "Este mercado o marco aún no tiene precios públicos." : "Prueba otra vez en un momento."));
@@ -945,7 +946,7 @@
       },
       subscribeBar: ({ callback }) => {
         if (st.unsub) st.unsub();
-        st.unsub = st.prov.subscribe(st.sym, st.tf, bar => { callback(bar); st.price = bar.close; opts.onPrice && opts.onPrice(bar.close, st.sym); });
+        st.unsub = st.prov.subscribe(st.sym, st.tf, bar => { callback(bar); st.price = bar.close; st.lastBar = bar; opts.onPrice && opts.onPrice(bar.close, st.sym); HK.onBar && HK.onBar(bar, "live"); });
       },
       unsubscribeBar: () => { if (st.unsub) { st.unsub(); st.unsub = null; } }
     };
@@ -976,7 +977,10 @@
         if (["RSI", "MACD", "KDJ", "STOCHRSI", "CCI", "WR", "DMI", "PSY", "BIAS", "VR", "BRAR", "CR", "TRIX", "ROC"].includes(x.n)) v.precision = 2;
         if (["ATR", "MA", "EMA", "WMA", "VWAP", "BOLL", "SAR", "BBI", "ICHIMOKU", "SUPERTREND", "KELTNER", "DONCHIAN"].includes(x.n)) v.precision = digits();
         if (x.c) { const cols = [x.c].concat(def.filter(c => c !== x.c)); v.styles = { lines: cols.map(c => ({ color: c, size: 1.5, style: "solid", smooth: false, dashedValue: [2, 2] })) }; }
-        if (meta[4]) { v.paneId = "candle_pane"; ch.createIndicator(v, true); } else ch.createIndicator(v, false);
+        if (x.h || (x.tfs && x.tfs.length && !x.tfs.includes(st.tf))) v.visible = false;
+        if (x.w || x.ls) { v.styles = v.styles || { lines: def.map(c => ({ color: c, size: 1.5, style: "solid", smooth: false, dashedValue: [2, 2] })) }; v.styles.lines = v.styles.lines.map(l => Object.assign({}, l, x.w ? { size: x.w } : {}, x.ls ? { style: x.ls === "solid" ? "solid" : "dashed", dashedValue: x.ls === "dotted" ? [1, 3] : [5, 4] } : {})); }
+        if (HK.indCreate) HK.indCreate(v, x);
+        if (meta[4] || x.ov) { v.paneId = "candle_pane"; ch.createIndicator(v, true); } else ch.createIndicator(v, false);
       });
     }
     function saveInd(a) { ls.set("tk-ind2", a); applyInd(); }
@@ -1495,8 +1499,9 @@
       $(".gx-stats").innerHTML = n ? `<span>Práctica de hoy: <b>${n}</b> simulada${n > 1 ? "s" : ""}</span><span>Resultado <b class="gx-hl">${fmtR(tot)}</b></span><span>Acierto <b>${Math.round(win / n * 100)} %</b></span><span class="gx-muted">Se guardan aparte: nunca cuentan como operaciones reales.</span>`
         : `<span class="gx-muted">Pulsa Comprar o Vender para abrir una simulada. Mueve el stop y el objetivo arrastrando sus puntos. Se guardan aparte de tus operaciones reales.</span>`;
       $('[data-act="closesim"]').hidden = !R.pos;
-      $$("[data-sim]").forEach(b => { b.disabled = !!R.pos; });
+      $$("[data-sim]").forEach(b => { b.disabled = !HK.openSim && !!R.pos; });
       if (R.on && bar()) { const w = fmtWhen(bar().timestamp); $(".gx-when").textContent = w; $(".gx-btbadge span").textContent = w; }
+      HK.stats && HK.stats();
       const rg = $(".gx-range");
       if (rg && R.all.length) { rg.max = R.all.length - 1; rg.value = R.idx; $(".gx-s0").textContent = fmtWhen(R.all[0].timestamp); rg.style.setProperty("--p", ((R.idx - 1) / Math.max(1, R.all.length - 2) * 100).toFixed(1) + "%"); }
     }
@@ -1552,6 +1557,7 @@
       pause(); if (R.cut) cutMode(false);
       if (R.pos) { ch.removeOverlay({ id: R.pos.id }); R.pos = null; }
       R.all = []; R.idx = 0; R.more = false; R.fetching = false; R.fails = 0;
+      HK.onReset && HK.onReset("tf");
       tfUI(k);
       msg(`Cargando velas de ${tfName(k)}…`);
       let w = null; try { w = await loadWindow(now - (TF_MS[k] || 3e5)); } catch (e) { w = null; }
@@ -1600,13 +1606,13 @@
         pause(); hint("Has llegado al presente."); setTimeout(() => hint(""), 2500); return false;
       }
       if (R.end && bar() && bar().timestamp >= R.end) { pause(); hint("Has llegado al final del periodo de esta sesión."); setTimeout(() => hint(""), 3500); opts.onSessionEnd && opts.onSessionEnd(); return false; }
-      R.idx++; const b = bar(); R.cb && R.cb(b); checkSim(b); stats(); opts.onReplay && opts.onReplay(b.timestamp);
+      R.idx++; const b = bar(); R.cb && R.cb(b); if (HK.onBar) HK.onBar(b, "replay"); else checkSim(b); stats(); opts.onReplay && opts.onReplay(b.timestamp);
       if (R.more && R.all.length - 1 - R.idx < 150) ahead();
       return true;
     }
     function back() {
       if (R.cut) cutMode(false);
-      if (R.idx <= 1) return; pause(); R.idx--;
+      if (R.idx <= 1) return; pause(); R.idx--; HK.onBack && HK.onBack(R.idx);
       if (R.pos && R.idx < R.pos.entryIdx) { ch.removeOverlay({ id: R.pos.id }); R.pos = null; hint("Simulada anulada: has vuelto a antes de la entrada."); setTimeout(() => hint(""), 2500); }
       ch.resetData(); stats();
     }
@@ -1616,7 +1622,7 @@
       R.tok++; R.more = false; R.fetching = false; R.at = null; msg("");
       pause(); if (R.cut) { R.cut = false; ch.removeOverlay({ id: "tkfog" }); el.querySelector(".gx").classList.remove("cut"); $('[data-act="cut"]').setAttribute("aria-pressed", "false"); } if (R.pos) { ch.removeOverlay({ id: R.pos.id }); R.pos = null; }
       ch.removeOverlay({ groupId: "sim" });
-      R.on = false; R.picking = false; hint("");
+      R.on = false; R.picking = false; hint(""); HK.onReset && HK.onReset("exit");
       $(".gx-replay").hidden = true; syncMode(); renderTfq();
       ch.setDataLoader(live); ch.resetData(); setSrc(); setTimeout(() => ch.resize(), 0);
     }
@@ -1647,7 +1653,7 @@
       if (R.cut) { R.cut = false; ch.removeOverlay({ id: "tkfog" }); el.querySelector(".gx").classList.remove("cut"); $('[data-act="cut"]').setAttribute("aria-pressed", "false"); ch.setDataLoader(replayLoader); }
       i = Math.max(1, Math.min(i, R.all.length - 1)); if (i === R.idx) return; pause();
       if (R.more && R.all.length - 1 - i < 150) ahead();
-      if (i > R.idx) { for (let k = R.idx + 1; k <= i; k++) { R.idx = k; checkSim(R.all[k]); } }
+      if (i > R.idx) { for (let k = R.idx + 1; k <= i; k++) { R.idx = k; if (HK.onBar) HK.onBar(R.all[k], "replay", true); else checkSim(R.all[k]); } }
       else { R.idx = i; if (R.pos && R.idx < R.pos.entryIdx) { ch.removeOverlay({ id: R.pos.id }); R.pos = null; hint("Simulada anulada: has vuelto a antes de la entrada."); setTimeout(() => hint(""), 2500); } }
       ch.resetData(); stats();
     }
@@ -1714,7 +1720,7 @@
       if (t.dataset.fa === "dup") { dupSel(); return; }
       if (t.dataset.fa === "lock") { const o = st.sel && getOv(st.sel); if (o) { ch.overrideOverlay({ id: o.id, lock: !o.lock }); t.setAttribute("aria-pressed", String(!o.lock)); save(); } return; }
       if (t.dataset.back) { startAt(Date.now() - (+t.dataset.back) * 864e5); return; }
-      if (t.dataset.sim) { openSim(t.dataset.sim); return; }
+      if (t.dataset.sim) { if (HK.openSim) HK.openSim(t.dataset.sim); else openSim(t.dataset.sim); return; }
       const a = t.dataset.act;
       if (a === "symbol") { modalSymbol(); return; }
       if (a === "ind") { modalInd(); return; }
@@ -1735,14 +1741,14 @@
       if (a === "hide") { st.hidden = !st.hidden; t.setAttribute("aria-pressed", String(st.hidden)); ch.getOverlays({ groupId: "draw" }).forEach(o => ch.overrideOverlay({ id: o.id, visible: !st.hidden })); return; }
       if (a === "clear") { if (ch.getOverlays({ groupId: "draw" }).length && window.confirm("¿Borrar todos los dibujos de " + st.sym + "? Puedes deshacerlo con la flecha de deshacer.")) { ch.removeOverlay({ groupId: "draw" }); F.hidden = true; queueSave(); } return; }
       if (a === "exit") { exitReplay(); return; }
-      if (a === "restart") { pause(); if (R.pos) { ch.removeOverlay({ id: R.pos.id }); R.pos = null; } R.picking = true; $(".gx-start").hidden = false; $(".gx-play").hidden = true; ch.setDataLoader(live); ch.resetData(); hint("Toca otra vela o elige una fecha."); return; }
+      if (a === "restart") { pause(); if (R.pos) { ch.removeOverlay({ id: R.pos.id }); R.pos = null; } HK.onReset && HK.onReset("restart"); R.picking = true; $(".gx-start").hidden = false; $(".gx-play").hidden = true; ch.setDataLoader(live); ch.resetData(); hint("Toca otra vela o elige una fecha."); return; }
       if (a === "play") { play(); return; }
       if (a === "next") { pause(); step(); return; }
       if (a === "prev") { back(); return; }
       if (a === "cut") { cutMode(!R.cut); return; }
       if (a === "back10") { if (R.cut) cutMode(false); jumpTo(R.idx - 10); return; }
       if (a === "fwd10") { jumpTo(R.idx + 10); return; }
-      if (a === "closesim") { if (R.pos) closeSim(bar().close, bar()); return; }
+      if (a === "closesim") { if (HK.closeAll) HK.closeAll(); else if (R.pos) closeSim(bar().close, bar()); return; }
       if (a === "godate") { const v = $(".gx-date input").value; if (v) startAt(new Date(v).getTime()); return; }
     });
     el.addEventListener("input", e => { const f = e.target.dataset.f; if (f === "text") { patchSel({ text: e.target.value }); const other = [...el.querySelectorAll('[data-f="text"]')].find(x => x !== e.target); if (other) other.value = e.target.value; } if (e.target.classList.contains("gx-range")) jumpTo(+e.target.value); });
@@ -1816,15 +1822,19 @@
       price: () => st.price,
       stop() { pause(); if (st.unsub) { st.unsub(); st.unsub = null; } }
     };
+    me.hk = HK;
+    me.X = { st, R, ch, $, $$, hint, msg, digits, bar, applyInd, activeInd, saveInd, openModal, closeModal, openPop, closePop, stats, setSrc, opts, tfName, fmtWhen, load, setTf, live, replayLoader, pause, step, get MODE() { return MODE; } };
     ALL.add(me); ALL.forEach(x => x.el.classList.toggle("tk-act", x === me));
     load(); applyInd(); restore(); renderFav(); applyCursor(); renderTfq();
     if (ls.get("tk-notools", false)) el.querySelector(".gx").classList.add("notools");
     if (st.last.cursor === "eraser" || !st.last.cursor) showInGroup("cursor", st.baseCur);
     st.tool = st.baseCur; $$("[data-tool]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.tool === st.baseCur)));
+    (window.TkChartExt || []).forEach(f => { try { f(me, me.X, HK); } catch (e) { console.error("TkChartExt", e); } });
     return me;
   }
   function destroyOne(x) {
     try { x.flush && x.flush(); } catch (e) { /* nada pendiente */ }
+    try { x.hk && x.hk.destroy && x.hk.destroy(); } catch (e) { /* nada */ }
     try { x.stop(); x.ro.disconnect(); document.removeEventListener("keydown", x.onKey); KC.dispose(x.el.querySelector(".gx-chart")); } catch (e) { /* ya no existe */ }
     ALL.delete(x); if (inst === x) inst = Array.from(ALL)[0] || null;
   }
@@ -1840,5 +1850,5 @@
   }
   /* velas sueltas para el cuadro de la portada */
   function bars(sym, tf, o) { o = o || {}; const prov = binSym(sym) ? binance() : publico(o.invoke, o.digits != null ? o.digits : guessDigits(sym)); return prov.bars(sym, tf, null); }
-  window.TkChart = { mount, destroy, quote, bars, digits: guessDigits, sources: { binance, publico }, get current() { return inst; }, get all() { return Array.from(ALL); } };
+  window.TkChart = { mount, destroy, quote, bars, digits: guessDigits, sources: { binance, publico }, U: { TFS, TF_MS, TF_SHORT, DERIV, IND, IND_BY, CATS, CFG, pal, styles, aggBars, tidyBars, fmtR, icon, get DARK() { return DARK; } }, get current() { return inst; }, get all() { return Array.from(ALL); } };
 })();

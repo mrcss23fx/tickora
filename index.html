@@ -908,7 +908,8 @@ body.bt-mode .live-only{display:none!important}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/klinecharts@10.1.0/dist/umd/klinecharts.min.js"></script>
-<script src="grafico.js?v=18"></script>
+<script src="grafico.js?v=19"></script>
+<script src="grafico2.js?v=1"></script>
 </head>
 <body>
 <div id="app" aria-live="polite"></div>
@@ -1907,6 +1908,7 @@ function chartOpts(i){
       document.querySelectorAll("[data-side]").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.side===a.side)));paintAnalizar();toast("Boleto rellenado con tu dibujo")}:null,
     loadDrawings:async sym=>{const {data,error}=await sb.from("docs").select("data,updated_at").eq("col","draw").eq("id",sym).maybeSingle();if(error)throw error;if(!data||!data.data||!data.data.list)return null;return {list:data.data.list,t:data.data.t||0}},
     saveDrawings:async(sym,list,t)=>{const {error}=await sb.from("docs").upsert({user_id:S.user.id,col:"draw",id:sym,data:{list,t:t||Date.now()},updated_at:new Date().toISOString()});if(error&&!S.drawErr){S.drawErr=1;toast("No se pudieron guardar los dibujos en la nube; quedan en este navegador")}},
+    lotsFor:(sym,e,st,money)=>{const info=symbolsInfo().find(x=>x.s===sym);if(!info||!info.ts||!info.tv||!money||e==null||st==null||e===st)return null;const lpl=Math.abs(e-st)/info.ts*info.tv;let l=Math.floor((money/lpl)/(info.vstep||0.01)+1e-9)*(info.vstep||0.01);if(info.vmax)l=Math.min(l,info.vmax);return l>=(info.vmin||0.01)?+l.toFixed(2):null},
     saveSim:async rec=>{const row=Object.assign({user_id:S.user.id},rec);if(main&&S.btRun)row.session_id=S.btRun.id;const {error}=await sb.from("sim_trades").insert(row);if(error)toast("No se pudo guardar la simulada");else if(main&&window.tkSessionHooks)tkSessionHooks.saved(Object.assign({},rec))}
   };
 }
@@ -2291,8 +2293,8 @@ if(SB_OK){
 window.viewPlan=viewPlan;window.viewProgreso=viewProgreso;window.TKAPP={savePlan,S,sb,esc,SVG,fmtR,fmtV,fmtVt,fmtMoney,mOf,sumM,oneR,oneRSrc,planRiskBal,dispCur,moneyOn,prefU,CURS,fmtVabs,fmtLim,fmtMs,num,fmtPct,dayKey,todayKey,evaluate,tradeStats,toast,render,spark,MARKETS,symbolsInfo,lsGet,lsSet,acctName,selAcct,FEELS,greet,initials,minOf,minOfDate,money,inSession,MESES_L,NAV_APPS,appOf,ico,isDark,refreshWidgets,effectivePlan,applyAcct,thumb};
 })();
 </script>
-<link rel="stylesheet" href="extra2.css?v=1107">
-<script src="extra.js?v=20"></script>
+<link rel="stylesheet" href="extra2.css?v=1108">
+<script src="extra.js?v=21"></script>
 <script src="extra2.js?v=73"></script>
 <script src="extra3.js?v=7"></script>
 <script src="extra4.js?v=1"></script>

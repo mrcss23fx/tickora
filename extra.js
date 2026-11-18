@@ -867,7 +867,7 @@
   };
   function run(x, sym) {
     const from = new Date(x.from + "T00:00").getTime(), to = new Date(x.to + "T23:59:59").getTime();
-    S.btRun = { id: x.id, name: x.name, mode: x.mode, sym: sym || x.syms[0], start: x.lastTs && x.lastTs < to ? x.lastTs : from, end: Math.min(to, Date.now()) };
+    S.btRun = { id: x.id, name: x.name, mode: x.mode, size: +x.size || 0, risk: +x.risk || 0, target: +x.target || 0, daily: +x.daily || 0, max: +x.max || 0, from: x.from, to: x.to, sym: sym || x.syms[0], start: x.lastTs && x.lastTs < to ? x.lastTs : from, end: Math.min(to, Date.now()) };
     location.hash = "#analizar";
   }
   /* -------- panel «Nueva sesión» -------- */
