@@ -839,7 +839,7 @@
     let MODE = MODES[KEY] || "live";
     let me = null;
     DARK = !!opts.dark;
-    const st = { sym: opts.sym, tf: ls.get(TFK, opts.tf || "5m"), tool: "cursor", magnet: ls.get("tk-magnet", false), stay: ls.get("tk-stay", false), favShow: ls.get("tk-favshow", true), fav: ls.get("tk-fav", ["segment", "horizontalStraightLine", "fibonacciLine", "tkRect", "tkLong", "tkShort", "tkText"]), baseCur: ["cursor", "cursorDot", "cursorArrow"].includes(ls.get("tk-cur", "cursor")) ? ls.get("tk-cur", "cursor") : "cursor", emoji: "🚀", hidden: false, locked: false, sel: null, prov: null, unsub: null, quiet: false, price: null,
+    const st = { sym: opts.sym, tf: ls.get(TFK, opts.tf || "5m"), tool: "cursor", magnet: ls.get("tk-magnet", false), stay: ls.get("tk-stay", false), favShow: ls.get("tk-favshow", !matchMedia("(max-width: 760px)").matches), fav: ls.get("tk-fav", ["segment", "horizontalStraightLine", "fibonacciLine", "tkRect", "tkLong", "tkShort", "tkText"]), baseCur: ["cursor", "cursorDot", "cursorArrow"].includes(ls.get("tk-cur", "cursor")) ? ls.get("tk-cur", "cursor") : "cursor", emoji: "🚀", hidden: false, locked: false, sel: null, prov: null, unsub: null, quiet: false, price: null,
       color: ls.get("tk-color", null), last: ls.get("tk-lasttool", {}), hist: [], fut: [] };
     if (!TF_MS[st.tf]) st.tf = "5m";
     CUR_TF = st.tf;
