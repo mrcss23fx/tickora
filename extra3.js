@@ -232,12 +232,13 @@
   }
   function sheet(t) {
     if (document.querySelector(".dj-sheet") || !t) return;
-    const ev = evaluate(t), loss = t.r < 0, rv = { mot: [], strat: null };
+    const ev = evaluate(t), loss = t.r < 0, rv = { mot: [], strat: null, feel: (t.review || {}).feel || null };
     const recT = loss ? recFor("perdida") : null;
     const box = document.createElement("div"); box.className = "dj-sheet"; box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true"); box.setAttribute("aria-label", "¿Por qué entraste?");
     const paint = () => { box.innerHTML = `<div class="dj-sp2"><span class="dj-hd" aria-hidden="true"></span>
       <h3>¿Por qué entraste?</h3><div class="dj-auto">${esc(t.symbol)} · ${t.side === "buy" ? "Compra" : "Venta"} · ${fmtV(t.r, A.mOf(t))} · ${ev.good ? (loss ? "respetaste tu plan" : "dentro del plan") : "fuera del plan"}</div>
       ${recT ? `<div class="dj-rec"><span class="dj-k">Tu recordatorio</span>${esc(recT)}</div>` : ""}
+      ${healthOk() ? `<p class="dj-q2">¿Cómo te sentías? <span class="muted">(un toque)</span></p><div class="dj-chips">${(A.FEELS || []).map(f => `<button type="button" class="dj-chip${rv.feel === f ? " on" : ""}" data-sfeel="${esc(f)}">${esc(f)}</button>`).join("")}</div><p class="dj-q2">¿Por qué entraste?</p>` : ""}
       ${chips(WHY, rv.mot, "data-swhy")}
       ${strats().length ? `<p class="dj-q2">¿Qué estrategia era?</p><div class="dj-chips">${strats().map(s => `<button type="button" class="dj-chip st${rv.strat === s.id ? " on" : ""}" data-sst="${esc(s.id)}">${esc(s.name)}</button>`).join("")}</div>` : ""}
       <div class="dj-in"><textarea id="sh-tx" class="dj-ta" rows="2" maxlength="400" placeholder="Cuéntalo en una frase (opcional)…"></textarea>${micBtn("sh-tx")}</div>
@@ -247,15 +248,16 @@
     const skip = () => { const L = lsGet("tk-whyskip", []); L.push(t.id); lsSet("tk-whyskip", L.slice(-200)); close(); };
     const bind = () => {
       box.querySelectorAll("[data-swhy]").forEach(b => b.onclick = () => { const c = b.dataset.swhy; rv.mot = rv.mot.includes(c) ? rv.mot.filter(x => x !== c) : rv.mot.concat(c); const tx = box.querySelector("#sh-tx").value; paint(); box.querySelector("#sh-tx").value = tx; });
+      box.querySelectorAll("[data-sfeel]").forEach(b => b.onclick = () => { rv.feel = rv.feel === b.dataset.sfeel ? null : b.dataset.sfeel; const tx = box.querySelector("#sh-tx").value; paint(); box.querySelector("#sh-tx").value = tx; });
       box.querySelectorAll("[data-sst]").forEach(b => b.onclick = () => { rv.strat = rv.strat === b.dataset.sst ? null : b.dataset.sst; const tx = box.querySelector("#sh-tx").value; paint(); box.querySelector("#sh-tx").value = tx; });
       box.querySelectorAll("[data-mic]").forEach(b => b.onclick = () => startMic(b));
       box.querySelector("[data-sno]").onclick = skip;
-      box.querySelector("[data-sok]").onclick = async () => { const tx = box.querySelector("#sh-tx").value.trim(); if (!rv.mot.length && !rv.strat && !tx) { skip(); return; } await setReview(t, { mot: rv.mot, strat: rv.strat, wtxt: tx }); toast("Anotado. +1 a tu diario de hoy"); close(); if ((location.hash || "").startsWith("#diario")) re(); };
+      box.querySelector("[data-sok]").onclick = async () => { const tx = box.querySelector("#sh-tx").value.trim(); if (!rv.mot.length && !rv.strat && !tx && !rv.feel) { skip(); return; } await setReview(t, Object.assign({ mot: rv.mot, strat: rv.strat, wtxt: tx }, rv.feel ? { feel: rv.feel } : {})); toast("Anotado. +1 a tu diario de hoy"); close(); if ((location.hash || "").startsWith("#diario")) re(); };
     };
     box.addEventListener("click", e => { if (e.target === box) skip(); });
     document.addEventListener("keydown", ek); paint(); document.body.appendChild(box); requestAnimationFrame(() => box.classList.add("in"));
   }
-  function checkSheet() { if (document.hidden || /^#(analizar|diario)/.test(location.hash || "")) return; const t = pendingTrade(); if (t) sheet(t); }
+  function checkSheet() { if (document.hidden || window.tkGuardianBusy || /^#(analizar|diario)/.test(location.hash || "")) return; const t = pendingTrade(); if (t) sheet(t); }
   window.tkWhySheet = checkSheet;
 
   /* ---------------- Mis estrategias ---------------- */

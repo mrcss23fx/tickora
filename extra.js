@@ -1144,7 +1144,49 @@
   const groupBy = (L, f) => { const g = {}; L.forEach(t => { const k = f(t); (g[k] = g[k] || []).push(t); }); return Object.entries(g).map(([k, l]) => ({ k, l, st: tradeStats(l) })); };
   const pick = (G, min, cmp) => G.filter(x => x.st.n >= min).sort(cmp)[0];
   const li = s => `<li>${s}</li>`;
+  /* filtro: nunca recomendaciones de inversión (reglas.js, con tests) y dos preguntas nuevas: la semana y el riesgo */
   function answer(raw) {
+    const R = window.TkRules;
+    if (R && R.isAdvice(raw)) return R.ADVICE_REPLY;
+    const q = norm(raw), C = closed(S.trades);
+    let out = null;
+    if (C.length && /semana|como voy|que tal voy/.test(q) && !/dia de la semana/.test(q)) out = weekAns(C);
+    else if (C.length && /riesgo|lotaje|tamano|tamaño|arriesg/.test(q)) out = riskAns(C);
+    if (out == null) out = answer0(raw);
+    return R ? R.safeOut(out) : out;
+  }
+  function weekAns(C) {
+    const mon = new Date(); mon.setHours(0, 0, 0, 0); mon.setDate(mon.getDate() - (mon.getDay() + 6) % 7);
+    const prev = new Date(mon); prev.setDate(prev.getDate() - 7);
+    const W = C.filter(t => new Date(t.open_time) >= mon), P = C.filter(t => new Date(t.open_time) >= prev && new Date(t.open_time) < mon);
+    if (!W.length) return `Esta semana aún no has cerrado ninguna operación.${P.length ? ` La semana pasada: ${P.length} operaciones, ${Math.round(P.filter(t => evaluate(t).good).length / P.length * 100)} % dentro del plan.` : ""}`;
+    const st = tradeStats(W), g = W.filter(t => evaluate(t).good).length, ev = W.filter(t => !evaluate(t).good), evL = ev.filter(t => +t.r < 0);
+    const evR = evL.reduce((s, t) => s - +t.r, 0), pg = P.length ? Math.round(P.filter(t => evaluate(t).good).length / P.length * 100) : null, pc = Math.round(g / W.length * 100);
+    const fo = window.tkFocoOf && window.tkFocoOf(dayKey(mon));
+    return `Esta semana llevas <b>${W.length}</b> ${W.length === 1 ? "operación" : "operaciones"}: ${fmtV(st.tot, st.mt)}, y <b>${pc} %</b> dentro de tu plan${pg != null ? ` (la semana pasada, ${pg} %)` : ""}.` +
+      (ev.length ? ` Has tenido ${ev.length} ${ev.length === 1 ? "operación evitable" : "operaciones evitables"}${evR ? `, que te ${ev.length === 1 ? "costó" : "costaron"} ${num(evR, 1)} R` : ""}.` : " Ninguna fuera del plan: así se hace.") +
+      (fo ? ` Tu foco es «${esc(fo.label)}».` : "") + ` El detalle, en <a href="#ahorro">Lo que te ahorras</a>.`;
+  }
+  function riskAns(C) {
+    const p = S.plan || {}, W = C.filter(t => t.risk_pct != null);
+    if (W.length < 3) return "Aún no tengo el riesgo de suficientes operaciones (hace falta el stop y el tamaño de cada una, que manda MetaTrader 5). Con unas pocas más te digo cuándo te pasas.";
+    const over = W.filter(t => +t.risk_pct > p.riskPct * 1.15), avg = W.reduce((s, t) => s + +t.risk_pct, 0) / W.length;
+    if (!over.length) return `Respetas tu riesgo: en ${W.length} operaciones has arriesgado de media un ${num(avg, 2)} % y nunca más de tu ${num(p.riskPct, 2)} % (con un margen del 15 %).`;
+    const S2 = C.slice().sort((a, b) => new Date(a.open_time) - new Date(b.open_time)), afterLoss = t => { const i = S2.indexOf(t), pr = S2[i - 1]; return !!(pr && dayKey(pr.open_time) === dayKey(t.open_time) && +pr.r < 0); };
+    const oL = over.filter(afterLoss).length, aL = W.filter(afterLoss).length, rest = W.length - aL;
+    const pAfter = aL ? Math.round(over.filter(afterLoss).length / aL * 100) : null, pRest = rest ? Math.round((over.length - oL) / rest * 100) : null;
+    const feels = {}; over.forEach(t => { const f = (t.review || {}).feel; if (f) feels[f] = (feels[f] || 0) + 1; }); const tf = Object.entries(feels).sort((a, b) => b[1] - a[1])[0];
+    const hrs = {}; over.forEach(t => { const h = new Date(t.open_time).getHours(); hrs[h] = (hrs[h] || 0) + 1; }); const th = Object.entries(hrs).sort((a, b) => b[1] - a[1])[0];
+    const st = tradeStats(over);
+    let why = [];
+    if (pAfter != null && pRest != null && pAfter > pRest + 10) why.push(`después de una pérdida te pasas mucho más (${pAfter} % de las veces, frente a ${pRest} % el resto)`);
+    if (tf && tf[1] >= 2) why.push(`muchas veces llegabas «${esc(tf[0].toLowerCase())}» (${tf[1]} de ${over.length})`);
+    if (th && th[1] >= 2 && over.length >= 3) why.push(`se repite sobre las ${th[0]}:00`);
+    return `Te has pasado de tu riesgo (${num(p.riskPct, 2)} %) en <b>${over.length} de ${W.length}</b> operaciones; esas te dejan ${fmtV(st.tot, st.mt)}.` +
+      (why.length ? ` Lo que dicen tus datos: ${why.join("; ")}.` : " No veo un patrón claro todavía: anota cómo te sentías en cada operación y lo encontraré.") +
+      ` Tu norma es la misma gane o pierda la anterior: calcula el tamaño antes de entrar. Tu guardián te avisa si subes el lotaje justo después de perder.`;
+  }
+  function answer0(raw) {
     const q = norm(raw), C = closed(S.trades);
     if (!C.length && !/backtest|simulad|practica/.test(q)) return `Aún no tienes operaciones cerradas${selAcct() ? " en esta cuenta" : ""}. Cuando conectes MetaTrader 5 y operes, podré responderte con tus números.`;
     const has = (...w) => w.some(x => q.includes(x));

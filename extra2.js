@@ -1417,6 +1417,8 @@
     const cnt = {}; C.filter(t => { const d = new Date(dateOf(t)); return d < mon && d >= mon - 30 * 864e5; }).forEach(t => keysOf(t).forEach(k => cnt[k] = (cnt[k] || 0) + 1));
     let top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
     if (!top) { const c2 = {}; C.filter(t => new Date(dateOf(t)) >= Date.now() - 30 * 864e5).forEach(t => keysOf(t).forEach(k => c2[k] = (c2[k] || 0) + 1)); top = Object.entries(c2).sort((a, b) => b[1] - a[1])[0]; }
+    const FM = { stop: "stop", stopmov: "stop", riesgo: "risk", horario: "hora", maxops: "max", limite: "lim" }, fo = window.tkFocoOf && window.tkFocoOf(dayKey(mon)), fk = fo && FM[fo.k];
+    if (fk) top = [fk, cnt[fk] || 0, true];
     const tk = todayKey();
     // misión
     let mis;
@@ -1426,7 +1428,7 @@
       for (let i = 0; i < 5; i++) { const d = new Date(mon); d.setDate(d.getDate() + i); const dk = dayKey(d), T = C.filter(t => dayKey(dateOf(t)) === dk), br = T.some(t => keysOf(t).has(k));
         days.push(`<div class="${dk > tk ? "fu" : br ? "no" : T.length ? "ok" : dk === tk ? "" : "nt"}${dk === tk ? " td" : ""}"><b>${dk > tk ? "" : br ? ico("x", 15, 2.6) : T.length ? ico("check", 16, 2.6) : dk === tk ? "Hoy" : "—"}</b>${d.toLocaleDateString("es-ES", { weekday: "short" }).replace(".", "")}</div>`); }
       const okN = days.filter(x => x.startsWith('<div class="ok')).length;
-      mis = `<div class="tr-ms"><span class="tr-k hl">Tu misión de esta semana</span><h2>${MISS[k].replace("{mx}", mx)}</h2><p class="tr-sub">La has roto ${top[1]} ${top[1] === 1 ? "vez" : "veces"} en los últimos 30 días. Es la que más te cuesta.</p>
+      mis = `<div class="tr-ms"><span class="tr-k hl">Tu misión de esta semana</span><h2>${MISS[k].replace("{mx}", mx)}</h2><p class="tr-sub">${top[2] ? `La elegiste como foco de esta semana${top[1] ? ` · la rompiste ${top[1]} ${top[1] === 1 ? "vez" : "veces"} en los 30 días anteriores` : ""}.` : `La has roto ${top[1]} ${top[1] === 1 ? "vez" : "veces"} en los últimos 30 días. Es la que más te cuesta.`}</p>
         <div class="tr-wk">${days.join("")}</div><div class="tr-wl">${okN ? `${okN} ${okN === 1 ? "día cumplida" : "días cumplida"} esta semana` : "Cada día que operes y la cumplas, se marca aquí."}<span>· sin operar no cuenta ni suma</span></div>
         <div class="tr-tip"><b>Truco para hoy:</b> ${TIPS[k]}</div></div>`;
     }

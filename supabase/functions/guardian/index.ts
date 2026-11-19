@@ -4,7 +4,7 @@
 // Guarda cada aviso en agent_events (la memoria común) y envía al móvil el más importante que sea nuevo.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3";
-import "https://mrcss23fx.github.io/tickora/reglas.js?v=1";
+import "./reglas.js";
 const R = (globalThis as any).TkRules;
 
 const DEFAULT_PLAN = { riskPct: 0.5, maxTrades: 3, dayLimitR: 2, start: "15:30", end: "17:30", rules: [{ si: "pierdo dos seguidas,", entonces: "me levanto 15 minutos." }] };

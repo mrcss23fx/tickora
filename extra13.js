@@ -127,6 +127,7 @@
         <div class="card sv-c"><div class="sv-k">Partidas ganadas</div><div class="sv-stat">${W.won} de ${W.days}</div><div class="sv-meter"><i style="width:${W.days ? Math.round(W.won / W.days * 100) : 0}%" class="v"></i></div><small class="muted">Días de la semana sin ninguna operación fuera del plan</small></div>
         <div class="card sv-c"><div class="sv-k">Errores evitables</div><div class="sv-stat">${W.evN}</div><div class="sv-meter"><i style="width:${Math.min(100, W.evN / Math.max(1, Mo.bEvN, W.evN) * 100)}%" class="r"></i></div><small class="muted">${Mo.pre ? "Antes de Tickora" : "Al empezar"}: ${num(Mo.bEvN, 1).replace(/,0$/, "")} por semana</small></div>
       </div>
+      ${window.tkFocoBlock ? window.tkFocoBlock() : ""}
       <div class="sv-acts"><a class="btn" href="#errores">Ver mis errores</a><button type="button" class="btn ghost" data-svsave>Guardar en mi diario</button></div>
       <p class="muted small" style="margin:0">Desde que empezaste: ${Mo.total >= 0 ? `${fmt(Mo.total)} menos en errores evitables que ${ref}` : `tus errores evitables te han costado ${fmt(-Mo.total)} más que ${ref}`}.</p></div>`;
   }

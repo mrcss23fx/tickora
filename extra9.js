@@ -81,6 +81,7 @@
     const head = inS.length ? `Hoy hay ${inS.length === 1 ? "una noticia fuerte" : inS.length + " noticias fuertes"} dentro de tu horario: ${inS.slice(0, 2).map(e => `${esc(e.title)} a las ${new Date(e.ts).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}`).join(" y ")}.`
       : nh.length ? "Las noticias fuertes de hoy caen fuera de tu horario." : "Hoy no hay noticias fuertes.";
     return `<div class="f9-card f9-morn"><h2 class="f9-lbl">Tu mañana · la escribe Tickora</h2><p class="f9-serif">${head}</p>
+      ${window.tkCoachLines ? window.tkCoachLines() : ""}
       <p class="f9-p">${rule ? `Tu regla: si ${esc(rule.si)} ${esc(rule.entonces)}` : ""}${ayer ? ` Ayer te dijiste: <i>«${esc(ayer)}»</i>.` : ""}</p>
       <div class="f9-row">${S.planOk && S.planOk.day === todayKey() ? `<span class="f9-ok">${I('<path d="M5 10.5l3 3 7-7"/>', 14)} Te comprometiste a las ${new Date(S.planOk.ts).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</span>` : `<button type="button" class="x-ch pri" data-hc-commit>Me comprometo hoy</button>`}<a class="f9-link" href="#hoy">Ver Mi día</a></div></div>`;
   }

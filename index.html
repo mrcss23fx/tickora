@@ -2281,8 +2281,11 @@ function bindView(r){
     };
     const ni=$i("nameInput");ni.onchange=async()=>{const n=ni.value.trim().slice(0,40);if(!n)return;S.name=n;await sb.auth.updateUser({data:{name:n}});toast("Nombre guardado")};
     $i("logoutBtn").onclick=()=>sb.auth.signOut();
-    $i("exportBtn").onclick=()=>{
-      const blob=new Blob([JSON.stringify({exportado:new Date().toISOString(),plan:S.planDoc,operaciones:S.trades,permisos:S.consents},null,2)],{type:"application/json"});
+    $i("exportBtn").onclick=async()=>{
+      // RGPD: todo lo tuyo, de todas las tablas (cada usuario solo puede leer lo suyo)
+      const T=["trades","docs","sim_trades","agent_events","alerts","alert_events","consents","bridge_lockev"],extra={};
+      for(const t of T){try{const {data}=await sb.from(t).select("*").limit(20000);if(data)extra[t]=data}catch(e){}}
+      const blob=new Blob([JSON.stringify({exportado:new Date().toISOString(),plan:S.planDoc,permisos:S.consents,tablas:extra},null,2)],{type:"application/json"});
       const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="mis-datos-tickora.json";document.body.appendChild(a);a.click();a.remove();
     };
     $i("delBtn").onclick=async()=>{
@@ -2319,22 +2322,24 @@ if(SB_OK){
   sb.auth.onAuthStateChange((event,session)=>{setTimeout(()=>onSession(session,event),0)});
   sb.auth.getSession().then(({data})=>onSession(data.session,"INIT"));
 }else render();
-window.viewPlan=viewPlan;window.viewProgreso=viewProgreso;window.TKAPP={savePlan,S,sb,esc,SVG,fmtR,fmtV,fmtVt,fmtMoney,mOf,sumM,oneR,oneRSrc,planRiskBal,dispCur,moneyOn,prefU,CURS,fmtVabs,fmtLim,fmtMs,num,fmtPct,dayKey,todayKey,evaluate,tradeStats,toast,render,spark,MARKETS,symbolsInfo,lsGet,lsSet,acctName,selAcct,FEELS,greet,initials,minOf,minOfDate,money,inSession,MESES_L,NAV_APPS,appOf,ico,isDark,refreshWidgets,effectivePlan,applyAcct,thumb};
+window.viewPlan=viewPlan;window.viewProgreso=viewProgreso;window.TKAPP={savePlan,planFor,S,sb,esc,SVG,fmtR,fmtV,fmtVt,fmtMoney,mOf,sumM,oneR,oneRSrc,planRiskBal,dispCur,moneyOn,prefU,CURS,fmtVabs,fmtLim,fmtMs,num,fmtPct,dayKey,todayKey,evaluate,tradeStats,toast,render,spark,MARKETS,symbolsInfo,lsGet,lsSet,acctName,selAcct,FEELS,greet,initials,minOf,minOfDate,money,inSession,MESES_L,NAV_APPS,appOf,ico,isDark,refreshWidgets,effectivePlan,applyAcct,thumb};
 })();
 </script>
-<link rel="stylesheet" href="extra2.css?v=1113">
-<script src="extra.js?v=21"></script>
-<script src="extra2.js?v=74"></script>
-<script src="extra3.js?v=7"></script>
+<link rel="stylesheet" href="extra2.css?v=1114">
+<script src="extra.js?v=22"></script>
+<script src="extra2.js?v=75"></script>
+<script src="extra3.js?v=8"></script>
 <script src="extra4.js?v=1"></script>
 <script src="extra5.js?v=2"></script>
 <script src="extra6.js?v=3"></script>
 <script src="extra7.js?v=2"></script>
 <script src="extra8.js?v=3"></script>
-<script src="extra9.js?v=8"></script>
+<script src="extra9.js?v=9"></script>
 <script src="extra10.js?v=1"></script>
 <script src="extra11.js?v=1"></script>
 <script src="extra12.js?v=1"></script>
-<script src="extra13.js?v=1"></script>
+<script src="extra13.js?v=2"></script>
+<script src="reglas.js?v=1"></script>
+<script src="extra14.js?v=1"></script>
 </body>
 </html>
