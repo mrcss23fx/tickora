@@ -3324,3 +3324,37 @@ html[data-theme="light"] .f9-tag.t{color:#1f8f80}
 }
 @media (max-width:860px){.gx-lgr.g3-lgc{display:flex}.g3-dw{width:172px;font-size:11px}.g3-dl dd{font-size:11px}}
 @media (max-width:760px){.g3-bot{height:38px}.g3-b{height:30px}.g3-clock .g3-z{display:none}}
+.mk-b.c-fut{background:rgba(79,209,219,.14);color:var(--mk-fut,#0b8a96)}:root[data-theme="dark"] .mk-b.c-fut{--mk-fut:#4fd1db}
+.tk-fullchart .side-hot,.tk-fullchart .side-tab{display:none!important}
+/* ---------- Ajustes del gráfico con los apartados de TradingView (grafico.js) ---------- */
+.gx-stabs button{display:flex;align-items:center;gap:9px}.gx-stabs button svg{flex:none;opacity:.8}
+.gx-ssec{padding:14px 0 4px!important;margin-top:2px}.gx-sbody>.gx-ssec:first-child,.gx-sprev+.gx-ssec{padding-top:6px!important}
+.gx-sdesc{margin:-4px 0 6px 25px;font-size:12px;line-height:1.45;color:var(--suave)}
+.gx-sbody>.gx-sdesc:first-child{margin-left:0}
+.gx-srng{display:inline-flex;align-items:center;gap:8px}.gx-srng input{width:120px;accent-color:var(--tinta)}.gx-srng i{font-style:normal;font-size:12px;color:var(--suave);min-width:40px;text-align:right;font-variant-numeric:tabular-nums}
+.gx-srow select.gx-ssty{min-width:116px}
+.gx-srow .gx-spair select.gx-in{min-width:110px}
+/* línea de estado */
+.gx-lglogo{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:6px;font:700 8.5px/1 Inter,system-ui,sans-serif;letter-spacing:-.02em;font-style:normal;background:var(--cobaltoC);color:var(--tinta);flex:none}
+.gx-lglogo.c-fx{background:rgba(123,147,255,.18);color:var(--g2up,#2443c7)}.gx-lglogo.c-com{background:rgba(251,226,122,.22);color:#7a6100}.gx-lglogo.c-cry{background:rgba(167,139,250,.2);color:#5b3fc4}.gx-lglogo.c-fut{background:rgba(79,209,219,.18);color:#0b7f8a}.gx-lglogo.c-stk,.gx-lglogo.c-etf,.gx-lglogo.c-otro,.gx-lglogo.c-bnd{background:var(--sub);box-shadow:inset 0 0 0 1px var(--linea)}
+:root[data-theme="dark"] .gx-lglogo.c-com{color:#f3dc7a}:root[data-theme="dark"] .gx-lglogo.c-cry{color:#c4b5fd}:root[data-theme="dark"] .gx-lglogo.c-fut{color:#4fd1db}:root[data-theme="dark"] .gx-lglogo.c-fx{color:#86a9ff}
+.gx-mko{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--suave)}.gx-mko i{width:7px;height:7px;border-radius:50%;background:var(--suave);opacity:.6}
+.gx-mko.on{color:var(--tinta2,var(--tinta))}.gx-mko.on i{background:var(--cobalto);opacity:1;box-shadow:0 0 0 3px color-mix(in srgb,var(--cobalto) 22%,transparent)}
+.gx-lg.bg{background:color-mix(in srgb,var(--card) var(--lgbg,70%),transparent);padding:5px 8px;border-radius:10px;margin:-5px 0 0 -8px}
+.gx-qo[hidden]{display:none!important}
+/* botones de navegación y «+» de la escala (grafico3.js) */
+.g3-nav{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:7;display:flex;gap:2px;padding:3px;background:color-mix(in srgb,var(--card) 92%,transparent);border:1px solid var(--linea);border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,.12);opacity:0;pointer-events:none;transition:opacity .18s ease}
+.g3-nav button{width:30px;height:28px;border:0;border-radius:7px;background:transparent;color:var(--tinta2,var(--tinta));display:grid;place-items:center;cursor:pointer}
+.g3-nav button:hover{background:var(--sub);color:var(--tinta)}
+.g3-nav[data-mode="always"]{opacity:1;pointer-events:auto}
+.gx-canvas:hover .g3-nav[data-mode="hover"],.g3-nav[data-mode="hover"]:focus-within{opacity:1;pointer-events:auto}
+.g3-nav[data-mode="off"]{display:none}
+@media (hover:none){.g3-nav[data-mode="hover"]{display:none}}
+.g3-plus{position:absolute;z-index:7;width:20px;height:20px;border-radius:6px;border:1px solid var(--borde);background:var(--card);color:var(--tinta);display:grid;place-items:center;cursor:pointer;padding:0;box-shadow:0 2px 6px rgba(0,0,0,.12)}
+.g3-plus:hover{border-color:var(--cobalto);color:var(--cobalto)}
+.g3-plus[hidden]{display:none}
+@media (hover:none){.g3-plus{display:none!important}}
+/* avisos que se quedan hasta cerrarlos (extra12.js) */
+.tk-sticky{position:fixed;right:16px;bottom:16px;z-index:1300;display:flex;flex-direction:column;gap:8px;max-width:min(380px,calc(100vw - 32px))}
+.tk-stk{display:flex;align-items:flex-start;gap:10px;background:var(--tinta);color:var(--card);padding:10px 12px 10px 14px;border-radius:12px;font-size:13.5px;line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.tk-stk span{flex:1}.tk-stk button{border:0;background:none;color:inherit;font-size:18px;line-height:1;cursor:pointer;opacity:.75;padding:0 2px}.tk-stk button:hover{opacity:1}

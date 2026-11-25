@@ -1,10 +1,11 @@
 // Velas públicas (respaldo cuando MT5 está cerrado).
+// v8 (25-nov-2026): futuros continuos (ES1!, NQ1!, GC1!, CL1!…) con precio de Yahoo y 10 min de retraso.
 // v7 (25-nov-2026): todos los mercados de Dukascopy (acciones, ETF, índices, materias primas y bonos además de divisas),
 // catálogo para el buscador ({catalog:1}) y precios de muchos mercados en una sola llamada ({quotes:[…]}).
 // v5 (18-nov-2026): divisas, oro, plata, petróleo e índices desde Dukascopy (precio de contado, al momento, con mechas reales
 // y años de historial en todos los marcos). Yahoo Finance queda de respaldo. Uso en pruebas: sustituir por un proveedor
 // con licencia antes de cobrar.
-import { dukaOf, digitsFor, buildCatalog, clean } from "./mercados.ts";
+import { dukaOf, digitsFor, buildCatalog, clean, futOf } from "./mercados.ts";
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -30,6 +31,7 @@ const TF: Record<string, [string, number, number, number]> = {
   "1w": ["1wk", 15 * 365 * 86400, 30 * 365 * 86400, 604800],
 };
 function resolve(sym: string): string | null {
+  const f = futOf(sym); if (f) return f; // futuros: ES1! → ES=F
   if (/\./.test(sym)) return null; // acciones y ETF: solo Dukascopy
   const c = clean(sym);
   if (MAP[c]) return MAP[c];
@@ -107,8 +109,17 @@ async function catalog() {
 /* ---------- precio y cambio del día de muchos mercados en una llamada (se guarda 20 s) ---------- */
 type Quote = { last: number; chg: number | null; t: number; digits: number };
 const QC = new Map<string, { t: number; v: Quote | null }>();
+async function yahooQuote(sym: string, y: string): Promise<Quote | null> {
+  const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(y)}?interval=5m&range=1d`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; Tickora/1.0)", "Accept": "application/json" } });
+  if (!r.ok) return null;
+  const m = (await r.json())?.chart?.result?.[0]?.meta; if (!m || m.regularMarketPrice == null) return null;
+  const last = +m.regularMarketPrice, prev = m.chartPreviousClose != null ? +m.chartPreviousClose : (m.previousClose != null ? +m.previousClose : null);
+  return { last, chg: prev ? (last - prev) / prev * 100 : null, t: (m.regularMarketTime || 0) * 1000 || Date.now(), digits: m.priceHint ?? digitsFor(last, false) };
+}
 async function quoteOf(sym: string): Promise<Quote | null> {
   const hit = QC.get(sym); if (hit && Date.now() - hit.t < 20000) return hit.v;
+  const fy = futOf(sym);
+  if (fy) { const v = await yahooQuote(sym, fy).catch(() => null); QC.set(sym, { t: Date.now(), v }); return v; }
   const d = dukaOf(sym); if (!d) return null;
   const now = Date.now();
   let code = d.code, D = await duka(code, "1DAY", now, 3);
@@ -159,7 +170,7 @@ Deno.serve(async (req) => {
     catch (_e) { return json({ error: "No se pudo cargar la lista de mercados" }, 502); }
   }
   if (Array.isArray(q.quotes)) {
-    const list = Array.from(new Set((q.quotes as unknown[]).map(String).filter(s => /^[A-Za-z0-9._-]{1,24}$/.test(s)))).slice(0, 40);
+    const list = Array.from(new Set((q.quotes as unknown[]).map(String).filter(s => /^[A-Za-z0-9._!-]{1,24}$/.test(s)))).slice(0, 40);
     const out: Record<string, Quote> = {};
     await pool(list, 8, async s => { try { const v = await quoteOf(s); if (v) out[s] = v; } catch (_e) { /* sin precio */ } });
     return json({ q: out });
@@ -176,7 +187,7 @@ Deno.serve(async (req) => {
   const now = Math.floor(Date.now() / 1000);
   const to = Number(q.to) > 0 ? Math.min(Number(q.to), now) : now;
   const oldest = now - cfg[2];
-  if (to <= oldest) return json({ sym, yahoo: y, tf, bars: [], more: false, delayed: DELAYED.has(y) });
+  if (to <= oldest) return json({ sym, yahoo: y, tf, bars: [], more: false, delayed: DELAYED.has(y) || /=F$/.test(y) });
   // «last»: solo las últimas velas (para actualizar el gráfico cada 15 s sin descargar días enteros)
   const span = q.last ? Math.min(cfg[1], Math.max(cfg[3] * 120, 6 * 3600)) : cfg[1];
   const from = Math.max(oldest, to - span);
@@ -185,7 +196,7 @@ Deno.serve(async (req) => {
   if (!r.ok) return json({ error: "La fuente pública no respondió (" + r.status + ")" }, 502);
   const d = await r.json();
   const res = d?.chart?.result?.[0];
-  if (!res || !res.timestamp) return json({ sym, yahoo: y, tf, bars: [], more: from > oldest, delayed: DELAYED.has(y) });
+  if (!res || !res.timestamp) return json({ sym, yahoo: y, tf, bars: [], more: from > oldest, delayed: DELAYED.has(y) || /=F$/.test(y) });
   const qq = res.indicators?.quote?.[0] || {};
   let bars: number[][] = [];
   for (let i = 0; i < res.timestamp.length; i++) {
@@ -204,5 +215,5 @@ Deno.serve(async (req) => {
     }
     bars = out;
   }
-  return json({ sym, src: "yahoo", yahoo: y, tf, bars, more: from > oldest, delayed: DELAYED.has(y), digits: res.meta?.priceHint ?? null });
+  return json({ sym, src: "yahoo", yahoo: y, tf, bars, more: from > oldest, delayed: DELAYED.has(y) || /=F$/.test(y), digits: futOf(sym) ? null : (res.meta?.priceHint ?? null) }); // futuros: decimales del buscador
 });

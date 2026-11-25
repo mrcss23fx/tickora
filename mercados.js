@@ -53,9 +53,39 @@
     "DIA.US": ["SPDR Dow Jones ETF", "dow jones"], "IWM.US": ["iShares Russell 2000", "russell"], "USO.US": ["United States Oil Fund", "petroleo oil"], "TLT.US": ["iShares bonos del Tesoro 20+ años", "bonos tesoro"]
   };
   const CRYN = { BTC: "Bitcoin", ETH: "Ethereum", BNB: "BNB", SOL: "Solana", XRP: "XRP", DOGE: "Dogecoin", ADA: "Cardano", TRX: "TRON", TON: "Toncoin", AVAX: "Avalanche", LINK: "Chainlink", DOT: "Polkadot", SHIB: "Shiba Inu", LTC: "Litecoin", BCH: "Bitcoin Cash", NEAR: "NEAR Protocol", UNI: "Uniswap", APT: "Aptos", SUI: "Sui", PEPE: "Pepe", ICP: "Internet Computer", ETC: "Ethereum Classic", XLM: "Stellar", ATOM: "Cosmos", FIL: "Filecoin", ARB: "Arbitrum", OP: "Optimism", HBAR: "Hedera", INJ: "Injective", AAVE: "Aave", RENDER: "Render", FET: "Fetch.ai", WLD: "Worldcoin", SEI: "Sei", TIA: "Celestia", POL: "Polygon", MATIC: "Polygon", ENA: "Ethena", JUP: "Jupiter", WIF: "dogwifhat", BONK: "Bonk", FLOKI: "Floki", TAO: "Bittensor", ONDO: "Ondo", ALGO: "Algorand", VET: "VeChain", SAND: "The Sandbox", MANA: "Decentraland", GRT: "The Graph", CRV: "Curve", LDO: "Lido DAO", RUNE: "THORChain", STX: "Stacks", IMX: "Immutable", QNT: "Quant", XTZ: "Tezos", EOS: "EOS", ZEC: "Zcash", DASH: "Dash" };
-  const CATN = { fx: "Divisa", idx: "Índice", com: "Materia prima", stk: "Acción", etf: "ETF", cry: "Cripto", bnd: "Bono", mt5: "Tu MT5", otro: "Mercado" };
-  const SUBN = { may: "Principales", cru: "Cruces", met: "Metales", ene: "Energía", agr: "Agrícolas", am: "América", eu: "Europa", as: "Asia y Pacífico", af: "África" };
-  const CATS = [["all", "Todo"], ["fav", "Favoritos"], ["mt5", "Tu MT5"], ["fx", "Divisas"], ["idx", "Índices"], ["com", "Materias primas"], ["stk", "Acciones"], ["etf", "ETF"], ["cry", "Cripto"], ["bnd", "Bonos"]];
+  /* futuros continuos (contrato más cercano), como en TradingView: ES1!, NQ1!, GC1!… Precio público de Yahoo, 10 min de retraso.
+     [raíz, nombre, otras formas de buscarlo, bolsa, grupo, decimales] */
+  const FUT = [
+    ["ES", "E-mini S&P 500", "sp500 s&p spx sandp emini e-mini", "CME", "fi", 2], ["MES", "Micro E-mini S&P 500", "sp500 s&p spx micro", "CME", "fi", 2],
+    ["NQ", "E-mini Nasdaq 100", "nasdaq us100 nas100 ustec tecnologicas emini", "CME", "fi", 2], ["MNQ", "Micro E-mini Nasdaq 100", "nasdaq us100 micro", "CME", "fi", 2],
+    ["YM", "E-mini Dow Jones", "dow jones dj30 us30 wall street", "CBOT", "fi", 0], ["MYM", "Micro E-mini Dow Jones", "dow jones us30 micro", "CBOT", "fi", 0],
+    ["RTY", "E-mini Russell 2000", "russell us2000 small caps", "CME", "fi", 1], ["M2K", "Micro E-mini Russell 2000", "russell us2000 micro", "CME", "fi", 1],
+    ["NKD", "Nikkei 225 (en dólares)", "nikkei japon jp225 jpn225", "CME", "fi", 0],
+    ["CL", "Petróleo WTI", "petroleo crudo oil wti texas usoil", "NYMEX", "fe", 2], ["MCL", "Micro petróleo WTI", "petroleo crudo wti micro", "NYMEX", "fe", 2],
+    ["BZ", "Petróleo Brent", "petroleo crudo oil brent ukoil", "NYMEX", "fe", 2], ["NG", "Gas natural", "gas natural natgas", "NYMEX", "fe", 3],
+    ["RB", "Gasolina RBOB", "gasolina rbob gasoline", "NYMEX", "fe", 4], ["HO", "Gasóleo de calefacción", "gasoleo diesel heating oil calefaccion", "NYMEX", "fe", 4],
+    ["GC", "Oro", "oro gold xauusd", "COMEX", "fm", 1], ["MGC", "Micro oro", "oro gold micro", "COMEX", "fm", 1],
+    ["SI", "Plata", "plata silver xagusd", "COMEX", "fm", 3], ["SIL", "Micro plata", "plata silver micro", "COMEX", "fm", 3],
+    ["HG", "Cobre", "cobre copper", "COMEX", "fm", 4], ["PL", "Platino", "platino platinum", "NYMEX", "fm", 1], ["PA", "Paladio", "paladio palladium", "NYMEX", "fm", 1],
+    ["ZB", "Bono de EE. UU. a 30 años", "bono tesoro treasury t-bond 30", "CBOT", "ft", 5], ["ZN", "Nota de EE. UU. a 10 años", "bono tesoro treasury t-note 10", "CBOT", "ft", 5],
+    ["ZF", "Nota de EE. UU. a 5 años", "bono tesoro treasury 5", "CBOT", "ft", 6], ["ZT", "Nota de EE. UU. a 2 años", "bono tesoro treasury 2", "CBOT", "ft", 6],
+    ["ZC", "Maíz", "maiz corn", "CBOT", "fa", 2], ["ZS", "Soja", "soja soya soybean", "CBOT", "fa", 2], ["ZW", "Trigo", "trigo wheat chicago", "CBOT", "fa", 2],
+    ["KE", "Trigo de Kansas", "trigo wheat kansas hrw", "CBOT", "fa", 2], ["ZL", "Aceite de soja", "aceite soja soybean oil", "CBOT", "fa", 2],
+    ["ZM", "Harina de soja", "harina soja soybean meal", "CBOT", "fa", 1], ["ZO", "Avena", "avena oats", "CBOT", "fa", 2], ["ZR", "Arroz", "arroz rice", "CBOT", "fa", 3],
+    ["KC", "Café", "cafe coffee arabica", "ICE", "fa", 2], ["CC", "Cacao", "cacao cocoa", "ICE", "fa", 0], ["SB", "Azúcar n.º 11", "azucar sugar", "ICE", "fa", 2],
+    ["CT", "Algodón", "algodon cotton", "ICE", "fa", 2], ["OJ", "Zumo de naranja", "zumo jugo naranja orange juice", "ICE", "fa", 2],
+    ["LE", "Ganado vivo", "ganado vacuno live cattle", "CME", "fg", 3], ["GF", "Ganado de engorde", "ganado engorde feeder cattle", "CME", "fg", 3], ["HE", "Cerdo magro", "cerdo porcino lean hogs", "CME", "fg", 3],
+    ["6E", "Euro", "euro eur eurusd", "CME", "fd", 5], ["6B", "Libra esterlina", "libra gbp gbpusd", "CME", "fd", 4], ["6J", "Yen japonés", "yen jpy usdjpy", "CME", "fd", 7],
+    ["6A", "Dólar australiano", "dolar australiano aud audusd", "CME", "fd", 5], ["6C", "Dólar canadiense", "dolar canadiense cad usdcad", "CME", "fd", 5],
+    ["6S", "Franco suizo", "franco suizo chf usdchf", "CME", "fd", 5], ["6N", "Dólar neozelandés", "dolar neozelandes nzd nzdusd", "CME", "fd", 5],
+    ["6M", "Peso mexicano", "peso mexicano mxn usdmxn", "CME", "fd", 5],
+    ["BTC", "Bitcoin (CME)", "bitcoin btc cme", "CME", "fc", 0], ["MBT", "Micro Bitcoin (CME)", "bitcoin btc micro", "CME", "fc", 0],
+    ["ETH", "Ether (CME)", "ether ethereum eth cme", "CME", "fc", 1], ["MET", "Micro Ether (CME)", "ether ethereum micro", "CME", "fc", 1]
+  ];
+  const FUTM = new Map(FUT.map(f => [f[0] + "1!", f]));
+  const CATN = { fx: "Divisa", idx: "Índice", fut: "Futuro", com: "Materia prima", stk: "Acción", etf: "ETF", cry: "Cripto", bnd: "Bono", mt5: "Tu MT5", otro: "Mercado" };
+  const SUBN = { may: "Principales", cru: "Cruces", met: "Metales", ene: "Energía", agr: "Agrícolas", am: "América", eu: "Europa", as: "Asia y Pacífico", af: "África", fi: "Índices", fe: "Energía", fm: "Metales", ft: "Tipos de interés", fa: "Agrícolas", fg: "Ganado", fd: "Divisas", fc: "Cripto" };
+  const CATS = [["all", "Todo"], ["fav", "Favoritos"], ["mt5", "Tu MT5"], ["fx", "Divisas"], ["idx", "Índices"], ["fut", "Futuros"], ["com", "Materias primas"], ["stk", "Acciones"], ["etf", "ETF"], ["cry", "Cripto"], ["bnd", "Bonos"]];
   const POP = ["EURUSD", "XAUUSD", "NAS100", "US30", "BTCUSDT", "GER40", "GBPUSD", "US500", "SPA35", "USOIL", "USDJPY", "AAPL.US", "NVDA.US", "TSLA.US", "ETHUSDT", "XAGUSD"];
   const STABLE = /^(USDC|FDUSD|TUSD|BUSD|DAI|USDP|USD1|AEUR|EUR|EURI|GBP|TRY|BRL|PAXG|XUSD|USDE|BFUSD|RLUSD|PYUSD)$/;
 
@@ -63,7 +93,7 @@
   const CRYPTO = /^(BTC|ETH|SOL|XRP|BNB|ADA|DOGE|LTC|AVAX|DOT|LINK|TRX|TON|MATIC|SHIB)/;
   function binSym(s) {
     const raw = String(s || "").toUpperCase().trim();
-    if (/\.[A-Z]{2}$/.test(raw)) return null;
+    if (/\.[A-Z]{2}$/.test(raw) || /!$/.test(raw)) return null; // acciones y futuros (ES1!, BTC1!…) no son de Binance
     const c = raw.replace(/[^A-Z0-9]/g, "");
     if (/^[A-Z0-9]{2,15}(USDT|USDC|FDUSD)$/.test(c)) return c;
     const m = c.replace(/[0-9]/g, "").match(CRYPTO);
@@ -76,6 +106,7 @@
   const M = new Map(), DG = new Map(), listeners = new Set();
   let ready = false, loading = null, invokeFn = null, catOk = false;
   function nameOf(m) {
+    if (m.c === "fut" && FUTM.has(m.s)) return FUTM.get(m.s)[1];
     if (NAMES[m.s]) return NAMES[m.s][0];
     if (STK[m.s]) return STK[m.s][0];
     if (m.c === "fx" || (m.c === "com" && /^X(AU|AG|PT|PD)[A-Z]{3}$/.test(m.s))) { const b = CUR[m.s.slice(0, 3)], q = CUR[m.s.slice(3, 6)]; if (b && q) return b + " / " + q; }
@@ -84,6 +115,7 @@
   }
   function aliasOf(m) {
     const a = [];
+    if (m.c === "fut" && FUTM.has(m.s)) { const f = FUTM.get(m.s); a.push(f[0], f[2], f[3], "futuro futuros future futures continuo"); }
     if (NAMES[m.s]) a.push(NAMES[m.s][1]);
     if (STK[m.s]) a.push(STK[m.s][1]);
     if (m.c === "fx" || (m.c === "com" && /^X(AU|AG|PT|PD)[A-Z]{3}$/.test(m.s))) { const b = m.s.slice(0, 3), q = m.s.slice(3, 6); a.push(b, q, CUR[b] || "", CUR[q] || ""); if (b === "XAU") a.push("oro gold"); if (b === "XAG") a.push("plata silver"); }
@@ -100,10 +132,12 @@
     else if (m.c === "etf") r += STK[m.s] ? 18 : 0;
     else if (m.c === "cry") r += Math.max(0, 45 - (m.vr || 0) * 0.12);
     else if (m.c === "bnd") r += 10;
+    else if (m.c === "fut") r += /^(ES|NQ|YM|RTY|GC|CL)1!$/.test(m.s) ? 34 : /^M/.test(m.s) ? 14 : 20;
     return r;
   }
   function finish(m) {
     m.t = m.c === "stk" || m.c === "etf" ? m.s.replace(/\.[A-Z]{2}$/, "") : m.s;
+    if (m.c === "fut" && FUTM.has(m.s)) m.ex = FUTM.get(m.s)[3];
     m.n = nameOf(m);
     m.al = " " + norm(aliasOf(m)) + " ";
     m.kk = " " + norm((CC[m.cc] || "") + " " + (CATN[m.c] || "")) + " ";
@@ -125,6 +159,7 @@
     ["BTCUSDT", "cry", "", "", 2], ["ETHUSDT", "cry", "", "", 2], ["SOLUSDT", "cry", "", "", 2], ["XRPUSDT", "cry", "", "", 4], ["DOGEUSDT", "cry", "", "", 5],
     ["BUND", "bnd", "DE", "DE", 2]
   ].forEach(x => add(x[0], x[1], x[2], x[3], "", x[4], { vr: ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT"].indexOf(x[0]) }));
+  FUT.forEach(f => add(f[0] + "1!", "fut", f[4], "US", f[1], f[5]));
 
   function emit() { listeners.forEach(f => { try { f(); } catch (e) { /* nada */ } }); }
   async function fetchCatalog() {
@@ -275,7 +310,7 @@
   /* ---------- la ventana del buscador ---------- */
   let D = null;
   function badge(m) {
-    let t = m.c === "idx" || m.c === "bnd" ? (m.cc || m.s.slice(0, 2)) : m.c === "cry" ? m.s.replace(/(USDT|USDC|FDUSD|USD)$/, "").slice(0, 4)
+    let t = m.c === "fut" ? m.s.replace(/1!$/, "") : m.c === "idx" || m.c === "bnd" ? (m.cc || m.s.slice(0, 2)) : m.c === "cry" ? m.s.replace(/(USDT|USDC|FDUSD|USD)$/, "").slice(0, 4)
       : m.c === "stk" || m.c === "etf" ? m.t.slice(0, 4) : ({ USOIL: "WTI", UKOIL: "BRN", NATGAS: "GAS", DIESEL: "GO", COPPER: "CU" })[m.s] || m.s.replace(/[^A-Z0-9]/gi, "").slice(0, 3);
     t = String(t).toUpperCase();
     return `<span class="mk-b c-${esc(m.c)}${t.length > 3 ? " l4" : ""}" aria-hidden="true">${esc(t)}</span>`;
@@ -283,6 +318,7 @@
   function tagOf(m, extra) {
     if (extra) return extra;
     if (m.c === "cry") return "Cripto · Binance";
+    if (m.c === "fut") return "Futuro" + (m.ex ? " · " + m.ex : "") + " · 10 min de retraso";
     if (m.c === "otro") return "Tu bróker";
     return (CATN[m.c] || "Mercado") + (m.cc && CC[m.cc] ? " · " + CC[m.cc] : "");
   }
@@ -330,7 +366,7 @@
     const list = Array.from(M.values()).filter(m => m.c === cat);
     const groups = new Map();
     list.sort((a, b) => b.r - a.r || a.s.localeCompare(b.s)).forEach(m => { const k = m.g || ""; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(m); });
-    const order = { may: 0, cru: 1, met: 0, ene: 1, agr: 2, am: 0, eu: 1, as: 2, af: 3, US: 0, ES: 1, DE: 2, FR: 3, GB: 4, IT: 5, NL: 6, CH: 7 };
+    const order = { may: 0, cru: 1, met: 0, ene: 1, agr: 2, am: 0, eu: 1, as: 2, af: 3, US: 0, ES: 1, DE: 2, FR: 3, GB: 4, IT: 5, NL: 6, CH: 7, fi: 0, fe: 1, fm: 2, ft: 3, fa: 4, fg: 5, fd: 6, fc: 7 };
     return Array.from(groups.entries()).sort((a, b) => (order[a[0]] ?? 50) - (order[b[0]] ?? 50) || b[1].length - a[1].length).map(([k, l]) => {
       const title = SUBN[k] || CC[k] || (cat === "cry" ? "Más negociadas en Binance" : (CATS.find(c => c[0] === cat) || ["", ""])[1]);
       const max = cat === "fx" && k === "cru" ? 40 : 60;

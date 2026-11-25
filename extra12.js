@@ -27,12 +27,22 @@
     } catch (e) { toast("No se pudieron activar los avisos: " + (e.message || e)); return false; }
   };
   window.tkPushOffer = () => { if (on === false && can() && !ios() && Notification.permission === "default" && !sessionStorage.getItem("tk-pushask")) { sessionStorage.setItem("tk-pushask", "1"); setTimeout(() => { if (confirm("¿Quieres que te avise en este dispositivo cuando salte la alerta, aunque Tickora esté cerrada?")) window.tkPushOn(); }, 300); } };
+  /* aviso que se queda hasta cerrarlo (Ajustes del gráfico › Alertas › «Ocultar automáticamente los avisos» apagado) */
+  function sticky(t) {
+    let box = document.querySelector(".tk-sticky"); if (!box) { box = document.createElement("div"); box.className = "tk-sticky"; box.setAttribute("role", "status"); document.body.appendChild(box); }
+    const it = document.createElement("div"); it.className = "tk-stk";
+    it.innerHTML = `<span></span><button type="button" aria-label="Cerrar el aviso">×</button>`; it.querySelector("span").textContent = t;
+    it.querySelector("button").onclick = () => { it.remove(); if (!box.children.length) box.remove(); };
+    box.appendChild(it); while (box.children.length > 4) box.firstChild.remove();
+  }
+  window.tkSticky = sticky;
   /* en la app: al momento */
   let ch = null;
   function listen() {
     if (ch || !S.user) return;
     ch = sb.channel("alertas-" + S.user.id).on("postgres_changes", { event: "INSERT", schema: "public", table: "alert_events", filter: "user_id=eq." + S.user.id }, p => {
-      const x = p.new || {}; toast("Alerta · " + (x.msg || x.sym || ""));
+      const x = p.new || {}, txt = "Alerta · " + (x.msg || x.sym || "");
+      if (window.TkChart && TkChart.U && TkChart.U.CFG && TkChart.U.CFG.alertAutoHide === false) sticky(txt); else toast(txt);
       if (document.hidden && "Notification" in window && Notification.permission === "granted" && !on) { try { new Notification("Alerta · " + (x.sym || ""), { body: x.msg || "", icon: "icon-192.png" }); } catch (e) { /* sin notificaciones */ } }
       window.tkAlertsChanged && window.tkAlertsChanged();
     }).subscribe();

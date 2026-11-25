@@ -162,7 +162,7 @@
   /* ---------- alertas (se comprueban en el servidor cada minuto) ---------- */
   KC.registerOverlay({
     name: "tkAlertLine", totalStep: 1, lock: true, needDefaultPointFigure: false, needDefaultXAxisFigure: false, needDefaultYAxisFigure: false,
-    createPointFigures: ({ coordinates: c, bounding: b, overlay: o }) => { if (!c.length) return []; const y = c[0].y, dark = U.DARK, col = dark ? "#5fd4c0" : "#0e8f7e", t = (o.extendData && o.extendData.t) || "Alerta";
+    createPointFigures: ({ coordinates: c, bounding: b, overlay: o }) => { if (!c.length) return []; const y = c[0].y, dark = U.DARK, off = o.extendData && o.extendData.off, col = off ? (dark ? "#6b7280" : "#9aa1ad") : ((U.CFG || {}).alertCol || (dark ? "#5fd4c0" : "#0e8f7e")), t = (o.extendData && o.extendData.t) || "Alerta";
       return [{ type: "line", ignoreEvent: true, attrs: { coordinates: [{ x: 0, y }, { x: b.width, y }] }, styles: { color: col, size: 1, style: "dashed", dashedValue: [2, 4] } },
         { type: "text", ignoreEvent: true, attrs: { x: b.width - 8, y, text: t, align: "right", baseline: "middle" }, styles: { color: col, size: 10.5, family: "Inter, sans-serif", backgroundColor: dark ? "#16161d" : "#ffffff", borderColor: col, borderSize: 1, borderRadius: 4, paddingLeft: 6, paddingRight: 6, paddingTop: 3, paddingBottom: 3 } }]; }
   });
@@ -185,10 +185,11 @@
     function paintLines() {
       try { ch.removeOverlay({ groupId: "alerts" }); } catch (e) { /* nada */ }
       if ((U.CFG || {}).showAlerts === false) return;
-      (ALR.list || []).filter(a => a.active && a.sym === st.sym && a.kind !== "ind").forEach(a => {
+      const allA = (U.CFG || {}).alertActive === false;
+      (ALR.list || []).filter(a => (a.active || allA) && a.sym === st.sym && a.kind !== "ind").forEach(a => {
         let v = a.value != null ? +a.value : null; if (a.kind === "line" && a.p1 && a.p1.t1 && a.p1.t2 && a.p1.t1 !== a.p1.t2) v = +a.p1.v1 + (+a.p1.v2 - +a.p1.v1) * (Date.now() - a.p1.t1) / (a.p1.t2 - a.p1.t1);
         if (v == null || !isFinite(v)) return; const l = ch.getDataList(); if (!l.length) return;
-        try { ch.createOverlay({ name: "tkAlertLine", groupId: "alerts", lock: true, points: [{ timestamp: l[l.length - 1].timestamp, value: v }], extendData: { t: "Alerta " + fmtP(v) + (a.kind === "line" ? " · línea" : "") } }); } catch (e) { /* fuera */ }
+        try { ch.createOverlay({ name: "tkAlertLine", groupId: "alerts", lock: true, points: [{ timestamp: l[l.length - 1].timestamp, value: v }], extendData: { t: (a.active ? "Alerta " : "Saltó ") + fmtP(v) + (a.kind === "line" ? " · línea" : ""), off: !a.active } }); } catch (e) { /* fuera */ }
       });
     }
     const paintAll = () => { paintLines(); HK.repaint && HK.repaint(); };
@@ -260,7 +261,24 @@
       if (/mt5/i.test(p.id || "") || /MT5/.test(p.label || "")) return "Tu MT5 · en vivo";
       return p.delayed ? "Precio público · 10–15 min de retraso" : "Precio público · al momento";
     }
-    function indLabel(x) { const meta = U.IND_BY[x.n]; return (meta ? meta[1] : x.n) + (x.p && x.p.length ? " " + x.p.join(", ") : ""); }
+    function indLabel(x) { const meta = U.IND_BY[x.n]; return (meta ? meta[1] : x.n) + ((U.CFG || {}).lgIp !== false && x.p && x.p.length ? " " + x.p.join(", ") : ""); }
+    /* línea de estado como en TradingView: logo, nombre, si el mercado está abierto, volumen y cambio del día */
+    const mtk = { t: 0, p: null };
+    function mktOpen() {
+      const L = ch.getDataList(); if (!L.length || R.on) return null;
+      if (st.price != null && st.price !== mtk.p) { if (mtk.p != null) mtk.t = Date.now(); mtk.p = st.price; }
+      if (window.TkMarkets && TkMarkets.binSym(st.sym)) return true; // cripto: siempre abierto
+      const ms = TF_MS[st.tf] || 3e5, now = Date.now(), tol = (st.prov && st.prov.delayed ? 22 : 4) * 6e4;
+      if (mtk.t && now - mtk.t < 5 * 6e4) return true;
+      if (ms < 864e5) return L[L.length - 1].timestamp + ms >= now - tol;
+      const q = opts.cachedQuote && opts.cachedQuote(st.sym); return q && q.t ? now - q.t < tol + 6e5 : null;
+    }
+    let dayF = null, dayTz = "";
+    function dayKey(ts) { const tz = (U.CFG || {}).tz && U.CFG.tz !== "auto" ? U.CFG.tz : Intl.DateTimeFormat().resolvedOptions().timeZone; if (!dayF || dayTz !== tz) { dayTz = tz; try { dayF = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }); } catch (e) { dayF = new Intl.DateTimeFormat("en-CA"); } } return dayF.format(new Date(ts)); }
+    function prevDayClose(list, i) { const k = dayKey(list[i].timestamp); for (let j = i - 1; j >= 0 && i - j < 3000; j--) if (dayKey(list[j].timestamp) !== k) return list[j].close; return null; }
+    HK.prevDayClose = () => { const L = ch.getDataList(); return L.length && (TF_MS[st.tf] || 0) < 864e5 ? prevDayClose(L, L.length - 1) : (L.length > 1 ? L[L.length - 2].close : null); };
+    const bigN = v => v == null || !isFinite(v) ? "—" : Math.abs(v) >= 1e5 ? Number(v).toLocaleString("es-ES", { notation: "compact", maximumFractionDigits: 2 }) : Number(v).toLocaleString("es-ES", { maximumFractionDigits: Math.abs(v) >= 100 ? 0 : 2 });
+    function logoOf() { const m = window.TkMarkets ? TkMarkets.info(st.sym) : null, c = (m && m.c) || "otro"; const t = c === "fut" ? st.sym.replace(/1!$/, "") : (c === "idx" || c === "bnd") && m.cc ? m.cc : ({ USOIL: "WTI", UKOIL: "BRN", NATGAS: "GAS", COPPER: "CU" })[st.sym] || (c === "cry" ? st.sym.replace(/(USDT|USDC|FDUSD|USD)$/, "") : c === "stk" || c === "etf" ? st.sym.replace(/\.[A-Z]{2}$/, "") : st.sym.replace(/[^A-Z0-9]/gi, "")); return `<i class="gx-lglogo c-${esc(c)}" aria-hidden="true">${esc(t.slice(0, 3).toUpperCase())}</i>`; }
     function paintLegend() {
       if (!lg.isConnected) return;
       const list = ch.getDataList(); if (!list.length) { lg.innerHTML = ""; return; }
@@ -276,8 +294,12 @@
       const nw = (HK.news || []).find(e => Math.abs(e.ts - b.timestamp) <= Math.max(15 * 6e4, (TF_MS[st.tf] || 3e5)));
       const fold = ls.get("tk-lgfold", false);
       const G = (U.CFG || {}), on = k => G[k] !== false;
-      lg.innerHTML = `<div class="gx-lg0">${on("lgSym") ? `<b>${esc(st.sym)} · ${esc(U.TF_SHORT[st.tf] || st.tf)}</b>` : ""}${on("lgSrc") ? `<span class="src">${esc(provLabel())}</span>` : ""}
-        ${on("lgOhlc") ? `<span class="k">A</span><span>${fmtP(b.open)}</span><span class="k">M</span><span>${fmtP(b.high)}</span><span class="k">m</span><span>${fmtP(b.low)}</span><span class="k">C</span><span class="${cls}">${fmtP(b.close)}</span>` : ""}${on("lgChg") ? `<span class="${cls}">${chg >= 0 ? "+" : "−"}${fmtP(Math.abs(chg))} (${chg >= 0 ? "+" : "−"}${nf(Math.abs(pct), 2)} %)</span>` : ""}
+      const mi = window.TkMarkets ? TkMarkets.info(st.sym) : null, desc = mi && mi.n && mi.n !== st.sym ? mi.n : "", tm = G.lgTitle || "ticker";
+      const ttl = tm === "desc" && desc ? desc : tm === "both" && desc ? st.sym + " · " + desc : st.sym, mo = on("lgMkt") ? mktOpen() : null;
+      const pdc = on("lgDay") && (TF_MS[st.tf] || 0) < 864e5 ? prevDayClose(list, i) : null, dch = pdc ? (b.close - pdc) / pdc * 100 : null;
+      lg.classList.toggle("bg", on("lgBg")); lg.style.setProperty("--lgbg", Math.max(10, Math.min(100, +G.lgBgOp || 70)) + "%");
+      lg.innerHTML = `<div class="gx-lg0">${on("lgLogo") ? logoOf() : ""}${on("lgSym") ? `<b>${esc(ttl)} · ${esc(U.TF_SHORT[st.tf] || st.tf)}</b>` : ""}${mo != null ? `<span class="gx-mko${mo ? " on" : ""}" title="${mo ? "El mercado está abierto" : "El mercado está cerrado ahora"}"><i></i>${mo ? "Abierto" : "Cerrado"}</span>` : ""}${on("lgSrc") ? `<span class="src">${esc(provLabel())}</span>` : ""}
+        ${on("lgOhlc") ? `<span class="k">A</span><span>${fmtP(b.open)}</span><span class="k">M</span><span>${fmtP(b.high)}</span><span class="k">m</span><span>${fmtP(b.low)}</span><span class="k">C</span><span class="${cls}">${fmtP(b.close)}</span>` : ""}${on("lgChg") ? `<span class="${cls}">${chg >= 0 ? "+" : "−"}${fmtP(Math.abs(chg))} (${chg >= 0 ? "+" : "−"}${nf(Math.abs(pct), 2)} %)</span>` : ""}${on("lgVol") && b.volume ? `<span class="k">Vol</span><span>${bigN(b.volume)}</span>` : ""}${dch != null && isFinite(dch) ? `<span class="k">Día</span><span class="${dch >= 0 ? "up" : "dn"}">${dch >= 0 ? "+" : "−"}${nf(Math.abs(dch), 2)} %</span>` : ""}
         ${inds.length && on("lgInd") ? `<button type="button" class="gx-lgf" data-lgi="fold" title="${fold ? "Ver indicadores" : "Plegar indicadores"}" aria-label="${fold ? "Ver indicadores" : "Plegar indicadores"}">${I(fold ? IC.down : IC.up, 13)}</button>` : ""}</div>
         ${nw && on("lgNews") ? `<div class="gx-lgn">Noticia ${new Date(nw.ts).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} · ${esc(nw.country)} · ${esc(nw.title || "")}</div>` : ""}
         ${HK.lgExtra ? HK.lgExtra(i, b) : ""}
@@ -427,7 +449,7 @@
       qo.addEventListener("click", e => { const b = e.target.closest("[data-qo]"); if (!b) return; e.stopPropagation(); const t = b.dataset.qo; if (t === "buy" || t === "sell") place({ side: t }); if (t === "ticket") ticket(b); });
     }
     function paintQo() {
-      if (!qo) return; const px = nowPrice(), a = acct(); if (px == null) { qo.innerHTML = ""; return; }
+      if (!qo) return; qo.hidden = (U.CFG || {}).qoShow === false; const px = nowPrice(), a = acct(); if (px == null) { qo.innerHTML = ""; return; }
       const d = (atrNow() || px * 0.002) * 1.5, rm = a.bal * a.riskPct / 100, lots = lotsFor(px, px - d, rm), sp = slipPx();
       qo.innerHTML = `<span class="gx-qtag" title="Las operaciones de aquí son de práctica: no tocan tu cuenta real">Práctica</span><button type="button" class="gx-qs" data-qo="sell"><small>VENDER</small>${fmtP(px - sp)}</button><span class="gx-qm">${lots ? nf(lots, 2) : "1 R"}</span><button type="button" class="gx-qb" data-qo="buy"><small>COMPRAR</small>${fmtP(px + sp)}</button>
         <button type="button" class="gx-qt" data-qo="ticket" title="Orden con precio, stop y objetivo" aria-label="Nueva orden">${I(IC.ticket, 15)}</button><span class="gx-qi">1 R = ${money(rm, a.cur)}${lots ? "" : " · stop a 1,5 ATR"}</span>`;

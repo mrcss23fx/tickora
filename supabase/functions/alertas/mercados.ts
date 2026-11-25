@@ -36,10 +36,20 @@ const CUR: Record<string, string> = {
 export const CRYPTO = /^(BTC|ETH|SOL|XRP|BNB|ADA|DOGE|LTC|AVAX|DOT|LINK|TRX|TON|MATIC|SHIB)/;
 export const clean = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/(PRO|ECN|RAW|MICRO|CASH|SPOT|M)$/, "");
 
+/* futuros continuos (contrato más cercano), como en TradingView: ES1!, NQ1!, GC1!, CL1!…
+   Precio público de Yahoo (CME, CBOT, NYMEX, COMEX e ICE de EE. UU.; 10 min de retraso). */
+export const FUTROOT = new Set(["ES", "MES", "NQ", "MNQ", "YM", "MYM", "RTY", "M2K", "NKD", "CL", "MCL", "BZ", "NG", "RB", "HO",
+  "GC", "MGC", "SI", "SIL", "HG", "PL", "PA", "ZB", "ZN", "ZF", "ZT", "ZC", "ZS", "ZW", "KE", "ZL", "ZM", "ZO", "ZR",
+  "KC", "CC", "SB", "CT", "OJ", "LE", "GF", "HE", "6E", "6B", "6J", "6A", "6C", "6S", "6N", "6M", "BTC", "MBT", "ETH", "MET"]);
+export function futOf(sym: string): string | null {
+  const m = String(sym || "").toUpperCase().trim().match(/^([A-Z0-9]{1,4})1!$/);
+  return m && FUTROOT.has(m[1]) ? m[1] + "=F" : null;
+}
+
 /* par de Binance de un mercado de cripto (BTCUSD de siempre → BTCUSDT; PEPEUSDT tal cual) */
 export function binOf(sym: string): string | null {
   const raw = String(sym || "").toUpperCase().trim();
-  if (/\.[A-Z]{2}$/.test(raw)) return null;
+  if (/\.[A-Z]{2}$/.test(raw) || /!$/.test(raw)) return null; // acciones y futuros no son de Binance
   const c = raw.replace(/[^A-Z0-9]/g, "");
   if (/^[A-Z0-9]{2,15}(USDT|USDC|FDUSD)$/.test(c)) return c;
   const m = c.match(CRYPTO);
@@ -55,7 +65,7 @@ export function dukaOf(sym: string): Duka | null {
     const cur = CUR[m[2]]; if (!cur) return null;
     return { code: `${m[1]}.${m[2]}/${cur}`, digits: m[2] === "JP" ? 0 : 2, alt: m[2] === "GB" ? [`${m[1]}.GB/USD`, `${m[1]}.GB/GBP`] : [] };
   }
-  if (binOf(raw)) return null;
+  if (binOf(raw) || /!$/.test(raw)) return null; // los futuros vienen de Yahoo
   const c = clean(raw);
   if (NAMEDUKA[c]) return { code: NAMEDUKA[c][0], digits: NAMEDUKA[c][1], alt: [] };
   for (const k of Object.keys(NAMEDUKA)) if (k.length >= 4 && c.startsWith(k)) return { code: NAMEDUKA[k][0], digits: NAMEDUKA[k][1], alt: [] };

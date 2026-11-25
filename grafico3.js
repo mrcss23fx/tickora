@@ -149,6 +149,44 @@
     calc: (list, ind) => { const f = CALC[(ind.extendData || {}).key]; return f ? f(list, +ind.calcParams[0] || 0) : list.map(() => ({})); }
   });
 
+  /* ---------- capas propias sobre las velas: cierre de ayer, separación de días, horario de la bolsa y marcas de ejecución ---------- */
+  const LAY = {}; // por gráfico: funciones que dibujan
+  const layer = (name, z) => KC.registerIndicator({
+    name, shortName: "", series: "price", precision: 10, calcParams: [], figures: [], zLevel: z || 0,
+    calc: list => list.map(() => ({})),
+    draw: a => { const ed = a.indicator.extendData || {}, L = LAY[ed.key]; if (L && L[name]) { try { L[name](a); } catch (e) { /* nada */ } } return true; }
+  });
+  layer("TKPDC"); layer("TKBRK", -1); layer("TKSESS", -1); layer("TKEXEC", 1);
+  /* horario normal de cada bolsa [zona, abre, cierra] en minutos del día */
+  const SESS = { US: ["America/New_York", 570, 960], EU: ["Europe/Berlin", 540, 1050], GB: ["Europe/London", 480, 990], CH: ["Europe/Zurich", 540, 1050],
+    JP: ["Asia/Tokyo", 540, 900], HK: ["Asia/Hong_Kong", 570, 960], AU: ["Australia/Sydney", 600, 960] };
+  function sessOf(sym) {
+    const s = String(sym || "").toUpperCase(), m = s.match(/\.([A-Z]{2})$/);
+    if (m) return m[1] === "US" ? SESS.US : m[1] === "GB" ? SESS.GB : m[1] === "CH" ? SESS.CH : m[1] === "JP" ? SESS.JP : m[1] === "HK" ? SESS.HK : /^(DE|FR|ES|IT|NL|AT|BE|FI|IE|PT|DK|SE|NO)$/.test(m[1]) ? SESS.EU : null;
+    if (/^(M?ES|M?NQ|M?YM|RTY|M2K)1!$/.test(s) || /^(US30|DJ30|US500|SPX500|NAS100|US100|USTEC|US2000)/.test(s)) return SESS.US;
+    if (/^(GER40|DE40|FRA40|SPA35|ES35|EU50|STOXX50|ITA40|NLD25)/.test(s)) return SESS.EU;
+    if (/^UK100/.test(s)) return SESS.GB; if (/^SWI20/.test(s)) return SESS.CH; if (/^(JPN225|JP225)/.test(s)) return SESS.JP; if (/^HK50/.test(s)) return SESS.HK; if (/^AUS200/.test(s)) return SESS.AU;
+    return null;
+  }
+  const OFFC = new Map();
+  function offAt(ts, tz) { // minutos que suma la zona horaria a la hora universal (se guarda por hora)
+    const k = tz + "|" + Math.floor(ts / 36e5); let v = OFFC.get(k); if (v != null) return v;
+    try { const p = {}; new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(new Date(ts)).forEach(x => { p[x.type] = x.value; });
+      v = Math.round((Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute) - Math.floor(ts / 6e4) * 6e4) / 6e4); } catch (e) { v = 0; }
+    if (OFFC.size > 5000) OFFC.clear(); OFFC.set(k, v); return v;
+  }
+  const localMin = (ts, tz) => Math.floor(ts / 6e4) + offAt(ts, tz); // minutos desde 1970 en la hora local de esa zona
+  function minOfDay(ts, tz) { const lm = localMin(ts, tz); return { m: ((lm % 1440) + 1440) % 1440, day: Math.floor(lm / 1440) }; }
+  /* sonido corto al ejecutarse una orden de práctica (sin archivos: se genera en el navegador) */
+  let AC = null;
+  function beep(kind, vol) {
+    try {
+      AC = AC || new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === "suspended") AC.resume();
+      const g = AC.createGain(), t0 = AC.currentTime, v = Math.max(0.01, Math.min(1, (vol || 60) / 100)) * 0.25; g.connect(AC.destination);
+      const notes = kind === "close" ? [784, 523] : [660, 990];
+      notes.forEach((f, i) => { const o = AC.createOscillator(); o.type = "sine"; o.frequency.value = f; const gg = AC.createGain(); gg.gain.setValueAtTime(0, t0 + i * 0.11); gg.gain.linearRampToValueAtTime(v, t0 + i * 0.11 + 0.01); gg.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.11 + 0.18); o.connect(gg); gg.connect(g); o.start(t0 + i * 0.11); o.stop(t0 + i * 0.11 + 0.2); });
+    } catch (e) { /* sin sonido */ }
+  }
   const PAINT = new Set(); // barras de abajo abiertas (para repintar todas a la vez)
   const repaintAll = () => PAINT.forEach(f => { try { f(); } catch (e) { /* gráfico cerrado */ } });
 
@@ -177,8 +215,8 @@
     function toggleScale(name) { setScale(effScale() === name ? "normal" : name); say(effScale() === "logarithm" ? "Escala logarítmica" : effScale() === "percentage" ? "Escala en porcentaje desde la primera vela que se ve" : "Escala normal", 1800); }
     function setAuto(on) { if (on) X.applyScale(); else { const a = yAx(); if (a && a.setAutoCalcTickFlag) a.setAutoCalcTickFlag(false); } paintBot(); }
     function invert() { CFG.inv = !CFG.inv; X.cfgSave(); scaleAll(); say(CFG.inv ? "Escala invertida" : "Escala normal (sin invertir)", 1600); }
-    /* se puede alejar más (como en las plataformas profesionales): así «1D» cabe entero en velas de 1 minuto */
-    try { ch.setLayoutOptions({ barSpaceLimit: { min: 0.5, max: 50 } }); } catch (e) { /* versión sin la opción */ }
+    /* se puede alejar más (como en las plataformas profesionales): así «1D» cabe entero en velas de 1 minuto (más aún con «Permitir alejar más») */
+    try { ch.setLayoutOptions({ barSpaceLimit: { min: CFG.zoomOut ? 0.12 : 0.5, max: 50 } }); } catch (e) { /* versión sin la opción */ }
     let defBS = 8; try { const b = ch.getBarSpace(); defBS = (b && (b.bar || b)) || 8; } catch (e) { /* nada */ }
     function resetView(scroll) {
       try { ch.setBarSpace(defBS); } catch (e) { /* nada */ }
@@ -195,7 +233,7 @@
       if (end != null) i1 = Math.max(i0, upperBound(L, end) - 1);
       const n = i1 - i0 + 1, mb = ch.getSize("candle_pane", "main"), w = (mb && mb.width) || box.clientWidth || 600;
       const extra = end != null ? 0.5 : Math.max(0, +CFG.mRight || 0) + 0.5;
-      const bs = Math.max(0.5, Math.min(50, w / (n + extra)));
+      const bs = Math.max(CFG.zoomOut ? 0.12 : 0.5, Math.min(50, w / (n + extra)));
       try { ch.setBarSpace(bs); } catch (e) { /* nada */ }
       X.applyRight && X.applyRight();
       try { if (end != null) ch.scrollToDataIndex(i1); else ch.scrollToRealTime(); } catch (e) { /* nada */ }
@@ -660,6 +698,159 @@
       if (areaAt(e.clientX, e.clientY) === "y") scaleMenu(e.clientX, e.clientY); else chartMenu(e.clientX, e.clientY);
     }, true);
 
+    /* ===== capas de los ajustes: cierre de ayer, separación de días, horario de la bolsa y marcas de ejecución ===== */
+    const intra = () => (U.TF_MS[st.tf] || 0) < 864e5;
+    const dash = k => k === "solid" ? [] : k === "dotted" ? [1, 3] : [4, 4];
+    const rgba = (hexc, a) => { const m = /^#([0-9a-f]{6})$/i.exec(hexc || ""); if (!m) return hexc; const n = parseInt(m[1], 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+    const softCol = () => U.DARK ? "#8a93a8" : "#6b7385";
+    LAY[me.key] = {
+      TKPDC: ({ ctx, bounding: b, yAxis }) => {
+        const v = HK.prevDayClose && HK.prevDayClose(); if (v == null || !isFinite(v)) return;
+        const y = yAxis.convertToPixel(v); if (!isFinite(y) || y < 0 || y > b.height) return;
+        const c = CFG.prevDayCol || softCol(); ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+        ctx.beginPath(); ctx.moveTo(0, Math.round(y) + .5); ctx.lineTo(b.width, Math.round(y) + .5); ctx.stroke(); ctx.setLineDash([]);
+        if (CFG.prevDay === "both") {
+          const t = "Cierre anterior " + nf(v, X.digits()); ctx.font = "500 10.5px Inter, system-ui, sans-serif"; const w = ctx.measureText(t).width + 12;
+          ctx.fillStyle = U.DARK ? "#16161d" : "#ffffff"; ctx.strokeStyle = c; ctx.beginPath(); ctx.rect(b.width - w - 6, y - 9, w, 18); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = c; ctx.textBaseline = "middle"; ctx.fillText(t, b.width - w, y);
+        }
+        ctx.restore();
+      },
+      TKBRK: ({ ctx, chart, bounding: b, xAxis }) => {
+        if (!intra()) return; const L = chart.getDataList(), vr = chart.getVisibleRange(); if (!L.length) return;
+        const tz = (CFG.tz && CFG.tz !== "auto") ? CFG.tz : Intl.DateTimeFormat().resolvedOptions().timeZone; let prev = null;
+        ctx.save(); ctx.strokeStyle = rgba(CFG.sessCol || softCol(), .55); ctx.lineWidth = 1; ctx.setLineDash(dash(CFG.sessStyle || "dashed"));
+        for (let i = Math.max(0, vr.from - 1); i < Math.min(L.length, vr.to + 1); i++) {
+          const k = minOfDay(L[i].timestamp, tz).day;
+          if (prev != null && k !== prev) { const x = Math.round(xAxis.convertToPixel(i) - (chart.getBarSpace().bar / 2)) + .5; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, b.height); ctx.stroke(); }
+          prev = k;
+        }
+        ctx.restore();
+      },
+      TKSESS: ({ ctx, chart, bounding: b, xAxis }) => {
+        const se = sessOf(st.sym); if (!se || !intra()) return; const L = chart.getDataList(), vr = chart.getVisibleRange(); if (!L.length) return;
+        const bs = chart.getBarSpace().bar; ctx.save(); ctx.fillStyle = rgba(CFG.ethCol || (U.DARK ? "#2a3045" : "#dfe5f2"), U.DARK ? .55 : .6);
+        let x0 = null;
+        for (let i = Math.max(0, vr.from - 1); i <= Math.min(L.length, vr.to + 1); i++) {
+          let out = false; if (i < L.length) { const q = minOfDay(L[i].timestamp, se[0]); out = q.m < se[1] || q.m >= se[2]; }
+          const x = i < L.length ? xAxis.convertToPixel(i) - bs / 2 : null;
+          if (out && x0 == null) x0 = x; if ((!out || i >= Math.min(L.length, vr.to + 1)) && x0 != null) { const x1 = x != null ? x : xAxis.convertToPixel(L.length - 1) + bs / 2; ctx.fillRect(x0, 0, Math.max(1, x1 - x0), b.height); x0 = null; }
+        }
+        ctx.restore();
+      },
+      TKEXEC: ({ ctx, chart, xAxis, yAxis }) => {
+        const L = chart.getDataList(); if (!L.length) return; const ms = U.TF_MS[st.tf] || 3e5, d = X.digits();
+        const idx = ts => { let lo = 0, hi = L.length - 1; if (ts < L[0].timestamp || ts > L[hi].timestamp + ms) return -1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (L[m].timestamp <= ts) lo = m; else hi = m - 1; } return lo; };
+        const mk = (ts, px, buy, entry, lbl, real) => {
+          const i = idx(ts); if (i < 0 || px == null || !isFinite(px)) return; const x = xAxis.convertToPixel(i), y = yAxis.convertToPixel(+px); if (!isFinite(x) || !isFinite(y)) return;
+          const up = entry ? buy : !buy, c = up ? (U.DARK ? "#86a9ff" : "#2443c7") : (U.DARK ? "#e9edf6" : "#14213a"), s = 6, yy = up ? y + 10 : y - 10;
+          ctx.fillStyle = c; ctx.strokeStyle = U.DARK ? "#0b0b10" : "#ffffff"; ctx.lineWidth = 1.5; ctx.beginPath();
+          if (up) { ctx.moveTo(x, yy - s); ctx.lineTo(x - s, yy + s * .6); ctx.lineTo(x + s, yy + s * .6); } else { ctx.moveTo(x, yy + s); ctx.lineTo(x - s, yy - s * .6); ctx.lineTo(x + s, yy - s * .6); }
+          ctx.closePath(); ctx.stroke(); ctx.fill(); if (!real) { ctx.fillStyle = U.DARK ? "#0b0b10" : "#ffffff"; ctx.beginPath(); ctx.arc(x, yy + (up ? 1 : -1), 1.6, 0, 7); ctx.fill(); }
+          if (CFG.execLbl && lbl) { ctx.font = "500 10.5px Inter, system-ui, sans-serif"; ctx.fillStyle = c; ctx.textAlign = "center"; ctx.textBaseline = up ? "top" : "bottom"; ctx.fillText(lbl, x, up ? yy + s + 3 : yy - s - 3); ctx.textAlign = "start"; }
+        };
+        ctx.save();
+        const A = window.TKAPP, flatS = v => String(v || "").toUpperCase().replace(/[^A-Z0-9]/g, ""), me2 = flatS(st.sym);
+        const same = s2 => { const f = flatS(s2); if (!f) return false; if (f === me2 || f.startsWith(me2) || me2.startsWith(f)) return true; try { return window.TkMarkets && TkMarkets.info(s2).s === st.sym; } catch (e) { return false; } };
+        if (!X.R.on && A && A.S && Array.isArray(A.S.trades)) A.S.trades.forEach(t => {
+          if (!same(t.symbol)) return; const buy = /buy|compra/i.test(t.side || t.type || "");
+          mk(new Date(t.open_time).getTime(), t.open_price, buy, true, (buy ? "Compra " : "Venta ") + nf(+t.open_price, d), true);
+          if (t.close_time && t.close_price != null) mk(new Date(t.close_time).getTime(), t.close_price, buy, false, "Cierre" + (t.r != null && isFinite(t.r) ? " " + (t.r >= 0 ? "+" : "−") + nf(Math.abs(t.r), 1) + " R" : ""), true);
+        });
+        const P = HK.P; if (P && Array.isArray(P.hist)) P.hist.forEach(h => {
+          if (h.symbol !== st.sym || (h.mode === "replay") !== !!X.R.on) return; const buy = h.side === "buy";
+          mk(new Date(h.entry_time).getTime(), h.entry, buy, true, (buy ? "Compra " : "Venta ") + nf(+h.entry, d), false);
+          if (h.exit_time) mk(new Date(h.exit_time).getTime(), h.exit, buy, false, "Cierre" + (h.r != null ? " " + (h.r >= 0 ? "+" : "−") + nf(Math.abs(h.r), 1) + " R" : ""), false);
+        });
+        ctx.restore();
+      }
+    };
+    function g3apply() {
+      if (!alive) return;
+      try { ch.setLayoutOptions({ barSpaceLimit: { min: CFG.zoomOut ? 0.12 : 0.5, max: 50 } }); } catch (e) { /* nada */ }
+      const want = { TKPDC: CFG.prevDay && CFG.prevDay !== "off" && intra(), TKBRK: !!CFG.sessBreak && intra(), TKSESS: CFG.ethBg !== false && !!sessOf(st.sym) && intra(), TKEXEC: CFG.execMk !== false };
+      Object.keys(want).forEach(n => {
+        const has = ch.getIndicators({ name: n }).length > 0;
+        if (want[n] && !has) { try { ch.createIndicator({ name: n, paneId: "candle_pane", zLevel: n === "TKBRK" || n === "TKSESS" ? -1 : 1, extendData: { key: me.key } }, true); } catch (e) { /* nada */ } }
+        else if (!want[n] && has) { try { ch.removeIndicator({ name: n }); } catch (e) { /* nada */ } }
+      });
+      nav.dataset.mode = CFG.navBtns || "hover";
+      if (CFG.plusBtn === false) plus.hidden = true;
+    }
+    { const prevAI2 = HK.afterInd; HK.afterInd = () => { prevAI2 && prevAI2(); setTimeout(g3apply, 0); }; }
+
+    /* ===== botones de navegación (acercar, alejar, mover, restablecer) ===== */
+    const nav = document.createElement("div"); nav.className = "g3-nav"; nav.setAttribute("role", "toolbar"); nav.setAttribute("aria-label", "Navegación del gráfico");
+    nav.innerHTML = [["out", "Alejar", '<path d="M5 10h10"/>'], ["in", "Acercar", '<path d="M5 10h10M10 5v10"/>'], ["left", "Ir atrás", '<path d="M12 5l-5 5 5 5"/>'], ["right", "Ir adelante", '<path d="M8 5l5 5-5 5"/>'], ["reset", "Restablecer la vista (Alt + R)", IC3.reset]]
+      .map(([k, t, d]) => `<button type="button" data-g3n="${k}" title="${t}" aria-label="${t}">${SV(d, 16)}</button>`).join("");
+    canvas.appendChild(nav);
+    nav.addEventListener("click", e => {
+      const b = e.target.closest("[data-g3n]"); if (!b) return; const k = b.dataset.g3n, w = (ch.getSize("candle_pane", "main") || {}).width || 600;
+      if (k === "in" || k === "out") { try { ch.zoomAtCoordinate(k === "in" ? 1.25 : 0.8, { x: w * 0.75, y: 0 }, 160); } catch (x) { /* nada */ } }
+      else if (k === "left" || k === "right") { try { ch.scrollByDistance((k === "left" ? 1 : -1) * w * 0.3, 220); } catch (x) { /* nada */ } }
+      else if (k === "reset") resetView(true);
+    });
+
+    /* ===== botón «+» en la escala de precios ===== */
+    const plus = document.createElement("button"); plus.type = "button"; plus.className = "g3-plus"; plus.hidden = true; plus.title = "Alerta, línea o copiar este precio"; plus.setAttribute("aria-label", "Opciones en este precio"); plus.innerHTML = SV('<path d="M10 5v10M5 10h10"/>', 14);
+    canvas.appendChild(plus);
+    let plusV = null, plusHide = 0, plusOver = false;
+    ch.subscribeAction("onCrosshairChange", d => {
+      if (!alive || CFG.plusBtn === false || X.R.picking) { plus.hidden = true; return; }
+      clearTimeout(plusHide);
+      if (!d || d.y == null || !isFinite(d.y) || (d.paneId && d.paneId !== "candle_pane")) { plusHide = setTimeout(() => { if (!plusOver) plus.hidden = true; }, 220); return; }
+      try {
+        const ya = ch.getSize("candle_pane", "yAxis"), pane = ch.getSize("candle_pane", "root"); if (!ya || !pane) return;
+        let r = ch.convertFromPixel([{ y: d.y }], { paneId: "candle_pane" }); r = Array.isArray(r) ? r[0] : r; if (!r || r.value == null) return;
+        plusV = r.value; const left = CFG.pos === "left" ? ya.left + ya.width + 2 : ya.left - 24;
+        plus.style.left = Math.round(left) + "px"; plus.style.top = Math.round(pane.top + d.y - 10) + "px"; plus.hidden = false;
+      } catch (e) { /* nada */ }
+    });
+    plus.addEventListener("pointerenter", () => { plusOver = true; clearTimeout(plusHide); });
+    plus.addEventListener("pointerleave", () => { plusOver = false; plusHide = setTimeout(() => { plus.hidden = true; }, 400); });
+    plus.addEventListener("click", e => {
+      e.stopPropagation(); if (plusV == null) return; const d = X.digits(), v = +(+plusV).toFixed(d), pt = nf(v, d), L = ch.getDataList(), at = { timestamp: L.length ? L[L.length - 1].timestamp : Date.now(), value: v };
+      const r = plus.getBoundingClientRect();
+      MENU.open([
+        { head: "Precio " + pt },
+        HK.alertDialog && { t: "Crear una alerta en " + pt, k: ALT + " A", ic: "bell", f: () => HK.alertDialog({ value: v }) },
+        { t: "Línea horizontal en " + pt, k: ALT + " H", ic: "hline", f: () => X.quickLine("horizontalStraightLine", at) },
+        { t: "Copiar el precio " + pt, ic: "copy", f: () => copyText(String(v), "Precio copiado: " + pt) }
+      ], CFG.pos === "left" ? r.right : r.left, r.top, { alignRight: CFG.pos !== "left", label: "Opciones del precio" });
+    });
+
+    /* ===== operaciones de práctica: confirmar, sonido y avisos ===== */
+    canvas.addEventListener("click", e => {
+      const b = e.target.closest && e.target.closest('.gx-qo [data-qo="buy"], .gx-qo [data-qo="sell"]'); if (!b || CFG.oneClick !== false || !HK.place) return;
+      e.stopPropagation(); e.preventDefault(); const side = b.dataset.qo, r = b.getBoundingClientRect();
+      MENU.open([{ head: "Práctica · a mercado" }, { t: side === "buy" ? "Comprar ahora" : "Vender ahora", ic: "check", f: () => HK.place({ side }) }, { t: "Cancelar", ic: "x" }], r.left, r.bottom + 6, { label: "Confirmar la orden", focusFirst: true });
+    }, true);
+    HK.sound = (kind, force) => { if (force || CFG.snd) beep(kind, CFG.sndVol); };
+    { const h0 = X.hint; X.hint = t => {
+      const s = String(t || ""), ok = /^(Práctica cerrada|Orden ejecutada|Cerrada una parte)/.test(s);
+      if (ok) HK.sound(/^Orden/.test(s) ? "fill" : "close");
+      if (ok && CFG.onlyRej) return; h0(t);
+    }; }
+    const seenP = new Set(); let seenInit = false;
+    function watchFills() {
+      const P = HK.P; if (!P || !Array.isArray(P.list)) return;
+      P.list.forEach(p => { if (!seenP.has(p.id)) { seenP.add(p.id); if (seenInit && p.status === "open") HK.sound("fill"); } });
+      seenInit = true;
+    }
+
+    /* ===== aviso antes de una noticia fuerte de este mercado ===== */
+    const warned = new Set();
+    function newsWarn() {
+      const mins = +CFG.newsWarn || 0; if (!mins || X.R.on || !window.TkG2 || !TkG2.newsFor) return;
+      if (TK.current !== me && me.key !== "main") return;
+      const now = Date.now();
+      TkG2.newsFor(st.sym).forEach(ev => {
+        const left = ev.ts - now, k = st.sym + "|" + ev.ts + "|" + ev.country; if (left <= 0 || left > mins * 6e4 || warned.has(k)) return; warned.add(k);
+        const txt = `Noticia fuerte en ${Math.max(1, Math.round(left / 6e4))} min · ${ev.country}${ev.title ? " · " + ev.title : ""} (mueve ${st.sym})`;
+        if (CFG.alertAutoHide === false && window.tkSticky) window.tkSticky(txt); else if (window.toast) window.toast(txt); else say(txt, 6000);
+      });
+    }
+
     /* ===== atajos de teclado ===== */
     const onKey3 = e => {
       if (!alive || !document.body.contains(me.el) || TK.current !== me || MENU.isOpen) return;
@@ -678,13 +869,14 @@
 
     /* ===== reloj y ciclo ===== */
     paintClock(); paintBot(); dwPaint();
-    const tick = setInterval(() => { if (!alive || !document.body.contains(me.el)) return; paintClock(); if (autoOn() !== lastAuto) paintBot(); }, 1000);
-    const slow = setInterval(() => { cmpRefresh(); }, 15000);
-    { const pr = HK.onRestyle; HK.onRestyle = () => { pr && pr(); cmpApply(); paintBot(); dwPaint(); }; }
+    const tick = setInterval(() => { if (!alive || !document.body.contains(me.el)) return; paintClock(); if (autoOn() !== lastAuto) paintBot(); watchFills(); }, 1000);
+    const slow = setInterval(() => { cmpRefresh(); newsWarn(); }, 15000);
+    { const pr = HK.onRestyle; HK.onRestyle = () => { pr && pr(); cmpApply(); paintBot(); dwPaint(); g3apply(); }; }
     /* en práctica no hay rangos ni comparados (se verían velas del futuro); al volver, todo vuelve */
     { const pm = HK.onMode; HK.onMode = m => { pm && pm(m); MENU.close(true); setTimeout(() => { if (!alive) return; X.applyScale(); paintBot(); HK.repaint && HK.repaint(); dwPaint(); }, 60); }; }
-    { const prevOD2 = HK.onData; HK.onData = () => { prevOD2 && prevOD2(); setTimeout(() => { if (alive) { paintBot(); dwPaint(); } }, 80); }; }
-    { const pd = HK.destroy; HK.destroy = () => { alive = false; clearInterval(tick); clearInterval(slow); document.removeEventListener("keydown", onKey3); PAINT.delete(paintBot); delete CALC[me.key]; MENU.close(true); pd && pd(); }; }
+    { const prevOD2 = HK.onData; HK.onData = () => { prevOD2 && prevOD2(); setTimeout(() => { if (alive) { paintBot(); dwPaint(); g3apply(); } }, 80); }; }
+    { const pd = HK.destroy; HK.destroy = () => { alive = false; clearInterval(tick); clearInterval(slow); document.removeEventListener("keydown", onKey3); PAINT.delete(paintBot); delete CALC[me.key]; delete LAY[me.key]; MENU.close(true); pd && pd(); }; }
+    setTimeout(g3apply, 0); setTimeout(newsWarn, 4000);
     setTimeout(() => { try { ch.resize(); } catch (e) { /* nada */ } }, 30);
   }
   window.TkChartExt2 = (window.TkChartExt2 || []).concat([ext]);

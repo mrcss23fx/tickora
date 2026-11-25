@@ -4,7 +4,7 @@
 // La llama pg_cron cada minuto con la cabecera x-cron (el secreto vive en la tabla privada app_secrets). Fuente de precios: Dukascopy (la misma que el gráfico), Yahoo de respaldo y Binance (cripto).
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3";
-import { dukaOf, binOf, clean } from "./mercados.ts";
+import { dukaOf, binOf, clean, futOf } from "./mercados.ts";
 
 const MAP: Record<string, string> = {
   EURUSD: "EURUSD=X", GBPUSD: "GBPUSD=X", USDJPY: "JPY=X", AUDUSD: "AUDUSD=X", USDCAD: "CAD=X", USDCHF: "CHF=X",
@@ -14,7 +14,7 @@ const MAP: Record<string, string> = {
   GER40: "^GDAXI", DE40: "^GDAXI", UK100: "^FTSE", SPA35: "^IBEX", FRA40: "^FCHI", JPN225: "^N225",
 };
 const TFY: Record<string, [string, string, number]> = { "1m": ["1m", "1d", 60], "5m": ["5m", "5d", 300], "15m": ["15m", "5d", 900], "30m": ["30m", "1mo", 1800], "1h": ["60m", "1mo", 3600], "4h": ["60m", "3mo", 14400], "1d": ["1d", "1y", 86400] };
-function yahoo(sym: string): string | null { if (/\./.test(sym)) return null; const c = clean(sym); if (MAP[c]) return MAP[c]; for (const k of Object.keys(MAP)) if (c.startsWith(k)) return MAP[k]; if (/^[A-Z]{6}$/.test(c)) return c + "=X"; return null; }
+function yahoo(sym: string): string | null { const f = futOf(sym); if (f) return f; if (/\./.test(sym)) return null; const c = clean(sym); if (MAP[c]) return MAP[c]; for (const k of Object.keys(MAP)) if (c.startsWith(k)) return MAP[k]; if (/^[A-Z]{6}$/.test(c)) return c + "=X"; return null; }
 type Bar = [number, number, number, number, number]; // t (ms), o, h, l, c
 
 async function bars(sym: string, tf: string): Promise<Bar[]> {
