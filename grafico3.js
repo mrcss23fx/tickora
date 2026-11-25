@@ -702,7 +702,9 @@
     const intra = () => (U.TF_MS[st.tf] || 0) < 864e5;
     const dash = k => k === "solid" ? [] : k === "dotted" ? [1, 3] : [4, 4];
     const rgba = (hexc, a) => { const m = /^#([0-9a-f]{6})$/i.exec(hexc || ""); if (!m) return hexc; const n = parseInt(m[1], 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
-    const softCol = () => U.DARK ? "#8a93a8" : "#6b7385";
+    /* el fondo del gráfico puede ser claro aunque Tickora esté en modo oscuro (o al revés): los colores se eligen según el fondo de verdad */
+    const darkBg = () => { const m = /^#([0-9a-f]{6})$/i.exec(CFG.bg || ""); if (!m) return !!U.DARK; const v = parseInt(m[1], 16), r = v >> 16, g = (v >> 8) & 255, b = v & 255; return (0.299 * r + 0.587 * g + 0.114 * b) < 140; };
+    const softCol = () => darkBg() ? "#8a93a8" : "#6b7385";
     LAY[me.key] = {
       TKPDC: ({ ctx, bounding: b, yAxis }) => {
         const v = HK.prevDayClose && HK.prevDayClose(); if (v == null || !isFinite(v)) return;
@@ -711,7 +713,7 @@
         ctx.beginPath(); ctx.moveTo(0, Math.round(y) + .5); ctx.lineTo(b.width, Math.round(y) + .5); ctx.stroke(); ctx.setLineDash([]);
         if (CFG.prevDay === "both") {
           const t = "Cierre anterior " + nf(v, X.digits()); ctx.font = "500 10.5px Inter, system-ui, sans-serif"; const w = ctx.measureText(t).width + 12;
-          ctx.fillStyle = U.DARK ? "#16161d" : "#ffffff"; ctx.strokeStyle = c; ctx.beginPath(); ctx.rect(b.width - w - 6, y - 9, w, 18); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = darkBg() ? "#16161d" : "#ffffff"; ctx.strokeStyle = c; ctx.beginPath(); ctx.rect(b.width - w - 6, y - 9, w, 18); ctx.fill(); ctx.stroke();
           ctx.fillStyle = c; ctx.textBaseline = "middle"; ctx.fillText(t, b.width - w, y);
         }
         ctx.restore();
@@ -729,7 +731,7 @@
       },
       TKSESS: ({ ctx, chart, bounding: b, xAxis }) => {
         const se = sessOf(st.sym); if (!se || !intra()) return; const L = chart.getDataList(), vr = chart.getVisibleRange(); if (!L.length) return;
-        const bs = chart.getBarSpace().bar; ctx.save(); ctx.fillStyle = rgba(CFG.ethCol || (U.DARK ? "#2a3045" : "#dfe5f2"), U.DARK ? .55 : .6);
+        const bs = chart.getBarSpace().bar, dk = darkBg(); ctx.save(); ctx.fillStyle = CFG.ethCol ? rgba(CFG.ethCol, .5) : (dk ? "rgba(255,255,255,.05)" : "rgba(20,33,58,.07)");
         let x0 = null;
         for (let i = Math.max(0, vr.from - 1); i <= Math.min(L.length, vr.to + 1); i++) {
           let out = false; if (i < L.length) { const q = minOfDay(L[i].timestamp, se[0]); out = q.m < se[1] || q.m >= se[2]; }
@@ -743,10 +745,10 @@
         const idx = ts => { let lo = 0, hi = L.length - 1; if (ts < L[0].timestamp || ts > L[hi].timestamp + ms) return -1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (L[m].timestamp <= ts) lo = m; else hi = m - 1; } return lo; };
         const mk = (ts, px, buy, entry, lbl, real) => {
           const i = idx(ts); if (i < 0 || px == null || !isFinite(px)) return; const x = xAxis.convertToPixel(i), y = yAxis.convertToPixel(+px); if (!isFinite(x) || !isFinite(y)) return;
-          const up = entry ? buy : !buy, c = up ? (U.DARK ? "#86a9ff" : "#2443c7") : (U.DARK ? "#e9edf6" : "#14213a"), s = 6, yy = up ? y + 10 : y - 10;
-          ctx.fillStyle = c; ctx.strokeStyle = U.DARK ? "#0b0b10" : "#ffffff"; ctx.lineWidth = 1.5; ctx.beginPath();
+          const dk = darkBg(), up = entry ? buy : !buy, c = up ? (dk ? "#86a9ff" : "#2443c7") : (dk ? "#e9edf6" : "#14213a"), s = 6, yy = up ? y + 10 : y - 10;
+          ctx.fillStyle = c; ctx.strokeStyle = dk ? "#0b0b10" : "#ffffff"; ctx.lineWidth = 1.5; ctx.beginPath();
           if (up) { ctx.moveTo(x, yy - s); ctx.lineTo(x - s, yy + s * .6); ctx.lineTo(x + s, yy + s * .6); } else { ctx.moveTo(x, yy + s); ctx.lineTo(x - s, yy - s * .6); ctx.lineTo(x + s, yy - s * .6); }
-          ctx.closePath(); ctx.stroke(); ctx.fill(); if (!real) { ctx.fillStyle = U.DARK ? "#0b0b10" : "#ffffff"; ctx.beginPath(); ctx.arc(x, yy + (up ? 1 : -1), 1.6, 0, 7); ctx.fill(); }
+          ctx.closePath(); ctx.stroke(); ctx.fill(); if (!real) { ctx.fillStyle = dk ? "#0b0b10" : "#ffffff"; ctx.beginPath(); ctx.arc(x, yy + (up ? 1 : -1), 1.6, 0, 7); ctx.fill(); }
           if (CFG.execLbl && lbl) { ctx.font = "500 10.5px Inter, system-ui, sans-serif"; ctx.fillStyle = c; ctx.textAlign = "center"; ctx.textBaseline = up ? "top" : "bottom"; ctx.fillText(lbl, x, up ? yy + s + 3 : yy - s - 3); ctx.textAlign = "start"; }
         };
         ctx.save();

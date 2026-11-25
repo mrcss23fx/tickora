@@ -1647,7 +1647,7 @@
           ${desc("Primer color: vela alcista · segundo: bajista. Sin cuerpo quedan solo los bordes (velas huecas).")}
           <div class="gx-quick"><button type="button" class="gx-btn" data-q="tickora">Tickora</button><button type="button" class="gx-btn" data-q="clasica">Verde y rojo</button><button type="button" class="gx-btn" data-q="mono">Blanco y negro</button><button type="button" class="gx-btn" data-q="hueca">Huecas</button></div>
           ${sec("Datos")}
-          ${chk("ethBg", "Fondo fuera del horario regular", col("ethCol", DARK ? "#1f2433" : "#eef1f8"))}
+          ${chk("ethBg", "Fondo fuera del horario regular", col("ethCol", DARK ? "#2a3045" : "#dfe4ee"))}
           ${desc("Sombrea las horas en las que su bolsa está cerrada: acciones, índices y futuros de índices de EE. UU., Europa y Asia.")}
           ${sel("prec", [["auto", "Por defecto"], ...[0, 1, 2, 3, 4, 5, 6, 7, 8].map(n => [String(n), n === 0 ? "Sin decimales" : n + (n === 1 ? " decimal" : " decimales")])], "Precisión")}
           ${sel("tz", TZLIST.map(([v, l]) => [v, tzName(v) + l]), "Zona horaria")}`,
