@@ -94,7 +94,7 @@
     let r = 0; const i = POP.indexOf(m.s);
     if (i >= 0) r += 200 - i * 5;
     if (m.c === "fx") { const b = m.s.slice(0, 3), q = m.s.slice(3, 6); r += m.g === "may" ? 60 : MAJ.has(b) && MAJ.has(q) ? 35 : 5; }
-    else if (m.c === "com") r += /^X(AU|AG)USD$/.test(m.s) ? 60 : NAMES[m.s] ? (m.g === "agr" ? 12 : 30) : 0;
+    else if (m.c === "com") r += /^X(AU|AG)USD$/.test(m.s) ? 60 : NAMES[m.s] ? (m.g === "agr" ? 12 : 30) : /^X(AU|AG|PT|PD)[A-Z]{3}$/.test(m.s) && MAJ.has(m.s.slice(3)) ? 15 : 0;
     else if (m.c === "idx") r += 40;
     else if (m.c === "stk") r += STK[m.s] ? 28 : m.cc === "US" ? 6 : m.cc === "ES" ? 5 : 0;
     else if (m.c === "etf") r += STK[m.s] ? 18 : 0;
