@@ -720,9 +720,9 @@
         if (e.key === "Escape") { hideSlash(); return; }
       }
       const mod = e.metaKey || e.ctrlKey;
-      if (mod && e.key.toLowerCase() === "b") { e.preventDefault(); exec("bold"); }
-      if (mod && e.key.toLowerCase() === "i") { e.preventDefault(); exec("italic"); }
-      if (mod && e.key.toLowerCase() === "u") { e.preventDefault(); exec("underline"); }
+      if (mod && String(e.key || "").toLowerCase() === "b") { e.preventDefault(); exec("bold"); }
+      if (mod && String(e.key || "").toLowerCase() === "i") { e.preventDefault(); exec("italic"); }
+      if (mod && String(e.key || "").toLowerCase() === "u") { e.preventDefault(); exec("underline"); }
     });
     doc.addEventListener("click", e => { const li = e.target.closest("ul.todo > li"); if (li && e.offsetX < 26) { li.classList.toggle("done"); mark(); } });
     doc.addEventListener("paste", async e => {

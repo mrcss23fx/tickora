@@ -1168,7 +1168,7 @@
   if (!window.__tkKeys) {
     window.__tkKeys = true;
     document.addEventListener("keydown", e => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k" && S.user && S.loaded) { e.preventDefault(); palette(); }
+      if ((e.metaKey || e.ctrlKey) && String(e.key || "").toLowerCase() === "k" && S.user && S.loaded) { e.preventDefault(); palette(); }
     });
   }
 

@@ -1980,10 +1980,10 @@
         e.preventDefault(); const k = e.shiftKey ? 10 : 1;
         nudge(e.key === "ArrowLeft" ? -k : e.key === "ArrowRight" ? k : 0, e.key === "ArrowUp" ? -k : e.key === "ArrowDown" ? k : 0); return;
       }
-      if (mod && e.key.toLowerCase() === "c" && st.sel && !window.getSelection().toString()) { const o = getOv(st.sel); if (o) { st.clip = { name: o.name, points: o.points.map(p => ({ timestamp: p.timestamp, value: p.value })), extendData: JSON.parse(JSON.stringify(o.extendData || {})), styles: o.styles, sym: st.sym, n: 0 }; hint("Dibujo copiado. Ctrl/Cmd + V para pegarlo."); setTimeout(() => hint(""), 1800); } e.preventDefault(); return; }
-      if (mod && e.key.toLowerCase() === "v" && st.clip) { e.preventDefault(); pasteClip(); return; }
-      if (mod && e.key.toLowerCase() === "d" && st.sel) { e.preventDefault(); dupSel(); return; }
-      if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+      if (mod && String(e.key || "").toLowerCase() === "c" && st.sel && !window.getSelection().toString()) { const o = getOv(st.sel); if (o) { st.clip = { name: o.name, points: o.points.map(p => ({ timestamp: p.timestamp, value: p.value })), extendData: JSON.parse(JSON.stringify(o.extendData || {})), styles: o.styles, sym: st.sym, n: 0 }; hint("Dibujo copiado. Ctrl/Cmd + V para pegarlo."); setTimeout(() => hint(""), 1800); } e.preventDefault(); return; }
+      if (mod && String(e.key || "").toLowerCase() === "v" && st.clip) { e.preventDefault(); pasteClip(); return; }
+      if (mod && String(e.key || "").toLowerCase() === "d" && st.sel) { e.preventDefault(); dupSel(); return; }
+      if (mod && String(e.key || "").toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
       if ((e.key === "Delete" || e.key === "Backspace") && st.sel) { e.preventDefault(); removeSel(); }
     };
     document.addEventListener("keydown", onKey);
