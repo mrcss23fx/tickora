@@ -242,7 +242,14 @@
     const { st, R, ch, $, $$ } = X, opts = X.opts, main = me.key === "main";
     const canvas = $(".gx-canvas"), gx = $(".gx");
     let cross = null;
-    ch.subscribeAction("onCrosshairChange", d => { cross = d && d.kLineData ? d : null; paintLegend(); });
+    /* KLineChart 10 solo da x, y y panel: la vela bajo el cursor se calcula aquí (antes la leyenda se quedaba siempre en la última) */
+    ch.subscribeAction("onCrosshairChange", d => {
+      let i = d ? d.dataIndex : null;
+      if (d && i == null && d.x != null && isFinite(d.x)) { try { let r = ch.convertFromPixel([{ x: d.x, y: d.y }], { paneId: d.paneId || "candle_pane" }); r = Array.isArray(r) ? r[0] : r; i = r ? r.dataIndex : null; } catch (e) { i = null; } }
+      const ni = i != null && isFinite(i) ? { dataIndex: i } : null;
+      if ((ni && ni.dataIndex) === (cross && cross.dataIndex) && !!ni === !!cross) return;
+      cross = ni; paintLegend();
+    });
 
     /* ===== leyenda ===== */
     const lg = document.createElement("div"); lg.className = "gx-lg"; canvas.appendChild(lg);
@@ -273,6 +280,7 @@
         ${on("lgOhlc") ? `<span class="k">A</span><span>${fmtP(b.open)}</span><span class="k">M</span><span>${fmtP(b.high)}</span><span class="k">m</span><span>${fmtP(b.low)}</span><span class="k">C</span><span class="${cls}">${fmtP(b.close)}</span>` : ""}${on("lgChg") ? `<span class="${cls}">${chg >= 0 ? "+" : "−"}${fmtP(Math.abs(chg))} (${chg >= 0 ? "+" : "−"}${nf(Math.abs(pct), 2)} %)</span>` : ""}
         ${inds.length && on("lgInd") ? `<button type="button" class="gx-lgf" data-lgi="fold" title="${fold ? "Ver indicadores" : "Plegar indicadores"}" aria-label="${fold ? "Ver indicadores" : "Plegar indicadores"}">${I(fold ? IC.down : IC.up, 13)}</button>` : ""}</div>
         ${nw && on("lgNews") ? `<div class="gx-lgn">Noticia ${new Date(nw.ts).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} · ${esc(nw.country)} · ${esc(nw.title || "")}</div>` : ""}
+        ${HK.lgExtra ? HK.lgExtra(i, b) : ""}
         ${fold || !on("lgInd") ? "" : on("lgIv") ? rows : rows.replace(/<i style="[^"]*">[^<]*<\/i>/g, "")}`;
       if (qo) qo.style.top = (lg.offsetTop + lg.offsetHeight + 6) + "px";
     }

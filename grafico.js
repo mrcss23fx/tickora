@@ -11,6 +11,7 @@
   const TFS = [["1m", "1 minuto", { type: "minute", span: 1 }], ["3m", "3 minutos", { type: "minute", span: 3 }], ["5m", "5 minutos", { type: "minute", span: 5 }], ["15m", "15 minutos", { type: "minute", span: 15 }],
     ["30m", "30 minutos", { type: "minute", span: 30 }], ["45m", "45 minutos", { type: "minute", span: 45 }], ["1h", "1 hora", { type: "hour", span: 1 }], ["2h", "2 horas", { type: "hour", span: 2 }], ["4h", "4 horas", { type: "hour", span: 4 }],
     ["1d", "1 día", { type: "day", span: 1 }], ["1w", "1 semana", { type: "week", span: 1 }]];
+  const TZLIST = [["auto", "La de tu dispositivo"], ["UTC", "UTC"], ["Europe/London", "Londres"], ["Europe/Lisbon", "Lisboa"], ["Europe/Madrid", "Madrid"], ["Europe/Berlin", "Fráncfort"], ["Europe/Zurich", "Zúrich"], ["Europe/Athens", "Atenas"], ["Europe/Istanbul", "Estambul"], ["Europe/Moscow", "Moscú"], ["Asia/Dubai", "Dubái"], ["Asia/Kolkata", "Bombay"], ["Asia/Singapore", "Singapur"], ["Asia/Hong_Kong", "Hong Kong"], ["Asia/Shanghai", "Shanghái"], ["Asia/Tokyo", "Tokio"], ["Australia/Sydney", "Sídney"], ["Pacific/Auckland", "Auckland"], ["America/Sao_Paulo", "São Paulo"], ["America/Argentina/Buenos_Aires", "Buenos Aires"], ["America/Santiago", "Santiago de Chile"], ["America/Caracas", "Caracas"], ["America/Bogota", "Bogotá"], ["America/Lima", "Lima"], ["America/New_York", "Nueva York"], ["America/Toronto", "Toronto"], ["America/Mexico_City", "Ciudad de México"], ["America/Chicago", "Chicago"], ["America/Denver", "Denver"], ["America/Los_Angeles", "Los Ángeles"]];
   const TF_SHORT = { "1m": "1m", "3m": "3m", "5m": "5m", "15m": "15m", "30m": "30m", "45m": "45m", "1h": "1h", "2h": "2h", "4h": "4h", "1d": "1D", "1w": "1S" };
   const TF_MS = { "1m": 6e4, "3m": 18e4, "5m": 3e5, "15m": 9e5, "30m": 18e5, "45m": 27e5, "1h": 36e5, "2h": 72e5, "4h": 144e5, "1d": 864e5, "1w": 6048e5 };
   /* marcos que se construyen juntando velas de uno menor (si la fuente no los da tal cual) */
@@ -1066,7 +1067,7 @@
     }
     function applyType() { try { ch.removeIndicator({ name: "TKTYPE" }); } catch (e) { /* no estaba */ } if (DRAWN.includes(CFG.type)) ch.createIndicator({ name: "TKTYPE", paneId: "candle_pane", extendData: { t: CFG.type } }, true); }
     function saveInd(a) { ls.set("tk-ind2", a); applyInd(); }
-    function applyScale() { try { ch.overrideYAxis({ paneId: "candle_pane", name: CFG.scale || "normal", reverse: !!CFG.inv, position: CFG.pos === "left" ? "left" : "right", gap: { top: (+CFG.mTop >= 0 ? +CFG.mTop : 20) / 100, bottom: (+CFG.mBot >= 0 ? +CFG.mBot : 10) / 100 } }); } catch (e) { /* versión sin ejes propios */ } }
+    function applyScale() { try { ch.overrideYAxis({ paneId: "candle_pane", name: (HK.scaleName && HK.scaleName()) || CFG.scale || "normal", reverse: !!CFG.inv, position: CFG.pos === "left" ? "left" : "right", gap: { top: (+CFG.mTop >= 0 ? +CFG.mTop : 20) / 100, bottom: (+CFG.mBot >= 0 ? +CFG.mBot : 10) / 100 } }); } catch (e) { /* versión sin ejes propios */ } }
     function applyRight() { try { const bs = ch.getBarSpace(); ch.setOffsetRightDistance(Math.max(0, +CFG.mRight || 0) * ((bs && bs.bar) || 8)); } catch (e) { /* nada */ } }
 
     /* ---------- dibujos ---------- */
@@ -1093,7 +1094,7 @@
       onDrawEnd: e => { const k = st.tool; afterDraw(e.overlay); save(); doneTool(k); if (!st.stay) showFloat(e.overlay.id, TEXTABLE.includes(e.overlay.name) && e.overlay.name !== "tkEmoji"); },
       onPressedMoveEnd: e => { st.dragging = false; afterDraw(e.overlay); save(); },
       onRemoved: () => { if (!st.quiet) queueSave(); },
-      onRightClick: e => { removeSel(e.overlay.id); return true; },
+      onRightClick: e => { const o = e.overlay; if (HK.ovMenu && o && o.groupId === "draw" && !(o.isDrawing && o.isDrawing())) { try { e.preventDefault && e.preventDefault(); } catch (x) { /* nada */ } HK.ovMenu(o, e); return true; } removeSel(o.id); return true; }, // botón derecho: menú del dibujo (grafico3.js)
       onSelected: e => { if (st.tool === "eraser") { removeSel(e.overlay.id); return; } showFloat(e.overlay.id, false); },
       onDeselected: () => hideFloat(),
       onPressedMoveStart: () => { st.dragging = true; },
@@ -1106,7 +1107,7 @@
     }
     const getOv = id => ch.getOverlays({ id })[0];
     const tfOk = tfs => !tfs || !tfs.length || tfs.includes(st.tf);
-    function serial() { return ch.getOverlays({ groupId: "draw" }).map(o => Object.assign({ name: o.name, points: o.points.map(p => ({ timestamp: p.timestamp, value: p.value })), extendData: o.extendData, styles: o.styles, lock: o.lock }, (st.tfsById || {})[o.id] ? { tfs: st.tfsById[o.id] } : {})); }
+    function serial() { return ch.getOverlays({ groupId: "draw" }).map(o => Object.assign({ name: o.name, points: o.points.map(p => ({ timestamp: p.timestamp, value: p.value })), extendData: o.extendData, styles: o.styles, lock: o.lock }, o.zLevel ? { z: o.zLevel } : {}, (st.tfsById || {})[o.id] ? { tfs: st.tfsById[o.id] } : {})); }
     function applyTfVis() { const m = st.tfsById || {}; ch.getOverlays({ groupId: "draw" }).forEach(o => { if (m[o.id]) ch.overrideOverlay({ id: o.id, visible: !st.hidden && tfOk(m[o.id]) }); }); }
     let saveT = null;
     let pend = null, qT = null;
@@ -1125,7 +1126,7 @@
     function build(list) {
       st.quiet = true; ch.removeOverlay({ groupId: "draw" }); st.quiet = false;
       st.tfsById = {};
-      (list || []).forEach(d => { if (d && d.name && d.points) { const id = ch.createOverlay(Object.assign({ name: d.name, groupId: "draw", points: d.points, extendData: d.extendData, styles: d.styles, lock: !!d.lock || st.locked, visible: !st.hidden && tfOk(d.tfs), mode: magMode() }, evs(d.name))); if (id && d.tfs && d.tfs.length) st.tfsById[id] = d.tfs.slice(); } });
+      (list || []).forEach(d => { if (d && d.name && d.points) { const id = ch.createOverlay(Object.assign({ name: d.name, groupId: "draw", points: d.points, extendData: d.extendData, styles: d.styles, lock: !!d.lock || st.locked, visible: !st.hidden && tfOk(d.tfs), zLevel: +d.z || 0, mode: magMode() }, evs(d.name))); if (id && d.tfs && d.tfs.length) st.tfsById[id] = d.tfs.slice(); } });
     }
     async function restore() {
       const loc = ls.get("tk-draw-" + st.sym, null), lt = loc && !Array.isArray(loc) ? loc.t || 0 : 0;
@@ -1369,9 +1370,9 @@
       ch.overrideOverlay({ id: o.id, points: pts }); showFloat(o.id, false);
       clearTimeout(nudgeT); nudgeT = setTimeout(save, 300);
     }
-    function quickLine(name) {
-      let pt = null;
-      try { if (lastCross && lastCross.x != null) { let r = ch.convertFromPixel([{ x: lastCross.x, y: lastCross.y }], { paneId: "candle_pane" }); r = Array.isArray(r) ? r[0] : r; const kb = crossBar(); if (r && r.value != null) pt = { timestamp: kb ? kb.timestamp : r.timestamp, value: r.value }; } } catch (e) { /* sin cruz */ }
+    function quickLine(name, at) {
+      let pt = at && at.value != null && at.timestamp != null ? { timestamp: at.timestamp, value: at.value } : null;
+      try { if (!pt && lastCross && lastCross.x != null) { let r = ch.convertFromPixel([{ x: lastCross.x, y: lastCross.y }], { paneId: "candle_pane" }); r = Array.isArray(r) ? r[0] : r; const kb = crossBar(); if (r && r.value != null) pt = { timestamp: kb ? kb.timestamp : r.timestamp, value: r.value }; } } catch (e) { /* sin cruz */ }
       if (!pt) { const L = ch.getDataList(), b = L[L.length - 1]; if (!b) return; pt = { timestamp: b.timestamp, value: b.close }; }
       const ed = newStyle(name), o = { name, groupId: "draw", points: [pt], extendData: ed, mode: magMode(), styles: { line: lineSt(sty({ extendData: ed })), text: { color: ed.color } } };
       ch.createOverlay(Object.assign(o, evs(name))); save();
@@ -1387,7 +1388,7 @@
         <div class="gx-msub">Herramientas</div>
         ${K(A + " T", "Línea de tendencia")}${K(A + " H", "Línea horizontal en el cursor")}${K(A + " V", "Línea vertical en el cursor")}${K(A + " J", "Rayo horizontal")}${K(A + " F", "Retroceso de Fibonacci")}
         <div class="gx-msub">Gráfico</div>
-        ${K("5 15 1h D …", "Escribir el marco y pulsar Intro")}${K(A + " R", "Volver a las últimas velas")}${K("?", "Ver estos atajos")}
+        ${K("5 15 1h D …", "Escribir el marco y pulsar Intro")}${K("A … Z", "Empezar a escribir un mercado para buscarlo")}${K(A + " R", "Restablecer la vista y volver a las últimas velas")}${K(A + " G", "Ir a una fecha")}${K(A + " A", "Crear una alerta")}${K(A + " L", "Escala logarítmica")}${K(A + " P", "Escala en porcentaje")}${K(A + " I", "Invertir la escala")}${K("/", "Añadir indicador")}${K("Botón derecho", "Menú del gráfico o del dibujo")}${K("?", "Ver estos atajos")}
         <div class="gx-msub">Backtesting</div>
         ${K("← →", "Una vela atrás o adelante")}${K("Mayús ← →", "Diez velas")}${K("Espacio", "Reproducir o pausar")}${K("C", "Elegir punto")}
       </div>`, () => { DLG.onclick = e => { if (e.target.closest("[data-close]")) closeModal(); }; });
@@ -1585,7 +1586,7 @@
       const num = (k, l, min, max, unit) => `<label class="gx-srow"><span class="gx-sl">${l}</span><span class="gx-snum"><input class="gx-in" type="number" data-cfg="${k}" min="${min}" max="${max}" value="${esc(CFG[k] ?? "")}">${unit ? `<i>${unit}</i>` : ""}</span></label>`;
       const LS = [["solid", "Continua"], ["dashed", "Discontinua"], ["dotted", "Puntos"]];
       const pair = (a, ad, b, bd) => `<span class="gx-spair">${col(a, ad)}${col(b, bd)}</span>`;
-      const TZ = [["auto", "La de tu dispositivo"], ["UTC", "UTC"], ["Europe/Madrid", "Madrid"], ["Europe/London", "Londres"], ["America/New_York", "Nueva York"], ["America/Chicago", "Chicago"], ["Asia/Tokyo", "Tokio"], ["Asia/Hong_Kong", "Hong Kong"], ["Australia/Sydney", "Sídney"], ["America/Bogota", "Bogotá"], ["America/Mexico_City", "Ciudad de México"], ["America/Argentina/Buenos_Aires", "Buenos Aires"]];
+      const TZ = TZLIST;
       const tpls = ls.get("tk-cfgtpl", {}), tn = Object.keys(tpls);
       const prev = `<div class="gx-sprev">${[[1, 0, .8, .2, .9], [0, .7, .9, .4, .3], [1, .35, .6, .2, .7], [1, .55, .75, .45, .95], [0, .85, .95, .5, .6], [0, .5, .65, .1, .2]].map(([u, o, h, l, c]) => { const up = !!u, bc = up ? (CFG.body !== false ? (CFG.up || upD) : "transparent") : (CFG.body !== false ? (CFG.down || dnD) : "transparent"), br = CFG.border !== false ? (up ? CFG.bUp || CFG.up || upD : CFG.bDown || CFG.down || dnD) : bc, wk = CFG.wick !== false ? (up ? CFG.wUp || CFG.up || upD : CFG.wDown || CFG.down || dnD) : "transparent", top = (1 - Math.max(o, c)) * 100, bot = Math.min(o, c) * 100; return `<span class="gx-spc"><i class="w" style="background:${esc(wk)};top:${(1 - h) * 100}%;bottom:${l * 100}%"></i><i class="b" style="background:${esc(bc)};border-color:${esc(br)};top:${top}%;bottom:${bot}%"></i></span>`; }).join("")}</div>`;
       const TABS = [["velas", "Velas"], ["estado", "Línea de estado"], ["escalas", "Escalas"], ["lienzo", "Lienzo"], ["grafico", "En el gráfico"]];
@@ -1686,6 +1687,7 @@
       el.querySelector(".gx").classList.toggle("bt", R.on);
       $(".gx-btbadge").hidden = !R.on || R.picking;
       opts.onMode && opts.onMode(MODE);
+      HK.onMode && HK.onMode(MODE);
     }
     function enterReplay() {
       if (R.on) return;
@@ -2014,7 +2016,8 @@
       stop() { pause(); if (st.unsub) { st.unsub(); st.unsub = null; } }
     };
     me.hk = HK;
-    me.X = { st, R, ch, $, $$, hint, msg, digits, pp, applyLook, bar, applyInd, activeInd, saveInd, openModal, closeModal, openPop, closePop, stats, setSrc, opts, tfName, fmtWhen, load, setTf, live, replayLoader, pause, step, get MODE() { return MODE; } };
+    me.X = { st, R, ch, $, $$, hint, msg, digits, pp, applyLook, bar, applyInd, activeInd, saveInd, openModal, closeModal, openPop, closePop, stats, setSrc, opts, tfName, fmtWhen, load, setTf, live, replayLoader, pause, step, get MODE() { return MODE; },
+      quickLine, getOv, save, setTool, modalInd, modalSettings, modalTree, goAnchor, applyScale, applyRight, showFloat, hideFloat, crossBar, whenLoaded, removeSel, dupSel, cfgSave, restyleAll, openSearch, pasteClip, viewAnchor, PUB_DAYS, MOD, POP, F, HK, get lastCross() { return lastCross; } };
     ALL.add(me); ALL.forEach(x => x.el.classList.toggle("tk-act", x === me));
     load(); applyInd(); applyScale(); setTimeout(applyRight, 600); restore(); cfgSync(); renderFav(); applyCursor(); renderTfq();
     if (ls.get("tk-notools", false)) el.querySelector(".gx").classList.add("notools");
@@ -2041,5 +2044,5 @@
   }
   /* velas sueltas para el cuadro de la portada */
   function bars(sym, tf, o) { o = o || {}; const prov = binSym(sym) ? binance() : publico(o.invoke, o.digits != null ? o.digits : guessDigits(sym)); return prov.bars(sym, tf, null); }
-  window.TkChart = { mount, destroy, quote, bars, digits: guessDigits, sources: { binance, publico }, U: { TFS, TF_MS, TF_SHORT, DERIV, IND, IND_BY, CATS, CFG, pal, styles, aggBars, tidyBars, fmtR, icon, get DARK() { return DARK; } }, get current() { return inst; }, get all() { return Array.from(ALL); } };
+  window.TkChart = { mount, destroy, quote, bars, digits: guessDigits, sources: { binance, publico }, U: { TFS, TF_MS, TF_SHORT, DERIV, IND, IND_BY, CATS, CFG, pal, styles, aggBars, tidyBars, fmtR, icon, addTf, withDerived, binSym, TZS: TZLIST, get DARK() { return DARK; } }, get current() { return inst; }, get all() { return Array.from(ALL); } };
 })();

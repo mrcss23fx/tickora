@@ -290,7 +290,7 @@
     const o = D.o, fav = isFav(m.s), q = Q.get(m.s) || (o.cached && o.cached(m.s)), d = digits(m.s);
     const added = D.added.has(m.s), cur = m.s === o.current;
     return `<div class="mk-row" data-s="${esc(m.s)}"${cur ? ' aria-current="true"' : ""}>
-      <button type="button" class="mk-open" id="mk-o${i}" data-mk-open="${esc(m.s)}" aria-label="${esc((o.mode === "add" ? "Añadir " : "Abrir ") + m.s + (m.n ? ", " + m.n : ""))}">${badge(m)}
+      <button type="button" class="mk-open" id="mk-o${i}" data-mk-open="${esc(m.s)}" aria-label="${esc((o.mode === "add" ? (o.addVerb ? o.addVerb.charAt(0).toUpperCase() + o.addVerb.slice(1) + " " : "Añadir ") : "Abrir ") + m.s + (m.n ? ", " + m.n : ""))}">${badge(m)}
         <span class="mk-n"><b>${esc(m.t)}${cur ? '<i class="mk-now">en el gráfico</i>' : ""}</b><span>${esc(m.n || tagOf(m, extra))}</span><span class="mk-t2">${esc(tagOf(m, extra))}</span></span>
         <span class="mk-tag">${esc(tagOf(m, extra))}</span>
         <span class="mk-pc"><span class="mk-p" data-qp="${esc(m.s)}">${q ? esc(fmtP(q.last, d)) : ""}</span><span class="mk-c${q && q.chg > 0 ? " up" : ""}" data-qc="${esc(m.s)}">${q ? esc(fmtC(q.chg)) : ""}</span></span>
@@ -375,7 +375,8 @@
     const o = D.o;
     if (o.mode === "add") {
       if (D.added.has(s)) return;
-      D.added.add(s); if (o.onAdd) o.onAdd(s);
+      if (o.onAdd && o.onAdd(s) === false) return; // quien llama puede negarse (p. ej. ya hay 5 comparados)
+      D.added.add(s);
       const row = D.list.querySelector(`.mk-row[data-s="${CSS.escape(s)}"] .mk-added`); if (row) { row.classList.add("ok"); row.innerHTML = svg(IC.ok, 17); }
       return;
     }
@@ -408,17 +409,17 @@
       <section class="mk-dlg" role="dialog" aria-modal="true" aria-labelledby="mkT">
         <div class="mk-h">
           <button type="button" class="mk-ib mk-backbtn" data-mk-close aria-label="Volver al gráfico">${svg(IC.back, 22, 1.9)}</button>
-          <h2 id="mkT">${o.mode === "add" ? "Añadir a tu lista" : "Buscar mercado"}</h2>
+          <h2 id="mkT">${esc(o.title || (o.mode === "add" ? "Añadir a tu lista" : "Buscar mercado"))}</h2>
           <button type="button" class="mk-ib mk-x" data-mk-close aria-label="Cerrar">${svg(IC.x, 18)}</button>
         </div>
         <label class="mk-s">${svg(IC.search, 18)}<input type="search" aria-label="Buscar mercado" placeholder="Nombre o símbolo: oro, ibex, apple, bitcoin…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"><span class="mk-esc">Esc</span></label>
         <div class="mk-chips" role="tablist" aria-label="Categorías"></div>
         <div class="mk-list" role="list" aria-label="Mercados"></div>
-        <div class="mk-f"><span class="mk-keys"><span class="mk-k">↑ ↓</span>moverte <span class="mk-k">Enter</span>${o.mode === "add" ? "añadir" : "abrir"}${multi && o.mode !== "add" ? ' <span class="mk-k">Mayús + Enter</span>en otro panel' : ""}</span><span>Precios: Dukascopy (CFD) y Binance (cripto)</span></div>
+        <div class="mk-f"><span class="mk-keys"><span class="mk-k">↑ ↓</span>moverte <span class="mk-k">Enter</span>${o.mode === "add" ? esc(o.addVerb || "añadir") : "abrir"}${multi && o.mode !== "add" ? ' <span class="mk-k">Mayús + Enter</span>en otro panel' : ""}</span><span>Precios: Dukascopy (CFD) y Binance (cripto)</span></div>
       </section>`;
     document.body.appendChild(root);
     const input = root.querySelector("input");
-    D = { o, root, input, chips: root.querySelector(".mk-chips"), list: root.querySelector(".mk-list"), q: o.q || "", cat: "all", act: 0, added: new Set(), prev: document.activeElement, ovf: document.body.style.overflow };
+    D = { o, root, input, chips: root.querySelector(".mk-chips"), list: root.querySelector(".mk-list"), q: o.q || "", cat: "all", act: 0, added: new Set(o.added || []), prev: document.activeElement, ovf: document.body.style.overflow };
     D.onData = () => { if (D) { const sc = D.list.scrollTop; render(); D.list.scrollTop = sc; } };
     listeners.add(D.onData);
     document.body.style.overflow = "hidden";
