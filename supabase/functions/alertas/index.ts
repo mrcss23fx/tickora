@@ -1,8 +1,10 @@
 // Alertas de Tickora (18-nov-2026): se comprueban en el servidor cada minuto, aunque tengas la web cerrada.
 // Precio, línea dibujada (horizontal o de tendencia) e indicador (RSI). Avisa en la app y con notificación al móvil u ordenador.
+// v3 (25-nov-2026): todos los mercados del buscador (acciones, ETF, índices, materias primas, bonos y cualquier cripto de Binance).
 // La llama pg_cron cada minuto con la cabecera x-cron (el secreto vive en la tabla privada app_secrets). Fuente de precios: Dukascopy (la misma que el gráfico), Yahoo de respaldo y Binance (cripto).
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3";
+import { dukaOf, binOf, clean } from "./mercados.ts";
 
 const MAP: Record<string, string> = {
   EURUSD: "EURUSD=X", GBPUSD: "GBPUSD=X", USDJPY: "JPY=X", AUDUSD: "AUDUSD=X", USDCAD: "CAD=X", USDCHF: "CHF=X",
@@ -11,27 +13,25 @@ const MAP: Record<string, string> = {
   NAS100: "NQ=F", US100: "NQ=F", USTEC: "NQ=F", US500: "ES=F", SPX500: "ES=F", US30: "YM=F", DJ30: "YM=F",
   GER40: "^GDAXI", DE40: "^GDAXI", UK100: "^FTSE", SPA35: "^IBEX", FRA40: "^FCHI", JPN225: "^N225",
 };
-const CRYPTO = /^(BTC|ETH|SOL|XRP|BNB|ADA|DOGE|LTC|AVAX|DOT|LINK|TRX|TON|MATIC|SHIB)/;
 const TFY: Record<string, [string, string, number]> = { "1m": ["1m", "1d", 60], "5m": ["5m", "5d", 300], "15m": ["15m", "5d", 900], "30m": ["30m", "1mo", 1800], "1h": ["60m", "1mo", 3600], "4h": ["60m", "3mo", 14400], "1d": ["1d", "1y", 86400] };
-const clean = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/(PRO|ECN|RAW|MICRO|CASH|SPOT|M)$/, "");
-function yahoo(sym: string): string | null { const c = clean(sym); if (MAP[c]) return MAP[c]; for (const k of Object.keys(MAP)) if (c.startsWith(k)) return MAP[k]; if (/^[A-Z]{6}$/.test(c)) return c + "=X"; return null; }
+function yahoo(sym: string): string | null { if (/\./.test(sym)) return null; const c = clean(sym); if (MAP[c]) return MAP[c]; for (const k of Object.keys(MAP)) if (c.startsWith(k)) return MAP[k]; if (/^[A-Z]{6}$/.test(c)) return c + "=X"; return null; }
 type Bar = [number, number, number, number, number]; // t (ms), o, h, l, c
-const DMAP: Record<string, string> = { XAUUSD: "XAU/USD", XAGUSD: "XAG/USD", USOIL: "LIGHT.CMD/USD", UKOIL: "BRENT.CMD/USD", NAS100: "USATECH.IDX/USD", US100: "USATECH.IDX/USD", USTEC: "USATECH.IDX/USD", US500: "USA500.IDX/USD", SPX500: "USA500.IDX/USD", US30: "USA30.IDX/USD", DJ30: "USA30.IDX/USD", GER40: "DEU.IDX/EUR", DE40: "DEU.IDX/EUR", UK100: "GBR.IDX/GBP", SPA35: "ESP.IDX/EUR", FRA40: "FRA.IDX/EUR", JPN225: "JPN.IDX/JPY" };
-function dukaOf(sym: string): string | null { const c = clean(sym); if (DMAP[c]) return DMAP[c]; for (const k of Object.keys(DMAP)) if (c.startsWith(k)) return DMAP[k]; if (/^[A-Z]{6}$/.test(c) && !CRYPTO.test(c)) return c.slice(0, 3) + "/" + c.slice(3); return null; }
 
 async function bars(sym: string, tf: string): Promise<Bar[]> {
-  const c = clean(sym), cm = c.match(CRYPTO);
-  if (cm) {
+  const bs = binOf(sym);
+  if (bs) {
     const iv = tf === "4h" ? "4h" : tf === "1d" ? "1d" : tf === "1h" ? "1h" : tf;
-    const r = await fetch(`https://api.binance.com/api/v3/klines?symbol=${cm[1]}USDT&interval=${iv}&limit=200`);
+    const r = await fetch(`https://api.binance.com/api/v3/klines?symbol=${bs}&interval=${iv}&limit=200`);
     if (!r.ok) return []; const j = await r.json(); return j.map((k: any[]) => [k[0], +k[1], +k[2], +k[3], +k[4]]);
   }
   const di = dukaOf(sym), dv: Record<string, string> = { "1m": "1MIN", "5m": "5MIN", "15m": "15MIN", "30m": "30MIN", "1h": "1HOUR", "4h": "4HOUR", "1d": "1DAY" };
   if (di && dv[tf]) {
-    try {
-      const r = await fetch(`https://freeserv.dukascopy.com/2.0/index.php?path=chart%2Fjson3&instrument=${encodeURIComponent(di)}&offer_side=B&interval=${dv[tf]}&splits=true&stocks=true&limit=200&time_direction=P&timestamp=${Date.now()}&jsonp=_cb`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; Tickora/1.0)", "Referer": "https://freeserv.dukascopy.com/" } });
-      if (r.ok) { const t = await r.text(); const a = JSON.parse(t.slice(t.indexOf("(") + 1, t.lastIndexOf(")"))); if (Array.isArray(a) && a.length) return a.map((k: number[]) => [k[0], k[1], k[2], k[3], k[4]] as Bar).sort((x: Bar, y: Bar) => x[0] - y[0]); }
-    } catch (_e) { /* Yahoo de respaldo */ }
+    for (const code of [di.code, ...di.alt]) {
+      try {
+        const r = await fetch(`https://freeserv.dukascopy.com/2.0/index.php?path=chart%2Fjson3&instrument=${encodeURIComponent(code)}&offer_side=B&interval=${dv[tf]}&splits=true&stocks=true&limit=200&time_direction=P&timestamp=${Date.now()}&jsonp=_cb`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; Tickora/1.0)", "Referer": "https://freeserv.dukascopy.com/" } });
+        if (r.ok) { const t = await r.text(); const a = JSON.parse(t.slice(t.indexOf("(") + 1, t.lastIndexOf(")"))); if (Array.isArray(a) && a.length) return a.map((k: number[]) => [k[0], k[1], k[2], k[3], k[4]] as Bar).sort((x: Bar, y: Bar) => x[0] - y[0]); }
+      } catch (_e) { /* siguiente código o Yahoo de respaldo */ }
+    }
   }
   const y = yahoo(sym); if (!y) return [];
   const [iv, range, step] = TFY[tf] || TFY["1m"];

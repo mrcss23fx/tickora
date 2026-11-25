@@ -1,7 +1,10 @@
 // Velas públicas (respaldo cuando MT5 está cerrado).
+// v7 (25-nov-2026): todos los mercados de Dukascopy (acciones, ETF, índices, materias primas y bonos además de divisas),
+// catálogo para el buscador ({catalog:1}) y precios de muchos mercados en una sola llamada ({quotes:[…]}).
 // v5 (18-nov-2026): divisas, oro, plata, petróleo e índices desde Dukascopy (precio de contado, al momento, con mechas reales
 // y años de historial en todos los marcos). Yahoo Finance queda de respaldo. Uso en pruebas: sustituir por un proveedor
 // con licencia antes de cobrar.
+import { dukaOf, digitsFor, buildCatalog, clean } from "./mercados.ts";
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -26,8 +29,8 @@ const TF: Record<string, [string, number, number, number]> = {
   "1d": ["1d", 3650 * 86400, 30 * 365 * 86400, 86400],
   "1w": ["1wk", 15 * 365 * 86400, 30 * 365 * 86400, 604800],
 };
-function clean(s: string) { return s.toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/(PRO|ECN|RAW|MICRO|CASH|SPOT|M)$/, ""); }
 function resolve(sym: string): string | null {
+  if (/\./.test(sym)) return null; // acciones y ETF: solo Dukascopy
   const c = clean(sym);
   if (MAP[c]) return MAP[c];
   for (const k of Object.keys(MAP)) if (c.startsWith(k)) return MAP[k];
@@ -35,20 +38,7 @@ function resolve(sym: string): string | null {
   return null;
 }
 /* ---------- Dukascopy ---------- */
-const DMAP: Record<string, [string, number]> = {
-  XAUUSD: ["XAU/USD", 2], XAGUSD: ["XAG/USD", 3], USOIL: ["LIGHT.CMD/USD", 2], WTI: ["LIGHT.CMD/USD", 2], UKOIL: ["BRENT.CMD/USD", 2], BRENT: ["BRENT.CMD/USD", 2],
-  NAS100: ["USATECH.IDX/USD", 1], US100: ["USATECH.IDX/USD", 1], USTEC: ["USATECH.IDX/USD", 1], US500: ["USA500.IDX/USD", 1], SPX500: ["USA500.IDX/USD", 1],
-  US30: ["USA30.IDX/USD", 1], DJ30: ["USA30.IDX/USD", 1], GER40: ["DEU.IDX/EUR", 1], DE40: ["DEU.IDX/EUR", 1], UK100: ["GBR.IDX/GBP", 1],
-  SPA35: ["ESP.IDX/EUR", 1], FRA40: ["FRA.IDX/EUR", 1], JPN225: ["JPN.IDX/JPY", 0],
-};
 const DTF: Record<string, [string, number]> = { "1m": ["1MIN", 60], "5m": ["5MIN", 300], "15m": ["15MIN", 900], "30m": ["30MIN", 1800], "1h": ["1HOUR", 3600], "4h": ["4HOUR", 14400], "1d": ["1DAY", 86400], "1w": ["1WEEK", 604800] };
-function dukaOf(sym: string): [string, number] | null {
-  const c = clean(sym);
-  if (DMAP[c]) return DMAP[c];
-  for (const k of Object.keys(DMAP)) if (c.startsWith(k)) return DMAP[k];
-  if (/^[A-Z]{6}$/.test(c) && !/^(BTC|ETH|SOL|XRP|BNB|ADA|DOG|LTC)/.test(c)) return [c.slice(0, 3) + "/" + c.slice(3), /JPY$/.test(c) ? 3 : 5];
-  return null;
-}
 async function duka(inst: string, iv: string, toMs: number, limit: number): Promise<number[][]> {
   const url = `https://freeserv.dukascopy.com/2.0/index.php?path=chart%2Fjson3&instrument=${encodeURIComponent(inst)}&offer_side=B&interval=${iv}&splits=true&stocks=true&limit=${limit}&time_direction=P&timestamp=${toMs}&jsonp=_callbacks____1`;
   const ac = new AbortController(); const tm = setTimeout(() => ac.abort(), 9000);
@@ -65,8 +55,10 @@ async function fromDuka(sym: string, tf: string, toSec: number | null, last: boo
   const d = dukaOf(sym), cfg = DTF[tf]; if (!d || !cfg) return null;
   const nowMs = Date.now(), toMs = toSec ? toSec * 1000 : nowMs;
   const limit = last ? 120 : tf === "1m" ? 1500 : 1000;
-  let bars = await duka(d[0], cfg[0], toMs, limit);
-  if (!bars.length && toSec) return { bars: [], more: false, digits: d[1] };
+  let code = d.code, bars = await duka(code, cfg[0], toMs, limit);
+  for (const a of d.alt) { if (bars.length) break; const b2 = await duka(a, cfg[0], toMs, limit); if (b2.length) { code = a; bars = b2; } }
+  const dg = () => d.digits ?? (bars.length ? digitsFor(bars[bars.length - 1][4], /^[A-Z]{3}\/[A-Z]{3}$/.test(code)) : 5);
+  if (!bars.length && toSec) return { bars: [], more: false, digits: dg() };
   if (!bars.length) throw new Error("dukascopy vacío");
   const more = bars.length >= limit * 0.9;
   /* la vela diaria o semanal que aún se está formando: Dukascopy solo da las cerradas; se hace con las de 1 hora */
@@ -75,7 +67,7 @@ async function fromDuka(sym: string, tf: string, toSec: number | null, last: boo
     const start = tf === "1d" ? day : day - ((n.getUTCDay() + 6) % 7) * 864e5;
     const lastB = bars[bars.length - 1];
     if (lastB[0] < start) {
-      const H = (await duka(d[0], "1HOUR", nowMs, tf === "1d" ? 30 : 180)).filter(b => b[0] >= start);
+      const H = (await duka(code, "1HOUR", nowMs, tf === "1d" ? 30 : 180)).filter(b => b[0] >= start);
       if (H.length) bars.push([start, H[0][1], Math.max(...H.map(b => b[2])), Math.min(...H.map(b => b[3])), H[H.length - 1][4], H.reduce((s, b) => s + b[5], 0)]);
     }
   }
@@ -83,7 +75,7 @@ async function fromDuka(sym: string, tf: string, toSec: number | null, last: boo
   if (!toSec && tf !== "1m" && tf !== "1d" && tf !== "1w") {
     const step = cfg[1] * 1000, next = bars[bars.length - 1][0] + step;
     if (nowMs > next) {
-      const Mn = (await duka(d[0], "1MIN", nowMs, Math.min(300, cfg[1] / 60 + 5))).filter(b => b[0] >= next);
+      const Mn = (await duka(code, "1MIN", nowMs, Math.min(300, cfg[1] / 60 + 5))).filter(b => b[0] >= next);
       for (const m of Mn) {
         const k = Math.floor(m[0] / step) * step, L = bars[bars.length - 1];
         if (L[0] === k) { L[2] = Math.max(L[2], m[2]); L[3] = Math.min(L[3], m[3]); L[4] = m[4]; L[5] += m[5]; }
@@ -92,10 +84,49 @@ async function fromDuka(sym: string, tf: string, toSec: number | null, last: boo
     }
   }
   if (tf !== "1d" && tf !== "1w") bars = tidy(bars, cfg[1] * 1000, true);
-  return { bars, more, digits: d[1] };
+  return { bars, more, digits: dg() };
 }
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "max-age=15" } });
+function json(body: unknown, status = 200, maxAge = 15) {
+  return new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "max-age=" + maxAge } });
+}
+/* ---------- catálogo del buscador (se guarda en memoria 12 h) ---------- */
+let CAT: { t: number; list: (string | number)[][] } | null = null;
+async function catalog() {
+  if (CAT && Date.now() - CAT.t < 12 * 3600e3) return CAT.list;
+  const ac = new AbortController(); const tm = setTimeout(() => ac.abort(), 20000);
+  try {
+    const r = await fetch("https://freeserv.dukascopy.com/2.0/index.php?path=common%2Finstruments&jsonp=_callbacks____1", { signal: ac.signal, headers: { "User-Agent": "Mozilla/5.0 (compatible; Tickora/1.0)", "Referer": "https://freeserv.dukascopy.com/" } });
+    if (!r.ok) throw new Error("dukascopy " + r.status);
+    const t = await r.text();
+    const list = buildCatalog(JSON.parse(t.slice(t.indexOf("(") + 1, t.lastIndexOf(")"))));
+    if (list.length < 10) throw new Error("lista incompleta");
+    CAT = { t: Date.now(), list };
+    return list;
+  } finally { clearTimeout(tm); }
+}
+/* ---------- precio y cambio del día de muchos mercados en una llamada (se guarda 20 s) ---------- */
+type Quote = { last: number; chg: number | null; t: number; digits: number };
+const QC = new Map<string, { t: number; v: Quote | null }>();
+async function quoteOf(sym: string): Promise<Quote | null> {
+  const hit = QC.get(sym); if (hit && Date.now() - hit.t < 20000) return hit.v;
+  const d = dukaOf(sym); if (!d) return null;
+  const now = Date.now();
+  let code = d.code, D = await duka(code, "1DAY", now, 3);
+  for (const a of d.alt) { if (D.length) break; const d2 = await duka(a, "1DAY", now, 3); if (d2.length) { code = a; D = d2; } }
+  if (!D.length) { QC.set(sym, { t: now, v: null }); return null; }
+  const M = await duka(code, "1MIN", now, 1).catch(() => [] as number[][]);
+  const L = D[D.length - 1], P = D[D.length - 2], m = M[M.length - 1];
+  let last: number, prev: number | null;
+  if (m && m[0] >= L[0] + 864e5) { last = m[4]; prev = L[4]; } // el día de hoy se está moviendo
+  else { last = L[4]; prev = P ? P[4] : L[1]; } // mercado cerrado: el cambio de su último día
+  const v: Quote = { last, chg: prev ? (last - prev) / prev * 100 : null, t: m ? m[0] : L[0], digits: d.digits ?? digitsFor(last, /^[A-Z]{3}\/[A-Z]{3}$/.test(code)) };
+  if (QC.size > 3000) QC.clear();
+  QC.set(sym, { t: now, v });
+  return v;
+}
+async function pool<T>(items: T[], n: number, fn: (x: T) => Promise<void>) {
+  let i = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (i < items.length) await fn(items[i++]); }));
 }
 /* Yahoo añade al final un punto con la hora exacta de ahora (p. ej. 19:32:45) en vez de la hora de la vela (19:30).
    El gráfico lo tomaba como una vela nueva y cada 15 s aparecía otra vela pequeña. Aquí cada punto se junta con su vela. */
@@ -123,7 +154,17 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   let q: Record<string, unknown> = {};
   try { q = req.method === "POST" ? await req.json() : Object.fromEntries(new URL(req.url).searchParams); } catch { /* vacío */ }
-  const sym = String(q.sym || ""), tf = String(q.tf || "5m");
+  if (q.catalog) {
+    try { return json({ v: 1, t: Date.now(), list: await catalog() }, 200, 3600); }
+    catch (_e) { return json({ error: "No se pudo cargar la lista de mercados" }, 502); }
+  }
+  if (Array.isArray(q.quotes)) {
+    const list = Array.from(new Set((q.quotes as unknown[]).map(String).filter(s => /^[A-Za-z0-9._-]{1,24}$/.test(s)))).slice(0, 40);
+    const out: Record<string, Quote> = {};
+    await pool(list, 8, async s => { try { const v = await quoteOf(s); if (v) out[s] = v; } catch (_e) { /* sin precio */ } });
+    return json({ q: out });
+  }
+  const sym = String(q.sym || "").slice(0, 32), tf = String(q.tf || "5m");
   if (q.src !== "yahoo") {
     try {
       const D = await fromDuka(sym, tf, Number(q.to) > 0 ? Math.min(Number(q.to), Math.floor(Date.now() / 1000)) : null, !!q.last);

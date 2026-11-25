@@ -100,8 +100,9 @@
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const nf = (v, d) => Number(v).toLocaleString("es-ES", { minimumFractionDigits: d, maximumFractionDigits: d });
   const fmtR = r => (r > 0 ? "+" : r < 0 ? "−" : "") + nf(Math.abs(r), 1) + " R";
-  const binSym = s => { const c = String(s).toUpperCase().replace(/[^A-Z]/g, ""); const m = c.match(CRYPTO); return m ? m[1] + "USDT" : null; };
-  const guessDigits = s => { const c = String(s).toUpperCase(); if (binSym(c)) return /^(XRP|ADA|DOGE|TRX|SHIB|MATIC)/.test(c) ? 4 : 2; if (/JPY/.test(c)) return 3; if (/XAU|GOLD/.test(c)) return 2; if (/XAG|SILVER|OIL|WTI|BRENT/.test(c)) return 3; if (/^[A-Z]{6}/.test(c) && !/(NAS|US|GER|UK|SPA|FRA|JPN|DE|SPX|DJ)\d/.test(c)) return 5; return 1; };
+  /* par de Binance: BTCUSD de siempre → BTCUSDT; cualquier par en USDT tal cual; las acciones (AAPL.US…) nunca son cripto */
+  const binSym = s => { if (window.TkMarkets) return TkMarkets.binSym(s); const raw = String(s).toUpperCase().trim(); if (/\.[A-Z]{2}$/.test(raw)) return null; const c = raw.replace(/[^A-Z0-9]/g, ""); if (/^[A-Z0-9]{2,15}(USDT|USDC|FDUSD)$/.test(c)) return c; const m = c.replace(/[0-9]/g, "").match(CRYPTO); return m ? m[1] + "USDT" : null; };
+  const guessDigits = s => { const k = window.TkMarkets && TkMarkets.digits(s); if (k != null) return k; const c = String(s).toUpperCase(); if (/\.[A-Z]{2}$/.test(c)) return /\.JP$/.test(c) ? 0 : 2; if (binSym(c)) return /^(XRP|ADA|DOGE|TRX|SHIB|MATIC)/.test(c) ? 4 : 2; if (/JPY/.test(c)) return 3; if (/XAU|GOLD/.test(c)) return 2; if (/XAG|SILVER|OIL|WTI|BRENT/.test(c)) return 3; if (/^[A-Z]{6}/.test(c) && !/(NAS|US|GER|UK|SPA|FRA|JPN|DE|SPX|DJ)\d/.test(c)) return 5; return 1; };
   const alpha = (hex, a) => { if (!hex || hex[0] !== "#") return hex; let h = hex.slice(1); if (h.length === 3) h = h.split("").map(c => c + c).join(""); const n = parseInt(h, 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; };
   const dur = ms => { const m = Math.round(Math.abs(ms) / 6e4); if (m < 60) return m + " min"; const h = Math.floor(m / 60), r = m % 60; if (h < 48) return h + " h" + (r ? " " + r + " min" : ""); return Math.round(h / 24) + " días"; };
 
@@ -831,7 +832,7 @@
       async bars(sym, tf, to, last) {
         const { data, error } = await invoke("velas", { sym, tf, to: to ? Math.floor(to / 1000) - 1 : undefined, last: last ? 1 : undefined });
         if (error || !data || data.error) throw new Error((data && data.error) || (error && error.message) || "sin datos");
-        delayed = !!data.delayed; deep = !!data.deep;
+        delayed = !!data.delayed; deep = !!data.deep; if (data.digits != null && window.TkMarkets) TkMarkets.learn(sym, data.digits);
         return { bars: tidyBars(data.bars.map(b => ({ timestamp: b[0], open: round(b[1]), high: round(b[2]), low: round(b[3]), close: round(b[4]), volume: b[5] || 0 })), tf), more: !!data.more };
       },
       subscribe(sym, tf, cb) {
@@ -970,7 +971,7 @@
     const msg = t => { const m = $(".gx-msg"); m.hidden = !t; m.textContent = t || ""; };
     const hint = t => { const m = $(".gx-hint"); m.hidden = !t; m.textContent = t || ""; };
     const setSrc = () => { $(".gx-src").textContent = R.on ? "Práctica · " + (st.prov ? st.prov.label.split(" · ")[0] : "") : (st.prov ? st.prov.label : ""); };
-    const digits = () => (opts.digits && opts.digits(st.sym)) || guessDigits(st.sym);
+    const digits = () => { const v = opts.digits && opts.digits(st.sym); return v != null && isFinite(v) ? v : guessDigits(st.sym); };
     const curColor = () => st.color || pal().cob;
     function pickProv() {
       if (opts.mt5 && opts.mt5.has(st.sym)) return wd(opts.mt5.provider(st.sym));
@@ -1459,6 +1460,7 @@
       if (tfBuf && k === "Escape") { tfBuf = ""; tfBox(false); return true; }
       if (tfBuf && k === "Enter") { const t = parseTf(tfBuf); tfBuf = ""; tfBox(false); if (t) setTf(t); else { hint("Ese marco no está disponible. Prueba 1, 5, 15, 30, 1h, 4h, D o W."); setTimeout(() => hint(""), 2600); } return true; }
       if (tfBuf && k === "Backspace") { tfBuf = tfBuf.slice(0, -1); tfBox(!!tfBuf); return true; }
+      if (tfBuf && /^[DW]$/.test(tfBuf) && /^[a-zA-Z]$/.test(k) && window.TkMarkets) { const q = tfBuf + k.toUpperCase(); tfBuf = ""; tfBox(false); clearTimeout(tfT); openSearch(q); return true; } // «DA…», «WTI»: es un mercado
       if (/^[0-9a-zA-Z]$/.test(k) && tfBuf.length < 5) { tfBuf += k.toUpperCase(); tfBox(true); clearTimeout(tfT); tfT = setTimeout(() => { tfBuf = ""; tfBox(false); }, 4000); return true; }
       return false;
     }
@@ -1514,6 +1516,17 @@
       st.prov = pickProv(); setSrc(); ch.setPeriod(TFS.find(x => x[0] === k)[2]);
       if (anchor) whenLoaded(() => setTimeout(() => goAnchor(anchor), 30));
       if (was) { enterReplay(); if (keep) whenLoaded(() => { startAt(keep); if (hadPos) { hint("La simulada abierta se ha cerrado al cambiar de marco."); setTimeout(() => hint(""), 3000); } }); }
+    }
+    /* buscador de mercados nuevo (mercados.js); el de antes queda de respaldo */
+    function openSearch(q) {
+      if (!window.TkMarkets) { modalSymbol(); return; }
+      closePop();
+      TkMarkets.open({
+        q: q || "", current: st.sym, invoke: opts.invoke,
+        mt5: opts.mt5Syms, traded: opts.traded, cached: opts.cachedQuote, onAdd: opts.onAddWatch,
+        onPick: sym => { opts.onSymbol ? opts.onSymbol(sym) : inst.setSymbol(sym); },
+        onOther: opts.onSymbolOther && ALL.size > 1 ? sym => opts.onSymbolOther(sym, me) : null
+      });
     }
     function modalSymbol() {
       const groups = (opts.symbols && opts.symbols()) || [];
@@ -1890,7 +1903,7 @@
       if (t.dataset.back) { startAt(Date.now() - (+t.dataset.back) * 864e5); return; }
       if (t.dataset.sim) { if (HK.openSim) HK.openSim(t.dataset.sim); else openSim(t.dataset.sim); return; }
       const a = t.dataset.act;
-      if (a === "symbol") { modalSymbol(); return; }
+      if (a === "symbol") { openSearch(); return; }
       if (a === "ind") { modalInd(); return; }
       if (a === "settings") { modalSettings(); return; }
       if (a === "shot") { shot(); return; }
@@ -1932,8 +1945,11 @@
     });
     const onKey = e => {
       if (!document.body.contains(el) || (me && inst !== me)) return;
-      const typing = e.target.matches && e.target.matches("input,textarea,select");
-      if (!(R.on && !R.picking && (e.key === " " || e.key === "c" || e.key === "C")) && tfKey(e)) { e.preventDefault(); return; }
+      const typing = (e.target.matches && e.target.matches("input,textarea,select")) || e.target.isContentEditable;
+      if (window.TkMarkets && TkMarkets.isOpen) return;
+      if (!typing && !(R.on && !R.picking && (e.key === " " || e.key === "c" || e.key === "C")) && tfKey(e)) { e.preventDefault(); return; }
+      /* como en las plataformas profesionales: empezar a escribir una letra encima del gráfico abre el buscador de mercados */
+      if (!typing && MOD.hidden && POP.hidden && !FR && /^[a-zA-Z]$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey && !(R.on && !R.picking && (e.key === "c" || e.key === "C"))) { e.preventDefault(); openSearch(e.key.toUpperCase()); return; }
       if (FR && (e.key === "Enter" || e.key === "Escape")) { e.preventDefault(); endFree(e.key === "Enter"); return; }
       if (e.key === "Escape") {
         if (!MOD.hidden) closeModal(); else if (!POP.hidden) closePop(); else if (R.cut) cutMode(false);

@@ -917,8 +917,9 @@ body.bt-mode .live-only{display:none!important}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/klinecharts@10.1.0/dist/umd/klinecharts.min.js"></script>
-<script src="grafico.js?v=26"></script>
+<script src="grafico.js?v=27"></script>
 <script src="grafico2.js?v=7"></script>
+<script src="mercados.js?v=1"></script>
 </head>
 <body>
 <div id="app" aria-live="polite"></div>
@@ -1693,7 +1694,7 @@ const isNarrow=()=>window.matchMedia("(max-width:1023px)").matches;
 function paneCount(){const k=isNarrow()?"1":layState().k;return PANES[k]||1}
 function wlRows(){const w=watchState(),cur=window.TkChart&&TkChart.current?TkChart.current.sym:S.an&&S.an.sym;
   return w.list.map(sym=>{const q=(S.quotes||{})[sym];return `<div class="wl-row" role="listitem"><button type="button" class="wl-pick" data-wl="${esc(sym)}" aria-current="${sym===cur}"><b>${esc(sym)}</b><span class="wl-p">${q&&q.last!=null?esc(fmtQ(sym,q.last)):"—"}</span><span class="wl-c ${q&&q.chg!=null?(q.chg>=0?"up":"dn"):""}">${q&&q.chg!=null?(q.chg>=0?"+":"−")+num(Math.abs(q.chg),2)+" %":""}</span></button><button type="button" class="wl-del" data-wl-del="${esc(sym)}" aria-label="Quitar ${esc(sym)} de la lista">${SVG('<path d="M5 5l10 10M15 5L5 15"/>',14,2)}</button></div>`}).join("")||`<div class="small muted" style="padding:14px">Tu lista está vacía. Pulsa + para añadir mercados.</div>`}
-function fmtQ(sym,v){const i=symbolsInfo().find(x=>x.s===sym),d=i&&i.d!=null?i.d:/JPY/.test(sym)?3:/^(XAU|NAS|US|GER|UK|BTC|ETH)/.test(sym)?2:5;return Number(v).toLocaleString("es-ES",{minimumFractionDigits:d,maximumFractionDigits:d})}
+function fmtQ(sym,v){const i=symbolsInfo().find(x=>x.s===sym),d=i&&i.d!=null?i.d:window.TkChart?TkChart.digits(sym):/JPY/.test(sym)?3:/^(XAU|NAS|US|GER|UK|BTC|ETH)/.test(sym)?2:5;return Number(v).toLocaleString("es-ES",{minimumFractionDigits:d,maximumFractionDigits:d})}
 function anLayout(){
   const L=layState(),w=watchState(),n=paneCount(),k=isNarrow()?"1":L.k;
   const panes=Array.from({length:n},(_,i)=>`<div class="tkpane" id="${i?"tkchart"+i:"tkchart"}" data-i="${i}"></div>`).join("");
@@ -1716,16 +1717,20 @@ function anLayout(){
 }
 async function refreshQuotes(force){
   const w=watchState();if(!w.open||!document.getElementById("wlList")||document.hidden)return;
-  S.quotes=S.quotes||{};const now=Date.now();
+  S.quotes=S.quotes||{};const now=Date.now(),need=[];
   for(const sym of w.list){
     const q=S.quotes[sym];if(!force&&q&&now-q.t<60000)continue;
     const mi=symbolsInfo().find(x=>x.s===sym);
-    try{
-      if(mt5Live(sym)&&mi&&mi.p){S.quotes[sym]={last:+mi.p,chg:q&&q.chg!=null?q.chg:null,t:now}}
-      else{const r=await TkChart.quote(sym,{invoke:(n,b)=>sb.functions.invoke(n,{body:b}),digits:mi&&mi.d!=null?mi.d:undefined});if(r)S.quotes[sym]=Object.assign(r,{t:now})}
-    }catch(e){/* sin precio ahora */}
-    const el=document.getElementById("wlList");if(el)el.innerHTML=wlRows();else return;
+    if(mt5Live(sym)&&mi&&mi.p){S.quotes[sym]={last:+mi.p,chg:q&&q.chg!=null?q.chg:null,t:now};continue}
+    need.push(sym);
   }
+  if(need.length){
+    try{
+      if(window.TkMarkets){const r=await TkMarkets.quotes(need,{invoke:(n,b)=>sb.functions.invoke(n,{body:b}),maxAge:force?0:55000});Object.entries(r).forEach(([k,v])=>{S.quotes[k]={last:v.last,chg:v.chg,t:now}})}
+      else for(const sym of need){const r=await TkChart.quote(sym,{invoke:(n,b)=>sb.functions.invoke(n,{body:b})});if(r)S.quotes[sym]=Object.assign(r,{t:now})}
+    }catch(e){/* sin precio ahora */}
+  }
+  const el=document.getElementById("wlList");if(!el)return;el.innerHTML=wlRows();
   bindWatch();
 }
 function setPaneSym(inst,sym){
@@ -1754,7 +1759,7 @@ function bindLayout(){
   const paint=()=>{const v=q.value.trim().toUpperCase(),l=all().filter(x=>!w.list.includes(x)&&(!v||x.includes(v))).slice(0,30);if(v&&/^[A-Z0-9.]{2,15}$/.test(v)&&!l.includes(v)&&!w.list.includes(v))l.unshift(v);
     res.innerHTML=l.map(x=>`<button type="button" data-wl-add="${esc(x)}">${esc(x)}</button>`).join("")||`<div class="small muted" style="padding:8px">Ya tienes todos.</div>`;
     res.querySelectorAll("[data-wl-add]").forEach(b=>b.onclick=()=>{w.list.push(b.dataset.wlAdd);lsSet("tk-watch",{open:w.open,list:w.list});document.getElementById("wlList").innerHTML=wlRows();bindWatch();paint();refreshQuotes()})};
-  addB.onclick=()=>{add.hidden=!add.hidden;if(!add.hidden){q.value="";paint();q.focus()}};
+  addB.onclick=()=>{if(window.TkMarkets){TkMarkets.open({mode:"add",invoke:(n,b)=>sb.functions.invoke(n,{body:b}),mt5:()=>symbolsInfo().map(x=>x.s),traded:tradedSyms,cached:s=>(S.quotes||{})[s],onAdd:addWatch});return}add.hidden=!add.hidden;if(!add.hidden){q.value="";paint();q.focus()}};
   q.oninput=paint;q.onkeydown=e=>{if(e.key==="Enter"){const b=res.querySelector("[data-wl-add]");if(b)b.click()}if(e.key==="Escape"){add.hidden=true}};
   bindWatch();
   const lb=document.getElementById("layBtn"),lm=document.getElementById("layMenu");
@@ -1780,6 +1785,10 @@ function bindLayNamed(){
   document.querySelectorAll("[data-layuse]").forEach(b=>b.onclick=()=>{const x=layNamed()[b.dataset.layuse];if(!x)return;const L=layState();L.k=x.k;L.syms=(x.syms||L.syms).slice();L.sync=Object.assign({},x.sync||{});saveLay();Object.entries(x.tfs||{}).forEach(([i,tf])=>lsSet(+i?"tk-tf-p"+i:"tk-tf",tf));if(x.ind)lsSet("tk-ind2",x.ind);if(x.cfg)lsSet("tk-cfg",x.cfg);S.an.sym=L.syms[0]||S.an.sym;toast("Diseño «"+b.dataset.layuse+"» cargado");setTimeout(()=>location.reload(),300)});
   document.querySelectorAll("[data-laydel]").forEach(b=>b.onclick=e=>{e.stopPropagation();const d=layNamed();delete d[b.dataset.laydel];lsSet("tk-layouts",d);layPush();document.getElementById("layNamed").innerHTML=layNamedRows();bindLayNamed()});
 }
+/* mercados que operas (últimos 90 días, de tu diario) y añadir a la lista de seguimiento desde el buscador */
+function tradedSyms(){const from=Date.now()-90*864e5,c={};(S.trades||[]).forEach(t=>{const ts=new Date(t.open_time||t.close_time||0).getTime();if(t.symbol&&ts>=from)c[t.symbol]=(c[t.symbol]||0)+1});return Object.entries(c).sort((a,b)=>b[1]-a[1])}
+function addWatch(sym){const w=watchState();if(!sym||w.list.includes(sym))return;w.list.push(sym);lsSet("tk-watch",{open:w.open,list:w.list});const el=document.getElementById("wlList");if(el){el.innerHTML=wlRows();bindWatch()}refreshQuotes();if(!(window.TkMarkets&&TkMarkets.isOpen))toast(sym+" añadido a tu lista")}
+function marketsCloud(){if(!window.TkMarkets||S.mkCloud||!S.user)return;S.mkCloud=1;TkMarkets.load((n,b)=>sb.functions.invoke(n,{body:b}));TkMarkets.setCloud({load:async()=>{const {data}=await sb.from("docs").select("data").eq("col","prefs").eq("id","mercados").maybeSingle();return data&&data.data},save:d=>sb.from("docs").upsert({user_id:S.user.id,col:"prefs",id:"mercados",data:d,updated_at:new Date().toISOString()}).then(()=>{},()=>{})})}
 function symbolsInfo(){return ((S.bridge&&S.bridge.last_info&&S.bridge.last_info.symbols)||[]).filter(x=>x&&x.s)}
 function viewAnalizar(){
   const syms=symbolsInfo(), last=S.trades[0], p=S.plan;
@@ -1931,6 +1940,8 @@ function chartOpts(i){
     mt5:{has:mt5Live,provider:mt5Provider},
     symbols:()=>{const mine=symbolsInfo().map(x=>x.s);return (mine.length?[["Tu MT5",mine]]:[]).concat(MARKETS.map(([g,l])=>[g,l.filter(x=>!mine.includes(x))])).filter(g=>g[1].length)},
     onSymbol:sym=>{const inst=TkChart.all.find(x=>x.key===(main?"main":"p"+i));setPaneSym(inst,sym)},
+    onSymbolOther:(sym,from)=>{const other=TkChart.all.find(x=>x!==from&&x!==TkChart.current)||TkChart.all.find(x=>x!==from);if(other)setPaneSym(other,sym)},
+    mt5Syms:()=>symbolsInfo().map(x=>x.s),traded:tradedSyms,cachedQuote:s=>(S.quotes||{})[s],onAddWatch:addWatch,
     onPrice:main?(p,sym)=>{if(sym===S.an.sym)livePrice(sym,p)}:null,
     onPosition:main?pos=>{const a=S.an,f=v=>Number(v).toFixed(pos.digits);a.side=pos.side;a.entry=f(pos.entry);a.stop=f(pos.stop);a.tp=f(pos.tp);
       [["anEntry","entry"],["anStop","stop"],["anTp","tp"]].forEach(([id,k])=>{const x=document.getElementById(id);if(x)x.value=a[k]});
@@ -1946,6 +1957,7 @@ async function mountChart(){
   if(TkChart.current&&TkChart.current.el===el)return;
   try{await refreshBridges()}catch(e){/* seguimos con lo que había */}
   el=document.getElementById("tkchart");if(!el||(TkChart.current&&TkChart.current.el===el))return;
+  marketsCloud();
   const panes=Array.from(document.querySelectorAll(".tkpane"));
   panes.slice(1).forEach(p=>TkChart.mount(p,chartOpts(+p.dataset.i)));
   const main=TkChart.mount(el,chartOpts(0));
@@ -2325,7 +2337,7 @@ if(SB_OK){
 window.viewPlan=viewPlan;window.viewProgreso=viewProgreso;window.TKAPP={savePlan,planFor,S,sb,esc,SVG,fmtR,fmtV,fmtVt,fmtMoney,mOf,sumM,oneR,oneRSrc,planRiskBal,dispCur,moneyOn,prefU,CURS,fmtVabs,fmtLim,fmtMs,num,fmtPct,dayKey,todayKey,evaluate,tradeStats,toast,render,spark,MARKETS,symbolsInfo,lsGet,lsSet,acctName,selAcct,FEELS,greet,initials,minOf,minOfDate,money,inSession,MESES_L,NAV_APPS,appOf,ico,isDark,refreshWidgets,effectivePlan,applyAcct,thumb};
 })();
 </script>
-<link rel="stylesheet" href="extra2.css?v=1114">
+<link rel="stylesheet" href="extra2.css?v=1115">
 <script src="extra.js?v=22"></script>
 <script src="extra2.js?v=75"></script>
 <script src="extra3.js?v=8"></script>
