@@ -259,7 +259,7 @@
       const p = st.prov || {}; if (R.on) return "Práctica · " + ((p.label || "").split(" · ")[0] || "");
       if (/binance/i.test(p.id || p.label || "")) return "Binance · en vivo";
       if (/mt5/i.test(p.id || "") || /MT5/.test(p.label || "")) return "Tu MT5 · en vivo";
-      return p.delayed ? "Precio público · 10–15 min de retraso" : "Precio público · al momento";
+      return p.delayed ? "Precio público · 10–15 min de retraso" : p.live ? "Precio público · en vivo" : "Precio público · al momento";
     }
     function indLabel(x) { const meta = U.IND_BY[x.n]; return (meta ? meta[1] : x.n) + ((U.CFG || {}).lgIp !== false && x.p && x.p.length ? " " + x.p.join(", ") : ""); }
     /* línea de estado como en TradingView: logo, nombre, si el mercado está abierto, volumen y cambio del día */

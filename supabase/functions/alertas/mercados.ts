@@ -1,5 +1,5 @@
 // Mercados de Tickora (25-nov-2026): de qué fuente sale cada mercado y el catálogo del buscador.
-// Lo usan las funciones «velas» y «alertas» (cada una lleva su copia de este archivo).
+// Lo usan las funciones «velas», «alertas» y «vivo» (cada una lleva su copia de este archivo).
 // Fuentes: Dukascopy (divisas, metales, materias primas, índices, acciones, ETF y bonos en CFD) y Binance (cripto).
 
 /* nombre de Tickora → [código de Dukascopy, decimales] */

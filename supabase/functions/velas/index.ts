@@ -1,4 +1,7 @@
 // Velas públicas (respaldo cuando MT5 está cerrado).
+// v9 (26-nov-2026): la vela que se está formando llega hasta hace 2-3 s: Dukascopy publica la vela cerrada de 1 minuto unos
+// 20 s tarde, así que lo último se completa con velas de 10 s y con los ticks. La respuesta dice hasta qué tick llega («asof»)
+// para que el gráfico siga con los ticks en vivo de la función «vivo» sin contar dos veces. El precio de la lista sale del último tick.
 // v8 (25-nov-2026): futuros continuos (ES1!, NQ1!, GC1!, CL1!…) con precio de Yahoo y 10 min de retraso.
 // v7 (25-nov-2026): todos los mercados de Dukascopy (acciones, ETF, índices, materias primas y bonos además de divisas),
 // catálogo para el buscador ({catalog:1}) y precios de muchos mercados en una sola llamada ({quotes:[…]}).
@@ -53,6 +56,20 @@ async function duka(inst: string, iv: string, toMs: number, limit: number): Prom
     return a.filter((b: number[]) => Array.isArray(b) && b.length >= 5 && b.slice(1, 5).every(v => typeof v === "number" && isFinite(v))).map((b: number[]) => [b[0], b[1], b[2], b[3], b[4], b[5] || 0]).sort((x: number[], y: number[]) => x[0] - y[0]);
   } finally { clearTimeout(tm); }
 }
+/* últimos ticks (precio de compra, como las velas): [hora en ms, precio, volumen en millones como las velas], del más viejo al más nuevo */
+async function dukaTicks(inst: string, toMs: number, limit: number): Promise<number[][]> {
+  const url = `https://freeserv.dukascopy.com/2.0/index.php?path=chart%2Fjson3&instrument=${encodeURIComponent(inst)}&offer_side=B&interval=TICK&splits=true&stocks=true&limit=${limit}&time_direction=P&timestamp=${toMs}&jsonp=_callbacks____1`;
+  const ac = new AbortController(); const tm = setTimeout(() => ac.abort(), 6000);
+  try {
+    const r = await fetch(url, { signal: ac.signal, headers: { "User-Agent": "Mozilla/5.0 (compatible; Tickora/1.0)", "Referer": "https://freeserv.dukascopy.com/" } });
+    if (!r.ok) throw new Error("dukascopy " + r.status);
+    const t = await r.text(), a = JSON.parse(t.slice(t.indexOf("(") + 1, t.lastIndexOf(")")));
+    if (!Array.isArray(a)) return [];
+    return a.filter((x: number[]) => Array.isArray(x) && x.length >= 4 && isFinite(x[0]) && isFinite(x[1]) && x[1] > 0)
+      .map((x: number[]) => [x[0], x[1], (+x[3] || 0) / 1e6]).sort((x: number[], y: number[]) => x[0] - y[0]);
+  } finally { clearTimeout(tm); }
+}
+const weekOf = (t: number) => { const d = Math.floor(t / 864e5) * 864e5; return d - ((new Date(d).getUTCDay() + 6) % 7) * 864e5; };
 async function fromDuka(sym: string, tf: string, toSec: number | null, last: boolean) {
   const d = dukaOf(sym), cfg = DTF[tf]; if (!d || !cfg) return null;
   const nowMs = Date.now(), toMs = toSec ? toSec * 1000 : nowMs;
@@ -63,30 +80,36 @@ async function fromDuka(sym: string, tf: string, toSec: number | null, last: boo
   if (!bars.length && toSec) return { bars: [], more: false, digits: dg() };
   if (!bars.length) throw new Error("dukascopy vacío");
   const more = bars.length >= limit * 0.9;
-  /* la vela diaria o semanal que aún se está formando: Dukascopy solo da las cerradas; se hace con las de 1 hora */
-  if (!toSec && (tf === "1d" || tf === "1w")) {
-    const n = new Date(nowMs), day = Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate());
-    const start = tf === "1d" ? day : day - ((n.getUTCDay() + 6) % 7) * 864e5;
-    const lastB = bars[bars.length - 1];
-    if (lastB[0] < start) {
-      const H = (await duka(code, "1HOUR", nowMs, tf === "1d" ? 30 : 180)).filter(b => b[0] >= start);
-      if (H.length) bars.push([start, H[0][1], Math.max(...H.map(b => b[2])), Math.min(...H.map(b => b[3])), H[H.length - 1][4], H.reduce((s, b) => s + b[5], 0)]);
-    }
-  }
-  /* la vela intradía que se está formando: Dukascopy solo da las cerradas; se hace con las de 1 minuto */
-  if (!toSec && tf !== "1m" && tf !== "1d" && tf !== "1w") {
-    const step = cfg[1] * 1000, next = bars[bars.length - 1][0] + step;
-    if (nowMs > next) {
-      const Mn = (await duka(code, "1MIN", nowMs, Math.min(300, cfg[1] / 60 + 5))).filter(b => b[0] >= next);
-      for (const m of Mn) {
-        const k = Math.floor(m[0] / step) * step, L = bars[bars.length - 1];
-        if (L[0] === k) { L[2] = Math.max(L[2], m[2]); L[3] = Math.min(L[3], m[3]); L[4] = m[4]; L[5] += m[5]; }
-        else if (k > L[0]) bars.push([k, m[1], m[2], m[3], m[4], m[5]]);
+  /* la vela que se está formando: Dukascopy solo da velas cerradas, y la de 1 minuto llega unos 20 s tarde.
+     Se completa por partes: horas (diaria y semanal), minutos, velas de 10 s y, al final, los ticks. */
+  let asof = 0;
+  if (!toSec) {
+    const step = cfg[1] * 1000;
+    const bucket = (t: number) => tf === "1w" ? weekOf(t) : tf === "1d" ? Math.floor(t / 864e5) * 864e5 : Math.floor(t / step) * step;
+    const add = (m: number[]) => {
+      const k = bucket(m[0]), L = bars[bars.length - 1];
+      if (!L || k > L[0]) bars.push([k, m[1], m[2], m[3], m[4], m[5]]);
+      else if (k === L[0]) { L[2] = Math.max(L[2], m[2]); L[3] = Math.min(L[3], m[3]); L[4] = m[4]; L[5] += m[5]; }
+    };
+    const lb = bars[bars.length - 1];
+    let cover = lb[0] + (tf === "1w" ? 7 * 864e5 : tf === "1d" ? 864e5 : step); // hasta dónde llegan las velas cerradas
+    if (tf !== "1m" && nowMs > cover) {
+      if (tf === "1d" || tf === "1w") {
+        const H = (await duka(code, "1HOUR", nowMs, tf === "1d" ? 30 : 180).catch(() => [] as number[][])).filter(b => b[0] >= cover);
+        H.forEach(add); if (H.length) cover = H[H.length - 1][0] + 3600e3;
       }
+      const Mn = (await duka(code, "1MIN", nowMs, Math.min(300, Math.ceil((nowMs - cover) / 6e4) + 5)).catch(() => [] as number[][])).filter(b => b[0] >= cover);
+      Mn.forEach(add); if (Mn.length) cover = Mn[Mn.length - 1][0] + 6e4;
+    }
+    if (nowMs > cover && nowMs - cover < 15 * 6e4) { // mercado abierto: los últimos segundos
+      const [S10, T] = await Promise.all([duka(code, "10SEC", nowMs, 12).catch(() => [] as number[][]), dukaTicks(code, nowMs, 400).catch(() => [] as number[][])]);
+      const s10 = S10.filter(b => b[0] >= cover); s10.forEach(add); if (s10.length) cover = s10[s10.length - 1][0] + 1e4;
+      const tk = T.filter(t => t[0] >= cover); tk.forEach(t => add([t[0], t[1], t[1], t[1], t[1], t[2]]));
+      asof = tk.length ? tk[tk.length - 1][0] : s10.length ? cover - 1 : 0;
     }
   }
-  if (tf !== "1d" && tf !== "1w") bars = tidy(bars, cfg[1] * 1000, true);
-  return { bars, more, digits: dg() };
+  if (tf !== "1d" && tf !== "1w") bars = tidy(bars, cfg[1] * 1000, true, false); // Dukascopy: cada vela abre en su primer tick
+  return { bars, more, digits: dg(), asof };
 }
 function json(body: unknown, status = 200, maxAge = 15) {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "max-age=" + maxAge } });
@@ -125,7 +148,8 @@ async function quoteOf(sym: string): Promise<Quote | null> {
   let code = d.code, D = await duka(code, "1DAY", now, 3);
   for (const a of d.alt) { if (D.length) break; const d2 = await duka(a, "1DAY", now, 3); if (d2.length) { code = a; D = d2; } }
   if (!D.length) { QC.set(sym, { t: now, v: null }); return null; }
-  const M = await duka(code, "1MIN", now, 1).catch(() => [] as number[][]);
+  const T = await dukaTicks(code, now, 1).catch(() => [] as number[][]);
+  const M = T.length ? T.map(t => [t[0], t[1], t[1], t[1], t[1], 0]) : await duka(code, "1MIN", now, 1).catch(() => [] as number[][]);
   const L = D[D.length - 1], P = D[D.length - 2], m = M[M.length - 1];
   let last: number, prev: number | null;
   if (m && m[0] >= L[0] + 864e5) { last = m[4]; prev = L[4]; } // el día de hoy se está moviendo
@@ -141,7 +165,7 @@ async function pool<T>(items: T[], n: number, fn: (x: T) => Promise<void>) {
 }
 /* Yahoo añade al final un punto con la hora exacta de ahora (p. ej. 19:32:45) en vez de la hora de la vela (19:30).
    El gráfico lo tomaba como una vela nueva y cada 15 s aparecía otra vela pequeña. Aquí cada punto se junta con su vela. */
-function tidy(bars: number[][], step: number, intraday: boolean) {
+function tidy(bars: number[][], step: number, intraday: boolean, fixFlat = true) {
   bars.sort((a, b) => a[0] - b[0]);
   const out: number[][] = [];
   for (const b0 of bars) {
@@ -156,7 +180,7 @@ function tidy(bars: number[][], step: number, intraday: boolean) {
   // solo da un precio por vela (divisas en 1 minuto) la vela abre donde cerró la anterior.
   for (let i = 0; i < out.length; i++) {
     const b = out[i], p = out[i - 1];
-    if (p && b[2] === b[3] && b[1] === b[4] && (!intraday || b[0] - p[0] <= step * 3)) b[1] = p[4];
+    if (fixFlat && p && b[2] === b[3] && b[1] === b[4] && (!intraday || b[0] - p[0] <= step * 3)) b[1] = p[4];
     b[2] = Math.max(b[2], b[1], b[4]); b[3] = Math.min(b[3], b[1], b[4]);
   }
   return out;
@@ -179,7 +203,7 @@ Deno.serve(async (req) => {
   if (q.src !== "yahoo") {
     try {
       const D = await fromDuka(sym, tf, Number(q.to) > 0 ? Math.min(Number(q.to), Math.floor(Date.now() / 1000)) : null, !!q.last);
-      if (D) return json({ sym, src: "dukascopy", tf, bars: D.bars, more: D.more, delayed: false, deep: true, digits: D.digits });
+      if (D) return json({ sym, src: "dukascopy", tf, bars: D.bars, more: D.more, delayed: false, deep: true, digits: D.digits, asof: D.asof || undefined });
     } catch (_e) { /* si Dukascopy falla, se usa Yahoo */ }
   }
   const y = resolve(sym), cfg = TF[tf];

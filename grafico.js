@@ -18,6 +18,8 @@
   const DERIV = { "3m": ["1m", 3], "45m": ["15m", 3], "2h": ["1h", 2] };
   const bucketOf = (ts, ms) => { const d = Math.floor(ts / 864e5) * 864e5; return d + Math.floor((ts - d) / ms) * ms; };
   const monthOf = ts => { const d = new Date(ts); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1); };
+  const weekOf = ts => { const d = Math.floor(ts / 864e5) * 864e5; return d - ((new Date(d).getUTCDay() + 6) % 7) * 864e5; }; // lunes, en UTC
+  const barKey = (ts, tf) => tf === "1w" ? weekOf(ts) : tf === "1M" ? monthOf(ts) : bucketOf(ts, TF_MS[tf] || 6e4);
   /* marcos a tu medida (7 min, 54 min, 3 h…) y mensual: se construyen juntando velas de uno menor */
   function addTf(k) {
     if (TF_MS[k]) return true;
@@ -31,7 +33,7 @@
   }
   /* cada vela en su sitio: ordenadas, sin repetidas y con la hora de su marco (la fuente pública añadía al final un
      punto con la hora exacta de ahora, y el gráfico lo pintaba como otra vela cada 15 segundos) */
-  function tidyBars(list, tf) {
+  function tidyBars(list, tf, flat) { // flat === false: no tocar la apertura de velas de un solo precio (Dukascopy abre en su primer tick)
     const ms = TF_MS[tf] || 0, intra = ms && ms < 864e5, out = [];
     list.filter(b => b && isFinite(b.open) && isFinite(b.high) && isFinite(b.low) && isFinite(b.close)).sort((a, b) => a.timestamp - b.timestamp).forEach(b0 => {
       const b = Object.assign({}, b0); if (intra) b.timestamp = bucketOf(b.timestamp, ms);
@@ -41,7 +43,7 @@
     });
     out.forEach((b, i) => { // máximo y mínimo siempre abarcan apertura y cierre; vela sin forma (un solo precio) abre donde cerró la anterior
       const p = out[i - 1];
-      if (p && b.high === b.low && b.open === b.close && (!intra || b.timestamp - p.timestamp <= ms * 3)) b.open = p.close;
+      if (flat !== false && p && b.high === b.low && b.open === b.close && (!intra || b.timestamp - p.timestamp <= ms * 3)) b.open = p.close;
       b.high = Math.max(b.high, b.open, b.close); b.low = Math.min(b.low, b.open, b.close);
     });
     return out;
@@ -57,7 +59,7 @@
   }
   function wd(p) { // como withDerived, pero la etiqueta, el retraso y el historial siguen vivos (son getters)
     const w = withDerived(p); if (w === p || !p) return w;
-    ["label", "delayed", "deep"].forEach(k => { const d = Object.getOwnPropertyDescriptor(p, k); if (d && d.get) Object.defineProperty(w, k, { get: () => p[k], enumerable: true, configurable: true }); });
+    ["label", "delayed", "deep", "live"].forEach(k => { const d = Object.getOwnPropertyDescriptor(p, k); if (d && d.get) Object.defineProperty(w, k, { get: () => p[k], enumerable: true, configurable: true }); });
     return w;
   }
   function withDerived(p) {
@@ -851,34 +853,113 @@
         return { bars: d.map(k => ({ timestamp: k[0], open: +k[1], high: +k[2], low: +k[3], close: +k[4], volume: +k[5] })), more: d.length === lim };
       },
       subscribe(sym, tf, cb) {
-        let ws = null, alive = true;
+        /* la vela llega cada 2 s por «kline»; entre medias, cada operación («aggTrade») mueve la vela al momento, como en MT5 */
+        let ws = null, alive = true, cur = null, lastT = 0, raf = 0, dirty = false, lastEmit = 0;
+        const flush = () => { raf = 0; if (!alive || !cur || !dirty) return; const now = performance.now(); if (now - lastEmit < 40 && !document.hidden) { raf = requestAnimationFrame(flush); return; } dirty = false; lastEmit = now; cb(Object.assign({}, cur)); };
+        const kick = () => { dirty = true; if (document.hidden) flush(); else if (!raf) raf = requestAnimationFrame(flush); };
         const open = () => {
           if (!alive) return;
-          ws = new WebSocket(`wss://data-stream.binance.vision/ws/${binSym(sym).toLowerCase()}@kline_${iv(tf)}`);
-          ws.onmessage = ev => { try { const k = JSON.parse(ev.data).k; if (k) cb({ timestamp: k.t, open: +k.o, high: +k.h, low: +k.l, close: +k.c, volume: +k.v }); } catch (e) { /* mensaje raro */ } };
+          const s0 = binSym(sym).toLowerCase();
+          ws = new WebSocket(`wss://data-stream.binance.vision/stream?streams=${s0}@kline_${iv(tf)}/${s0}@aggTrade`);
+          ws.onmessage = ev => {
+            try {
+              const m = JSON.parse(ev.data), d = m.data || m;
+              if (d.e === "kline" && d.k) {
+                const k = d.k, b = { timestamp: k.t, open: +k.o, high: +k.h, low: +k.l, close: +k.c, volume: +k.v };
+                if (cur && b.timestamp < cur.timestamp) { cb(b); return; } // la vela anterior, ya cerrada
+                if (cur && b.timestamp === cur.timestamp && lastT > d.E) { b.close = cur.close; b.high = Math.max(b.high, cur.high); b.low = Math.min(b.low, cur.low); b.volume = Math.max(b.volume, cur.volume); }
+                cur = b; kick();
+              } else if (d.e === "aggTrade") {
+                if (!cur) return;
+                const pr = +d.p, qn = +d.q, k = barKey(d.T, tf);
+                if (k < cur.timestamp || !isFinite(pr)) return;
+                if (k > cur.timestamp) cur = { timestamp: k, open: pr, high: pr, low: pr, close: pr, volume: qn };
+                else { cur.high = Math.max(cur.high, pr); cur.low = Math.min(cur.low, pr); cur.close = pr; cur.volume += qn; }
+                lastT = Math.max(lastT, d.T); kick();
+              }
+            } catch (e) { /* mensaje raro */ }
+          };
           ws.onclose = () => { if (alive) setTimeout(open, 3000); };
         };
         open();
-        return () => { alive = false; try { ws && ws.close(); } catch (e) { /* ya cerrado */ } };
+        return () => { alive = false; if (raf) cancelAnimationFrame(raf); try { ws && ws.close(); } catch (e) { /* ya cerrado */ } };
       }
     };
   }
-  function publico(invoke, digits) {
-    let delayed = false, deep = false;
+  function publico(invoke, digits, live) {
+    let delayed = false, deep = false, flowAt = 0;
     const round = v => +(+v).toFixed(digits);
+    const snap = {}; // mercado|marco → última vela de «velas» y hasta qué tick llega (asof)
     const p = {
-      id: "publico", get label() { return delayed ? "Precio público · con retraso" : "Precio público"; }, get delayed() { return delayed; }, get deep() { return deep; },
+      id: "publico",
+      get live() { return Date.now() - flowAt < 8000; },
+      get label() { return delayed ? "Precio público · con retraso" : p.live ? "Precio público · en vivo" : "Precio público"; }, get delayed() { return delayed; }, get deep() { return deep; },
       async bars(sym, tf, to, last) {
         const { data, error } = await invoke("velas", { sym, tf, to: to ? Math.floor(to / 1000) - 1 : undefined, last: last ? 1 : undefined });
         if (error || !data || data.error) throw new Error((data && data.error) || (error && error.message) || "sin datos");
         delayed = !!data.delayed; deep = !!data.deep; if (data.digits != null && window.TkMarkets) TkMarkets.learn(sym, data.digits);
-        return { bars: tidyBars(data.bars.map(b => ({ timestamp: b[0], open: round(b[1]), high: round(b[2]), low: round(b[3]), close: round(b[4]), volume: b[5] || 0 })), tf), more: !!data.more };
+        const bars = tidyBars(data.bars.map(b => ({ timestamp: b[0], open: round(b[1]), high: round(b[2]), low: round(b[3]), close: round(b[4]), volume: b[5] || 0 })), tf, data.src !== "dukascopy");
+        const asof = +data.asof || 0;
+        if (!to && bars.length) snap[sym + "|" + tf] = { bar: Object.assign({}, bars[bars.length - 1]), asof };
+        return { bars, more: !!data.more, asof };
       },
       subscribe(sym, tf, cb) {
-        let alive = true, t = null;
-        const tick = async () => { if (!alive) return; try { const r = await p.bars(sym, tf, null, true); r.bars.slice(-2).forEach(cb); } catch (e) { /* lo intenta otra vez */ } if (alive) t = setTimeout(tick, 15000); };
-        t = setTimeout(tick, 15000);
-        return () => { alive = false; clearTimeout(t); };
+        /* Ticks en vivo (función «vivo», por Realtime): llegan en tandas de ~1 s y se reproducen con el ritmo con el que
+           ocurrieron, así la vela se mueve tick a tick como en MT5. Cada 15 s (cada 60 s si llegan ticks) se piden las
+           últimas velas a «velas» para corregir la vela anterior y por si se pierde algún tick. */
+        let alive = true, t = null, raf = 0, dirty = false, lastEmit = 0, qEnd = 0;
+        const s0 = snap[sym + "|" + tf];
+        let cur = s0 ? Object.assign({}, s0.bar) : null, lastT = s0 ? s0.asof : 0, lastQ = lastT;
+        const q = [];
+        const emit = () => { if (!cur) return; dirty = false; lastEmit = performance.now(); cb(Object.assign({}, cur)); };
+        const apply = x => { // x = [hora en ms, precio, volumen]
+          if (x[0] <= lastT || !cur) return;
+          const k = barKey(x[0], tf), pr = round(x[1]);
+          if (k > cur.timestamp) cur = { timestamp: k, open: pr, high: pr, low: pr, close: pr, volume: +x[2] || 0 };
+          else if (k === cur.timestamp) { cur.high = Math.max(cur.high, pr); cur.low = Math.min(cur.low, pr); cur.close = pr; cur.volume = +((cur.volume || 0) + (+x[2] || 0)).toFixed(6); }
+          else return;
+          lastT = x[0]; dirty = true;
+        };
+        const pump = () => {
+          raf = 0; if (!alive) return;
+          const now = performance.now();
+          while (q.length && q[0].due <= now) apply(q.shift().x);
+          if (dirty && (now - lastEmit >= 40 || !q.length)) emit();
+          if (q.length || dirty) raf = requestAnimationFrame(pump);
+        };
+        const onTicks = list => {
+          if (!alive || !Array.isArray(list) || !list.length) return;
+          flowAt = Date.now();
+          const fresh = list.filter(x => Array.isArray(x) && x[0] > lastQ && isFinite(x[1])).sort((a, b) => a[0] - b[0]);
+          if (!fresh.length) return;
+          lastQ = fresh[fresh.length - 1][0];
+          if (document.hidden || q.length > 400) { while (q.length) apply(q.shift().x); fresh.forEach(apply); if (dirty) emit(); return; } // en segundo plano: sin animar
+          const now = performance.now(), start = Math.max(now, qEnd), span = fresh[fresh.length - 1][0] - fresh[0][0];
+          const k = start - now > 1200 || span > 2500 ? Math.min(1, 700 / Math.max(1, span)) : 1; // si se acumula retraso, más deprisa
+          fresh.forEach(x => q.push({ x, due: start + (x[0] - fresh[0][0]) * k }));
+          qEnd = q[q.length - 1].due + 1;
+          if (!raf) raf = requestAnimationFrame(pump);
+        };
+        const unT = live && live.subscribe && !/!$/.test(sym) ? live.subscribe(sym, onTicks) : null;
+        const poll = async () => {
+          if (!alive) return;
+          try {
+            const r = await p.bars(sym, tf, null, true); if (!alive) return;
+            r.bars.slice(-2).forEach(b => {
+              if (!cur || b.timestamp > cur.timestamp) { cur = Object.assign({}, b); if (r.asof > lastT) lastT = r.asof; dirty = true; }
+              else if (b.timestamp === cur.timestamp) {
+                cur.open = b.open; cur.high = Math.max(cur.high, b.high); cur.low = Math.min(cur.low, b.low);
+                if (r.asof > lastT || !p.live) { cur.close = b.close; cur.volume = b.volume; if (r.asof > lastT) lastT = r.asof; } else cur.volume = Math.max(cur.volume || 0, b.volume || 0);
+                dirty = true;
+              } else cb(b); // vela anterior, ya cerrada: la corrige
+            });
+            if (lastQ < lastT) lastQ = lastT;
+            if (dirty) emit();
+          } catch (e) { /* lo intenta otra vez */ }
+          if (alive) t = setTimeout(poll, p.live ? 60000 : 15000);
+        };
+        t = setTimeout(poll, 15000);
+        return () => { alive = false; clearTimeout(t); if (raf) cancelAnimationFrame(raf); if (unT) unT(); };
       }
     };
     return p;
@@ -1017,7 +1098,7 @@
     function pickProv() {
       if (opts.mt5 && opts.mt5.has(st.sym)) return wd(opts.mt5.provider(st.sym));
       if (binSym(st.sym)) return wd(binance());
-      return wd(publico(opts.invoke, digits()));
+      return wd(publico(opts.invoke, digits(), opts.ticks));
     }
 
     /* datos en vivo (en KLineChart 10, «forward» = velas más antiguas y «backward» = más nuevas) */
@@ -1054,7 +1135,7 @@
       },
       subscribeBar: ({ callback }) => {
         if (st.unsub) st.unsub();
-        st.unsub = st.prov.subscribe(st.sym, st.tf, bar => { feedLive(bar, callback); st.price = bar.close; st.lastBar = bar; opts.onPrice && opts.onPrice(bar.close, st.sym); HK.onBar && HK.onBar(bar, "live"); });
+        st.unsub = st.prov.subscribe(st.sym, st.tf, bar => { feedLive(bar, callback); st.price = bar.close; st.lastBar = bar; opts.onPrice && opts.onPrice(bar.close, st.sym); HK.onBar && HK.onBar(bar, "live"); if (st.prov && st.prov.label !== st.srcShown) { st.srcShown = st.prov.label; setSrc(); } });
       },
       unsubscribeBar: () => { if (st.unsub) { st.unsub(); st.unsub = null; } }
     };

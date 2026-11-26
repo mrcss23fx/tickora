@@ -920,8 +920,8 @@ body.bt-mode .live-only{display:none!important}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/klinecharts@10.1.0/dist/umd/klinecharts.min.js"></script>
-<script src="grafico.js?v=32"></script>
-<script src="grafico2.js?v=11"></script>
+<script src="grafico.js?v=33"></script>
+<script src="grafico2.js?v=12"></script>
 <script src="grafico3.js?v=4"></script>
 <script src="mercados.js?v=4"></script>
 </head>
@@ -1890,6 +1890,22 @@ function livePrice(sym,price){
   S.an.live=txt;document.querySelectorAll(".ticket .sb .p").forEach(x=>x.textContent=txt);
   if(!S.an.entry){S.an.entry=txt;const el=document.getElementById("anEntry");if(el&&document.activeElement!==el)el.value=txt;paintAnalizar()}
 }
+/* Ticks en vivo del precio público: la función «vivo» los reparte por Realtime (canal «vivo:<MERCADO>»).
+   Un canal por mercado, compartido entre todos los gráficos que lo miran. Cada 20 s se avisa al servidor de qué
+   mercados se miran (si nadie avisa en 45 s, deja de pedirlos). Con la pestaña oculta más de 30 s se suelta el canal. */
+const VIVO={subs:new Map(),timer:null,hid:null};
+function vivoWatch(){const syms=[...VIVO.subs.keys()];if(!syms.length||!S.user||!sb)return;sb.rpc("vivo_watch",{p_syms:syms.slice(0,8)}).then(()=>{},()=>{})}
+function vivoJoin(sym,v){v.ch=sb.channel("vivo:"+sym).on("broadcast",{event:"t"},m=>{const t=m&&m.payload&&m.payload.t;if(Array.isArray(t))v.fns.forEach(f=>{try{f(t)}catch(e){}})}).subscribe()}
+const vivoTicks={subscribe(sym,fn){
+  if(!sb)return()=>{};sym=String(sym||"").toUpperCase();if(!/^[A-Z0-9._-]{1,24}$/.test(sym))return()=>{};
+  let v=VIVO.subs.get(sym);if(!v){v={fns:new Set(),ch:null};VIVO.subs.set(sym,v);if(!document.hidden)vivoJoin(sym,v)}
+  v.fns.add(fn);vivoWatch();if(!VIVO.timer)VIVO.timer=setInterval(()=>{if(!document.hidden)vivoWatch()},20000);
+  return()=>{v.fns.delete(fn);if(v.fns.size)return;if(v.ch)sb.removeChannel(v.ch);VIVO.subs.delete(sym);if(!VIVO.subs.size){clearInterval(VIVO.timer);VIVO.timer=null}};
+}};
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden){clearTimeout(VIVO.hid);VIVO.hid=setTimeout(()=>VIVO.subs.forEach(v=>{if(v.ch){sb.removeChannel(v.ch);v.ch=null}}),30000)}
+  else{clearTimeout(VIVO.hid);let n=0;VIVO.subs.forEach((v,sym)=>{if(!v.ch){vivoJoin(sym,v);n++}});if(n)vivoWatch()}
+});
 /* Precios en vivo de tu MT5 (programa puente 1.3 o más nuevo) */
 function mt5Live(sym){
   const b=S.bridge, info=b&&b.last_info||{}, v=parseFloat(info.version||"0");
@@ -1898,7 +1914,7 @@ function mt5Live(sym){
 }
 function mt5Provider(sym){
   const info=symbolsInfo().find(x=>x.s===sym), d=info&&info.d!=null?info.d:5;
-  const pub=TkChart.sources.publico((n,body)=>sb.functions.invoke(n,{body}),d);
+  const pub=TkChart.sources.publico((n,body)=>sb.functions.invoke(n,{body}),d,window.TK_TICKS||vivoTicks);
   const toBar=a=>({timestamp:a[0],open:+a[1],high:+a[2],low:+a[3],close:+a[4],volume:+a[5]||0});
   const wait=ms=>new Promise(r=>setTimeout(r,ms));
   let off=false;
@@ -1946,6 +1962,7 @@ function chartOpts(i){
     onTf:k=>{if(!layState().sync.tf||S.tfSyncing)return;S.tfSyncing=true;try{TkChart.all.forEach(x=>{if(x.key!==(main?"main":"p"+i)&&x.X&&x.tf!==k)x.X.setTf(k)})}finally{setTimeout(()=>{S.tfSyncing=false},50)}},
     digits:sym=>{const x=symbolsInfo().find(y=>y.s===sym);return x&&x.d!=null?x.d:null},
     invoke:(name,body)=>sb.functions.invoke(name,{body}),
+    ticks:window.TK_TICKS||vivoTicks,
     mt5:{has:mt5Live,provider:mt5Provider},
     symbols:()=>{const mine=symbolsInfo().map(x=>x.s);return (mine.length?[["Tu MT5",mine]]:[]).concat(MARKETS.map(([g,l])=>[g,l.filter(x=>!mine.includes(x))])).filter(g=>g[1].length)},
     onSymbol:sym=>{const inst=TkChart.all.find(x=>x.key===(main?"main":"p"+i));setPaneSym(inst,sym)},
