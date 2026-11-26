@@ -5,6 +5,7 @@
 // (canal «vivo:<MERCADO>», evento «t», carga {s, t: [[hora ms, precio, volumen], …]}). Una sola petición por mercado,
 // la mire una persona o mil. Solo una copia reparte a la vez (turno en la tabla live_relay); cada copia dura hasta
 // el minuto siguiente y la del siguiente minuto toma el relevo.
+// v3 (26-nov-2026): cada mercado con su propio ritmo (uno lento no retrasa a los demás) y reparto cada 0,1 s.
 // v2 (26-nov-2026): cada medio segundo (cada 0,75 s con más de 8 mercados mirados, cada segundo con más de 16):
 // la vela va 1 s más cerca del mercado. El registro final dice cuánto tarda el tick más nuevo en llegar (mediana).
 // v1 (26-nov-2026).
@@ -37,35 +38,50 @@ async function broadcast(messages: unknown[]) {
 // deno-lint-ignore no-explicit-any
 async function run(sb: any, owner: string) {
   const end = (Math.floor(Date.now() / 60000) + 1) * 60000 + 1500; // hasta 1,5 s después del minuto siguiente
-  const last = new Map<string, number>(), code = new Map<string, string>();
-  let syms: string[] = [], leaseAt = 0, have = false, idle = 0, sent = 0;
-  const ages: number[] = []; // ms entre el tick más nuevo y el momento de repartirlo (para el registro)
-  while (Date.now() < end) {
-    const t0 = Date.now();
-    if (!have || t0 - leaseAt >= 2000) { // renovar el turno y leer qué mercados se miran
-      const { data, error } = await sb.rpc("vivo_lease", { p_owner: owner });
-      if (error || data == null) { have = false; await sleep(300); continue; } // otra copia aún reparte: esperamos el relevo
-      have = true; leaseAt = t0; syms = (data as string[]).slice(0, 30);
-      if (!syms.length) { if (++idle >= 3) break; } else idle = 0; // nadie mira nada: se acaba
-    }
-    const msgs: unknown[] = [];
-    await Promise.all(syms.map(async s => {
-      const d = dukaOf(s); if (!d) return;
+  const last = new Map<string, number>(), code = new Map<string, string>(), loops = new Map<string, { stop: boolean }>();
+  const out: unknown[] = [], ages: number[] = []; // mensajes listos para repartir · ms entre el tick más nuevo y repartirlo
+  let syms: string[] = [], idle = 0, sent = 0, done = false;
+  const every = () => syms.length <= 8 ? 500 : syms.length <= 16 ? 750 : 1000;
+  const stopAll = () => { loops.forEach(c => { c.stop = true; }); loops.clear(); };
+  // cada mercado va a su ritmo: uno lento no retrasa a los demás
+  const loop = async (s: string, ctl: { stop: boolean }) => {
+    const d = dukaOf(s); if (!d) return;
+    while (!ctl.stop && Date.now() < end) {
+      const t0 = Date.now();
       let c = code.get(s) || d.code, tk = await ticks(c, 60);
       if (!tk.length && !code.has(s)) for (const a of d.alt) { const t2 = await ticks(a, 60); if (t2.length) { c = a; tk = t2; break; } }
-      if (!tk.length) return;
-      code.set(s, c);
-      const lt = last.get(s) ?? (Date.now() - 4000); // la primera vez, solo los últimos segundos
-      const fresh = tk.filter(x => x[0] > lt);
-      if (!fresh.length) return;
-      last.set(s, fresh[fresh.length - 1][0]);
-      if (ages.length < 2000) ages.push(Date.now() - fresh[fresh.length - 1][0]);
-      msgs.push({ topic: "vivo:" + s, event: "t", payload: { s, t: fresh }, private: false });
-    }));
-    if (msgs.length) { await broadcast(msgs).catch(e => console.log("vivo: broadcast", String(e))); sent += msgs.length; }
-    const every = syms.length <= 8 ? 500 : syms.length <= 16 ? 750 : 1000;
-    const wait = every - (Date.now() - t0); if (wait > 0) await sleep(wait);
+      if (tk.length && !ctl.stop) {
+        code.set(s, c);
+        const lt = last.get(s) ?? (Date.now() - 4000); // la primera vez, solo los últimos segundos
+        const fresh = tk.filter(x => x[0] > lt);
+        if (fresh.length) {
+          last.set(s, fresh[fresh.length - 1][0]);
+          if (ages.length < 4000) ages.push(Date.now() - fresh[fresh.length - 1][0]);
+          out.push({ topic: "vivo:" + s, event: "t", payload: { s, t: fresh }, private: false });
+        }
+      }
+      const wait = every() - (Date.now() - t0); if (wait > 0) await sleep(wait);
+    }
+  };
+  // lo que esté listo se reparte junto, cada 0,1 s
+  const flusher = (async () => {
+    while (!done) {
+      if (out.length) { const m = out.splice(0); await broadcast(m).catch(e => console.log("vivo: broadcast", String(e))); sent += m.length; }
+      await sleep(100);
+    }
+  })();
+  let have = false;
+  while (Date.now() < end) {
+    const { data, error } = await sb.rpc("vivo_lease", { p_owner: owner }); // renovar el turno y leer qué mercados se miran
+    if (error || data == null) { if (have) stopAll(); have = false; await sleep(300); continue; } // otra copia aún reparte: esperamos el relevo
+    have = true; syms = (data as string[]).slice(0, 30);
+    for (const s of syms) if (!loops.has(s)) { const ctl = { stop: false }; loops.set(s, ctl); loop(s, ctl).catch(() => {}); }
+    for (const [s, ctl] of Array.from(loops)) if (!syms.includes(s)) { ctl.stop = true; loops.delete(s); }
+    if (!syms.length) { if (++idle >= 3) break; } else idle = 0; // nadie mira nada: se acaba
+    await sleep(Math.min(2000, Math.max(0, end - Date.now())));
   }
+  stopAll(); await sleep(150); done = true; await flusher;
+  if (out.length) { await broadcast(out.splice(0)).catch(() => {}); }
   if (have) await sb.rpc("vivo_release", { p_owner: owner });
   ages.sort((a, b) => a - b);
   console.log("vivo: fin", owner, "mensajes", sent, "mercados", syms.length, "retraso_ms", ages.length ? ages[Math.floor(ages.length / 2)] : "-");
