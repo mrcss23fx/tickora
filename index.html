@@ -950,9 +950,10 @@ body.bt-mode .live-only{display:none!important}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/klinecharts@10.1.0/dist/umd/klinecharts.min.js"></script>
-<script src="grafico.js?v=35"></script>
-<script src="grafico2.js?v=13"></script>
-<script src="grafico3.js?v=5"></script>
+<script src="grafico.js?v=36"></script>
+<script src="grafico2.js?v=14"></script>
+<script src="grafico3.js?v=6"></script>
+<script src="grafico4.js?v=1"></script>
 <script src="mercados.js?v=4"></script>
 </head>
 <body>
@@ -2002,6 +2003,60 @@ function mt5Provider(sym){
     }
   };
 }
+/* Operar en tu MT5 desde el gráfico (programa 2.2). La orden va a bridge_orders (trade_send); el programa la recoge
+   en su siguiente envío (cada medio segundo mientras miras el gráfico), la comprueba y la ejecuta. Por defecto solo en
+   cuentas demo, nunca sin stop ni rompiendo tu plan (la app lo mira antes y el programa otra vez, con los datos de la cuenta). */
+const TRADE={acct:null,at:0,ch:null,started:false,hb:null,hbKey:""};
+const tradeVer=()=>parseFloat((S.bridge&&S.bridge.last_info&&S.bridge.last_info.version)||"0");
+function tradeSym(sym){const L=symbolsInfo(),f=x=>String(x||"").toUpperCase().replace(/[^A-Z0-9]/g,""),k=f(sym);if(!k)return null;
+  const x=L.find(z=>z.s===sym)||L.find(z=>f(z.s)===k);if(x)return x;const c=L.filter(z=>f(z.s).startsWith(k)&&f(z.s).length-k.length<=4);return c.length===1?c[0]:null}
+function tradeStart(){
+  if(TRADE.started||!sb||!S.user)return;TRADE.started=true;
+  sb.from("bridge_acct").select("data,updated_at").maybeSingle().then(({data})=>{if(data&&data.data){TRADE.acct=data.data;TRADE.at=new Date(data.updated_at).getTime();window.dispatchEvent(new CustomEvent("tk-acct"))}},()=>{});
+  TRADE.ch=sb.channel("acct-"+S.user.id).on("postgres_changes",{event:"*",schema:"public",table:"bridge_acct",filter:"user_id=eq."+S.user.id},p=>{const r=p.new;if(r&&r.data){TRADE.acct=r.data;TRADE.at=Date.now();window.dispatchEvent(new CustomEvent("tk-acct"))}}).subscribe();
+  if(window.tkCandPush)try{window.tkCandPush(true)}catch(e){}   // que el programa tenga tus normas aunque el candado esté apagado
+}
+function tradeCheck(c){
+  if(c.op!=="open")return "";
+  if(!(+c.sl>0))return "Sin stop no se abre: es tu plan.";
+  const P=S.basePlan||S.plan||{},md=(S.user&&S.user.user_metadata)||{},lk=Math.max(+lsGet("tk-lock","0")||0,+md.lockUntil||0);
+  if(lk>Date.now())return "Pediste no operar hasta las "+new Date(lk).toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"})+".";
+  const mi=x=>{const m=/^(\d{1,2}):(\d{2})$/.exec(x||"");return m?+m[1]*60+ +m[2]:null},a=mi(P.start),b=mi(P.end);
+  if(a!=null&&b!=null&&a!==b){const d=new Date(),m=d.getHours()*60+d.getMinutes(),out=a<b?(m<a||m>=b):(m>=b&&m<a);if(out)return `Estás fuera de tu horario (${P.start}–${P.end}).`}
+  const n=(S.trades||[]).filter(t=>t.open_time&&dayKey(t.open_time)===todayKey()).length;if(P.maxTrades&&n>=P.maxTrades)return `Ya hiciste tus ${P.maxTrades} operaciones de hoy.`;
+  if(TRADE.acct&&TRADE.acct.lock)return "Tu plan lo bloquea: "+TRADE.acct.lock+".";
+  return "";
+}
+const mt5Trade={
+  state(sym){
+    if(!S.user||!sb)return{ok:false,why:""};
+    const b=S.bridge;if(!b)return{ok:false,why:"Conecta tu MT5 (Mi plan → Conectar MT5) para operar desde aquí."};
+    if(tradeVer()<2.2)return{ok:false,why:"Para operar desde el gráfico, pon el programa de MT5 2.2."};
+    tradeStart();const a=TRADE.acct;
+    if(!a||Date.now()-TRADE.at>90000)return{ok:false,why:"Tu MT5 no responde: ábrelo con el programa de Tickora."};
+    if(!+a.ok)return{ok:false,why:a.why||"Tu MT5 no deja operar ahora."};
+    const x=tradeSym(sym);if(!x)return{ok:false,why:"Este mercado no está en tu MT5 (añádelo a Observación de mercado)."};
+    return{ok:true,msym:x.s,d:x.d!=null?x.d:null,demo:!!+a.demo,acct:a,q:a.q&&a.q.s===x.s?a.q:null};
+  },
+  riskPct(){const pr=planRiskBal();return pr&&pr.risk?pr.risk:+((S.basePlan||S.plan||{}).riskPct)||.5},
+  lots(msym,e,st,money){const info=symbolsInfo().find(x=>x.s===msym);if(!info||!info.ts||!info.tv||!money||e==null||st==null||e===st)return null;const lpl=Math.abs(e-st)/info.ts*info.tv,step=info.vstep||0.01;let l=Math.floor((money/lpl)/step+1e-9)*step;if(info.vmax)l=Math.min(l,info.vmax);return l>=(info.vmin||step)-1e-9?+l.toFixed(2):0},
+  check:tradeCheck,
+  // mientras operas, el programa envía cada medio segundo (y recoge las órdenes al momento)
+  watch(msym,tf){if(!msym){clearInterval(TRADE.hb);TRADE.hb=null;TRADE.hbKey="";return}const k=msym+"|"+tf;if(TRADE.hbKey===k&&TRADE.hb)return;TRADE.hbKey=k;clearInterval(TRADE.hb);const go=()=>{if(!document.hidden)sb.rpc("bridge_watch_set",{p_sym:msym,p_tf:tf}).then(()=>{},()=>{})};go();TRADE.hb=setInterval(go,20000)},
+  async send(cmd){
+    const why=tradeCheck(cmd);if(why)return{ok:false,msg:why,plan:true};
+    const {data:id,error}=await sb.rpc("trade_send",{p_cmd:cmd});if(error)return{ok:false,msg:error.message};
+    const t0=Date.now();
+    while(Date.now()-t0<15000){
+      await new Promise(r=>setTimeout(r,350));
+      const {data}=await sb.from("bridge_orders").select("status,result").eq("id",id).maybeSingle();
+      if(data&&data.status==="done")return{ok:true,res:data.result||{}};
+      if(data&&data.status==="error")return{ok:false,msg:(data.result&&data.result.m)||"MT5 la rechazó"};
+      if(data&&data.status==="expired")return{ok:false,msg:"Tu MT5 no la recogió a tiempo: no se ha enviado."};
+    }
+    return{ok:false,msg:"Tu MT5 no ha contestado. Mira en MetaTrader si se abrió antes de repetirla.",unknown:true};
+  }
+};
 function chartOpts(i){
   const L=layState(),main=i===0;
   return {
@@ -2014,6 +2069,7 @@ function chartOpts(i){
     invoke:(name,body)=>sb.functions.invoke(name,{body}),
     ticks:window.TK_TICKS||vivoTicks,
     mt5:{has:mt5Live,provider:mt5Provider},
+    trade:main?(window.TK_TRADE||mt5Trade):null,
     symbols:()=>{const mine=symbolsInfo().map(x=>x.s);return (mine.length?[["Tu MT5",mine]]:[]).concat(MARKETS.map(([g,l])=>[g,l.filter(x=>!mine.includes(x))])).filter(g=>g[1].length)},
     onSymbol:sym=>{const inst=TkChart.all.find(x=>x.key===(main?"main":"p"+i));setPaneSym(inst,sym)},
     onSymbolOther:(sym,from)=>{const other=TkChart.all.find(x=>x!==from&&x!==TkChart.current)||TkChart.all.find(x=>x!==from);if(other)setPaneSym(other,sym)},
@@ -2421,7 +2477,7 @@ if(SB_OK){
 window.viewPlan=viewPlan;window.viewProgreso=viewProgreso;window.TKAPP={savePlan,planFor,S,sb,esc,SVG,fmtR,fmtV,fmtVt,fmtMoney,mOf,sumM,oneR,oneRSrc,planRiskBal,dispCur,moneyOn,prefU,CURS,fmtVabs,fmtLim,fmtMs,num,fmtPct,dayKey,todayKey,evaluate,tradeStats,toast,render,spark,MARKETS,symbolsInfo,lsGet,lsSet,acctName,selAcct,FEELS,greet,initials,minOf,minOfDate,money,inSession,MESES_L,NAV_APPS,appOf,ico,isDark,refreshWidgets,effectivePlan,applyAcct,thumb};
 })();
 </script>
-<link rel="stylesheet" href="extra2.css?v=1118">
+<link rel="stylesheet" href="extra2.css?v=1119">
 <script src="extra.js?v=23"></script>
 <script src="extra2.js?v=76"></script>
 <script src="extra3.js?v=8"></script>
@@ -2429,7 +2485,7 @@ window.viewPlan=viewPlan;window.viewProgreso=viewProgreso;window.TKAPP={savePlan
 <script src="extra5.js?v=2"></script>
 <script src="extra6.js?v=3"></script>
 <script src="extra7.js?v=2"></script>
-<script src="extra8.js?v=3"></script>
+<script src="extra8.js?v=4"></script>
 <script src="extra9.js?v=9"></script>
 <script src="extra10.js?v=1"></script>
 <script src="extra11.js?v=1"></script>

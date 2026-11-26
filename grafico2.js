@@ -358,12 +358,13 @@
     const lotsFor = (e, s, money) => opts.lotsFor ? opts.lotsFor(st.sym, e, s, money) : null;
     function persist() { if (!main) return; const keep = (ls.get("tk-paper-pos", []) || []).filter(p => p.mode === "live" && p.sym !== st.sym); ls.set("tk-paper-pos", keep.concat(P.list.filter(p => p.mode === "live"))); }
     function drawPos(p) {
-      if (p.sym !== st.sym) return;
+      if (p.sym !== st.sym || (HK.qoReal && HK.qoReal.on())) return; // operando en tu MT5 se ven sus posiciones, no las de práctica
       const ms = TF_MS[st.tf] || 3e5, t0 = p.openTime || p.created, tw = Math.max(ms * 20, (nowTs() - t0) + ms * 8);
       const ex = { side: p.side, sim: true, pend: p.status === "pending" ? p.kind : null, lots: p.lots, frac: p.frac, live: p.status === "open" ? liveR(p) : null };
       const pts = [{ timestamp: t0, value: p.entry }, { timestamp: t0 + tw, value: p.stop }, { timestamp: t0 + tw, value: p.tp != null ? p.tp : p.entry }];
       if (P.ov[p.id]) { try { ch.overrideOverlay({ id: P.ov[p.id], extendData: ex, points: pts }); return; } catch (e) { /* se volvió a crear */ } }
       P.ov[p.id] = ch.createOverlay({ name: "tkPos", groupId: "sim", extendData: ex, points: pts,
+        onSelected: () => { P.sel = p.id; }, onDeselected: () => { if (P.sel === p.id) P.sel = null; },
         onPressedMoveEnd: ev => { const q = P.list.find(z => z.id === p.id); if (!q) return; const pt = ev.overlay.points, px = nowPrice();
           if (q.status === "pending") { const ne = rd(pt[0].value); if (ne > 0) q.entry = ne; }
           const ns = rd(pt[1].value), nt = pt[2] ? rd(pt[2].value) : null, buy = q.side === "buy";
@@ -372,7 +373,7 @@
           drawPos(q); persist(); paintPanel(); } });
     }
     function undraw(p) { if (P.ov[p.id]) { try { ch.removeOverlay({ id: P.ov[p.id] }); } catch (e) { /* ya no está */ } delete P.ov[p.id]; } }
-    function redrawAll() { Object.keys(P.ov).forEach(id => { try { ch.removeOverlay({ id: P.ov[id] }); } catch (e) { /* nada */ } }); P.ov = {}; if ((U.CFG || {}).showPos === false) return; P.list.filter(p => (p.mode === "replay") === !!R.on).forEach(drawPos); }
+    function redrawAll() { P.sel = null; Object.keys(P.ov).forEach(id => { try { ch.removeOverlay({ id: P.ov[id] }); } catch (e) { /* nada */ } }); P.ov = {}; if ((U.CFG || {}).showPos === false) return; P.list.filter(p => (p.mode === "replay") === !!R.on).forEach(drawPos); }
     function liveR(p) { const px = nowPrice(); if (px == null || !p.risk) return 0; return Math.round((px - p.entry) / p.risk * (p.side === "buy" ? 1 : -1) * 100) / 100; }
     function place(o) {
       const a = acct(), px = nowPrice(); if (px == null) return null;
@@ -406,8 +407,22 @@
       X.hint(`Práctica cerrada (${why === "stop" ? "stop" : why === "tp" ? "objetivo" : "a mano"}): ${fmtR(rTot)} · ${money(moneyV, a.cur)}`); setTimeout(() => X.hint(""), 3000);
       persist(); paintPanel(); X.stats();
     }
-    function onBar(b, mode) {
+    /* En vivo, de cada vela solo cuenta lo que pasó desde la última vez que la vimos: al cambiar de marco
+       o de mercado, la vela nueva trae máximos y mínimos de antes de abrir la posición (y la cerraba con un stop u objetivo falso). */
+    let seen = null;
+    function liveSpan(b) {
+      let hi = b.close, lo = b.close;
+      if (seen && seen.tf === st.tf && seen.sym === st.sym) {
+        if (b.timestamp === seen.ts) { if (b.high > seen.h) hi = b.high; if (b.low < seen.l) lo = b.low; }
+        else if (b.timestamp > seen.ts) { hi = b.high; lo = b.low; }
+      }
+      const same = seen && seen.tf === st.tf && seen.sym === st.sym && seen.ts === b.timestamp;
+      seen = { tf: st.tf, sym: st.sym, ts: b.timestamp, h: same ? Math.max(seen.h, b.high) : b.high, l: same ? Math.min(seen.l, b.low) : b.low };
+      return { timestamp: b.timestamp, open: b.open, close: b.close, high: Math.max(hi, b.close), low: Math.min(lo, b.close) };
+    }
+    function onBar(b0, mode) {
       if (!main) return;
+      const b = mode === "live" ? liveSpan(b0) : b0;
       for (const p of P.list.slice()) {
         if (p.sym !== st.sym || (mode === "replay") !== (p.mode === "replay")) continue;
         if (p.status === "pending") {
@@ -432,6 +447,10 @@
     }
     function toBE(p) { const px = nowPrice(), buy = p.side === "buy"; if (px == null || (buy ? px <= p.entry : px >= p.entry)) { X.hint("Para mover el stop a la entrada, el precio tiene que ir a tu favor."); setTimeout(() => X.hint(""), 2500); return; } p.stop0 = p.stop0 || p.stop; p.stop = p.entry; drawPos(p); persist(); paintPanel(); }
     HK.openSim = side => { if (!main) return; place({ side }); };
+    /* Supr o Retroceso con una posición de práctica seleccionada: la cierra a mercado (o anula la orden pendiente) */
+    HK.delSel = () => { const p = P.sel && P.list.find(z => z.id === P.sel); P.sel = null; if (!p) return false;
+      if (p.status === "pending") { undraw(p); P.list = P.list.filter(z => z !== p); persist(); paintPanel(); X.hint("Orden de práctica anulada."); setTimeout(() => X.hint(""), 2000); } else closePos(p);
+      return true; };
     HK.closeAll = () => P.list.filter(p => p.status === "open" && p.sym === st.sym && (p.mode === "replay") === !!R.on).forEach(p => closePos(p));
     HK.onBar = onBar;
     HK.onBack = idx => { P.list.filter(p => p.mode === "replay" && ((p.entryIdx != null && p.entryIdx > idx) || (p.status === "pending" && p.created > (R.all[idx] || {}).timestamp))).forEach(p => { undraw(p); P.list = P.list.filter(z => z !== p); }); paintPanel(); };
@@ -440,18 +459,23 @@
     HK.onData = () => { setTimeout(() => { paintNews(); redrawAll(); paintLegend(); paintCd(); X.applyLook && X.applyLook(); try { paintPanel(); } catch (e) { /* aún sin panel */ } }, 120); };
     { const pr = HK.onRestyle; HK.onRestyle = () => { pr && pr(); paintNews(); redrawAll(); paintLegend(); paintCd(); }; }
     HK.stats = () => paintPanel(true);
-    HK.place = place; HK.P = P; HK.acct = acct;
+    HK.place = place; HK.P = P; HK.acct = acct; HK.atr = atrNow; HK.paintQo = () => paintQo();
 
     /* ===== botones de comprar y vender sobre el gráfico ===== */
     let qo = null;
     if (main) {
       qo = document.createElement("div"); qo.className = "gx-qo"; canvas.appendChild(qo);
-      qo.addEventListener("click", e => { const b = e.target.closest("[data-qo]"); if (!b) return; e.stopPropagation(); const t = b.dataset.qo; if (t === "buy" || t === "sell") place({ side: t }); if (t === "ticket") ticket(b); });
+      qo.addEventListener("click", e => { const b = e.target.closest("[data-qo]"); if (!b) return; e.stopPropagation(); const t = b.dataset.qo;
+        if (t === "mode" && HK.qoReal) { HK.qoReal.toggle(); paintQo(); return; }
+        if (HK.qoReal && HK.qoReal.on()) { if (t === "buy" || t === "sell") HK.qoReal.click(t); if (t === "ticket") HK.qoReal.ticket(); return; } // con tu MT5 (grafico4.js)
+        if (t === "buy" || t === "sell") place({ side: t }); if (t === "ticket") ticket(b); });
     }
     function paintQo() {
-      if (!qo) return; qo.hidden = (U.CFG || {}).qoShow === false; const px = nowPrice(), a = acct(); if (px == null) { qo.innerHTML = ""; return; }
+      if (!qo) return; qo.hidden = (U.CFG || {}).qoShow === false;
+      if (HK.qoReal && HK.qoReal.on() && !R.on) { const h = HK.qoReal.html(); if (h != null) { if (qo.innerHTML !== h) qo.innerHTML = h; return; } }
+      const px = nowPrice(), a = acct(); if (px == null) { qo.innerHTML = ""; return; }
       const d = (atrNow() || px * 0.002) * 1.5, rm = a.bal * a.riskPct / 100, lots = lotsFor(px, px - d, rm), sp = slipPx();
-      qo.innerHTML = `<span class="gx-qtag" title="Las operaciones de aquí son de práctica: no tocan tu cuenta real">Práctica</span><button type="button" class="gx-qs" data-qo="sell"><small>VENDER</small>${fmtP(px - sp)}</button><span class="gx-qm">${lots ? nf(lots, 2) : "1 R"}</span><button type="button" class="gx-qb" data-qo="buy"><small>COMPRAR</small>${fmtP(px + sp)}</button>
+      qo.innerHTML = `${HK.qoReal && HK.qoReal.avail() && !R.on ? `<button type="button" class="gx-qtag gx-qtog" data-qo="mode" title="Las operaciones de aquí son de práctica. Pulsa para operar en tu MT5">Práctica</button>` : `<span class="gx-qtag" title="Las operaciones de aquí son de práctica: no tocan tu cuenta real">Práctica</span>`}<button type="button" class="gx-qs" data-qo="sell"><small>VENDER</small>${fmtP(px - sp)}</button><span class="gx-qm">${lots ? nf(lots, 2) : "1 R"}</span><button type="button" class="gx-qb" data-qo="buy"><small>COMPRAR</small>${fmtP(px + sp)}</button>
         <button type="button" class="gx-qt" data-qo="ticket" title="Orden con precio, stop y objetivo" aria-label="Nueva orden">${I(IC.ticket, 15)}</button><span class="gx-qi">1 R = ${money(rm, a.cur)}${lots ? "" : " · stop a 1,5 ATR"}</span>`;
     }
     function ticket(btn) {

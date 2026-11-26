@@ -3365,3 +3365,14 @@ html[data-theme="light"] .f9-tag.t{color:#1f8f80}
 :root .gx-canvas[data-cbg="dark"] .gx-lg .up{--g2up:#86a9ff}:root .gx-canvas[data-cbg="dark"] .gx-lg .dn{--g2dn:#ff8c8c}:root .gx-canvas[data-cbg="dark"] .gx-lgn{--g2vio:#c49dff}
 :root .gx-canvas[data-cbg="light"] .gx-lglogo.c-fx{color:#2443c7}:root .gx-canvas[data-cbg="light"] .gx-lglogo.c-com{color:#7a6100}:root .gx-canvas[data-cbg="light"] .gx-lglogo.c-cry{color:#5b3fc4}:root .gx-canvas[data-cbg="light"] .gx-lglogo.c-fut{color:#0b7f8a}
 :root .gx-canvas[data-cbg="dark"] .gx-lglogo.c-fx{color:#86a9ff}:root .gx-canvas[data-cbg="dark"] .gx-lglogo.c-com{color:#f3dc7a}:root .gx-canvas[data-cbg="dark"] .gx-lglogo.c-cry{color:#c4b5fd}:root .gx-canvas[data-cbg="dark"] .gx-lglogo.c-fut{color:#4fd1db}
+
+/* Operar en tu MT5 desde el gráfico (grafico4.js) */
+.gx-qo .gx-qtog{cursor:pointer;font-family:Inter,system-ui,sans-serif}
+.gx-qo .gx-qtog:hover{color:var(--tinta);border-style:solid}
+.gx-qo .gx-qreal{color:var(--cobalto);border:1px solid var(--cobalto);background:color-mix(in srgb,var(--cobalto) 10%,var(--card))}
+.gx-qo .gx-qlive{color:#fff;background:var(--cobalto);border-color:var(--cobalto)}
+:root[data-theme="dark"] .gx-qo .gx-qlive{color:#0b0b10}
+.gx-qo .gx-qwarn{color:var(--tinta);max-width:360px;white-space:normal}
+.gx-qo button[disabled]{opacity:.55;cursor:progress}
+.gx-mt5h{display:none;margin:0;padding:6px 12px 2px;font-size:12px}
+@media (max-width:860px){.gx-mt5h{display:block}.gx-qo .gx-qtog{display:inline-block}.gx-qo .gx-qwarn{display:inline-block;max-width:200px}}

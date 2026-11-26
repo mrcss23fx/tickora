@@ -3,7 +3,7 @@
    La app guarda la configuración en bridge_lock (un texto con «|») y el programa de MT5 (2.0) la lee cada
    pocos segundos y la aplica con los datos de la propia cuenta. Lo que hace el programa vuelve a bridge_lockev.
    Reglas de psicología: endurecer vale al momento; aflojar vale desde mañana; quitarlo hoy pide una frase y
-   10 minutos de espera. Tickora nunca abre operaciones. */
+   10 minutos de espera. El candado nunca abre operaciones (solo las abres tú, desde el gráfico, con el programa 2.2). */
 (function () {
   "use strict";
   const A = window.TKAPP, V = window.TK_VIEWS, X2 = window.TK_X2;
@@ -150,7 +150,7 @@
     return `<div class="card stack cd" style="gap:14px" id="candado">
       <div class="row" style="justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap"><div><div class="cd-eye">Tu compromiso, en frío</div><h3 style="margin:2px 0 0">Tu candado en MetaTrader</h3></div>
         ${pv ? `<span class="cd-state ${pv[0]}">${pv[0] === "on" ? "Cerrado" : pv[0] === "off" ? "Quitado hoy" : "Abierto"} · ${esc(pv[1])}</span>` : ""}</div>
-      <div class="small muted">Cuando se cumple una de tus normas, el programa de Tickora en tu MT5 actúa como elijas. Tickora nunca abre operaciones.</div>
+      <div class="small muted">Cuando se cumple una de tus normas, el programa de Tickora en tu MT5 actúa como elijas. El candado nunca abre operaciones.</div>
       ${mt5Note}
       <div class="cd-modes" role="radiogroup" aria-label="Qué hace el candado">${MODES.map(([k, l, d]) => `<button type="button" role="radio" class="cd-mode${c.mode === k ? " on" : ""}" data-cdmode="${k}" aria-checked="${c.mode === k}"><b>${l}</b><small>${d}</small></button>`).join("")}</div>
       ${c.mode ? `<div><div class="cd-sub">Cuándo se cierra el candado</div>

@@ -12,17 +12,21 @@
 //| 3. En el gráfico sale un código de 6 cifras: escríbelo en la app |
 //|    (Mi plan → Conectar MT5). Queda vinculado para siempre.       |
 //| Mantén abierto un gráfico de cada mercado que operes: de ahí     |
-//| sale la captura. El programa NUNCA abre operaciones.             |
+//| sale la captura.                                                 |
 //| Candado (2.0): si lo activas en Tickora (Ajustes), cuando se     |
 //| cumple una de tus normas el programa te avisa, cierra al momento |
 //| las operaciones nuevas o cierra MetaTrader, según elijas.        |
 //| Para cerrar operaciones necesita «Trading algorítmico» activado. |
 //| 2.1: mientras miras el gráfico en la app, le manda cada medio    |
 //| segundo la vela y sus ticks, y allí se mueve igual que aquí.     |
+//| 2.2: operar desde el gráfico de Tickora. Solo abre, cierra o     |
+//| cambia una operación cuando tú lo pides allí. Por defecto solo   |
+//| en cuentas demo (PermitirCuentaReal), con un lote máximo, nunca  |
+//| sin stop y nunca si rompe las normas de tu plan.                 |
 //+------------------------------------------------------------------+
 #property copyright   "Tickora"
-#property version     "2.10"
-#property description "Apunta solas tus operaciones en Tickora, con la captura del gráfico al entrar y al salir. Nunca abre operaciones. Con el candado activado en Tickora puede avisarte, cerrar las operaciones nuevas o cerrar MetaTrader cuando se cumple una de tus normas."
+#property version     "2.20"
+#property description "Apunta solas tus operaciones en Tickora, con la captura del gráfico al entrar y al salir. Te deja operar desde el gráfico de Tickora (por defecto solo en cuentas demo, nunca sin stop ni rompiendo tu plan). Con el candado activado en Tickora puede avisarte, cerrar las operaciones nuevas o cerrar MetaTrader cuando se cumple una de tus normas."
 #include <Trade\Trade.mqh>
 
 input string Clave           = "";    // Clave (opcional: si la dejas vacía, te enseña un código para vincular)
@@ -30,11 +34,14 @@ input bool   GuardarCapturas = true;  // Guardar la captura del gráfico
 input int    AnchoCaptura    = 1000;  // Ancho de la captura (píxeles)
 input int    AltoCaptura     = 560;   // Alto de la captura (píxeles)
 input bool   RehacerFoto     = true;  // Si no hubo foto en el momento, rehacerla con el historial
+input bool   OperarDesdeTickora = true;  // Operar desde el gráfico de Tickora (solo cuando tú lo pides allí)
+input bool   PermitirCuentaReal = false; // Operar desde Tickora también en cuentas reales (si no, solo demo)
+input double LoteMaximo         = 1.0;   // Lote máximo de cada orden que llega desde Tickora
 
 #define BT_URL      "https://xsvezicjksfrklwjskfv.supabase.co"
 #define BT_RPC      "/rest/v1/rpc/bridge_ingest"
 #define BT_APIKEY   "sb_publishable_qLIhdI4CuQuisOstwl0fWg_dhW61xcm"
-#define BT_VERSION  "2.1"
+#define BT_VERSION  "2.2"
 #define BT_LOCKFILE "tickora_candado.txt"
 #define BT_KEYFILE  "bitacora_clave.txt"
 #define BT_STATE    "bitacora_estado.csv"
@@ -91,12 +98,20 @@ string   g_lockEv[];                            // lo que ha hecho, pendiente de
 ulong    g_lockDone[];                          // operaciones y órdenes ya atendidas
 datetime g_lockShown = 0;                       // cuándo enseñamos el aviso de «no dejar usar MT5»
 CTrade   g_trade;
+//--- operar desde Tickora (2.2)
+CTrade   g_tt;                                  // órdenes que pides en el gráfico de Tickora
+string   g_ordRes[];                            // resultados pendientes de enviar
+long     g_ordDone[];                           // órdenes ya atendidas (para no repetir nunca una)
+string   g_acctKey   = "";                      // lo último que mandamos de la cuenta (sin precios)
+ulong    g_acctMs    = 0;
 
 //+------------------------------------------------------------------+
 int OnInit()
   {
    LoadState();
    LoadLock();
+   g_tt.SetExpertMagicNumber(2622);
+   g_tt.SetDeviationInPoints(30);
    g_key = StringLen(Clave) >= 10 ? Clave : LoadKey();
    EventSetMillisecondTimer(250);                  // 4 veces por segundo: los precios en vivo salen cada medio segundo
    if(g_key == "")
@@ -357,6 +372,22 @@ void Sync()
          data = "\"live\":{\"sym\":\"" + JsonEsc(g_wSym) + "\",\"tf\":\"" + g_wTf + "\",\"bars\":[" + BarsJson(r, n, digits, off) + "]" +
                 (tj != "" ? ",\"ticks\":[" + tj + "]" : "") + "}";
      }
+   // estado de la cuenta: cada segundo mientras miras el gráfico; si no, al cambiar algo o cada 30 s
+   ulong nowMs = GetTickCount64();
+   string akey = AcctJson(false);
+   bool sendAcct = (akey != g_acctKey || (g_wUntil > TimeLocal() && nowMs - g_acctMs >= 1000) || nowMs - g_acctMs >= 30000);
+   if(sendAcct)
+      data += (data != "" ? "," : "") + "\"acct\":" + AcctJson(true);
+   int nres = ArraySize(g_ordRes);
+   if(nres > 20)
+      nres = 20;
+   if(nres > 0)
+     {
+      string rs = "";
+      for(int i = 0; i < nres; i++)
+         rs += (i > 0 ? "," : "") + g_ordRes[i];
+      data += (data != "" ? "," : "") + "\"ordres\":[" + rs + "]";
+     }
    int nev = ArraySize(g_lockEv);
    if(nev > 20)
       nev = 20;
@@ -374,12 +405,20 @@ void Sync()
    g_lastOk = TimeLocal();
    if(nev > 0)
       ArrayRemove(g_lockEv, 0, nev);               // ya enviados
+   if(nres > 0)
+      ArrayRemove(g_ordRes, 0, nres);
+   if(sendAcct)
+     {
+      g_acctKey = akey;
+      g_acctMs = nowMs;
+     }
    string lk = JsonGet(resp, "lock");
    if(lk != "" && lk != g_lock)
      {
       g_lock = lk;
       SaveLock();
      }
+   ExecOrders(JsonGet(resp, "ord"));               // órdenes que pediste en el gráfico de Tickora (con tus normas ya al día)
    string sym = JsonGet(resp, "sym");
    if(sym == "")
      {
@@ -416,7 +455,10 @@ void SendHistory(const string req, const long toMs, int n)
                "\",\"tf\":\"" + g_wTf + "\",\"bars\":[" + BarsJson(r, got, digits, off) + "]}}}";
    string err = "", resp = "";
    if(PostTo("/rest/v1/rpc/bridge_sync", js, err, resp))
+     {
       g_lastReq = req;
+      ExecOrders(JsonGet(resp, "ord"));            // también aquí pueden llegar órdenes
+     }
   }
 
 //+------------------------------------------------------------------+
@@ -1139,7 +1181,7 @@ long ToUtcMs(const datetime serverTime)
   }
 
 // ¿está cerrado el candado ahora? Devuelve el motivo y desde cuándo (0 si no se sabe exacto)
-bool LockState(string &why, string &code, long &since)
+bool LockState(string &why, string &code, long &since, const bool anyMode = false)
   {
    why = ""; code = ""; since = 0;
    if(g_lock == "")
@@ -1149,8 +1191,8 @@ bool LockState(string &why, string &code, long &since)
    if(nf < 16)
       return(false);
    int mode = (int)LockNum(f, 1);
-   if(mode <= 0)
-      return(false);
+   if(mode <= 0 && !anyMode)
+      return(false);                               // las órdenes que llegan de Tickora respetan tu plan aunque el candado esté apagado
    long now = (long)TimeGMT() * 1000;
    long offFrom = LockNum(f, 3), offUntil = LockNum(f, 4);
    if(offFrom > 0 && now >= offFrom && now < offUntil)
@@ -1407,4 +1449,264 @@ void LockPaint(const bool show)
    ObjectSetString(0, t1, OBJPROP_TEXT, "Candado de Tickora · " + g_lockWhy);
    ObjectSetString(0, t2, OBJPROP_TEXT, sub);
    ChartRedraw();
+  }
+
+//+------------------------------------------------------------------+
+//| Operar desde el gráfico de Tickora (2.2)                         |
+//| Solo cuando tú lo pides allí. Nunca sin stop, nunca por encima   |
+//| de LoteMaximo, nunca si rompe tu plan y, salvo que lo permitas,  |
+//| solo en cuentas demo.                                            |
+//+------------------------------------------------------------------+
+bool IsDemo()
+  {
+   return(AccountInfoInteger(ACCOUNT_TRADE_MODE) == ACCOUNT_TRADE_MODE_DEMO);
+  }
+
+string TradeBlock()
+  {
+   if(!OperarDesdeTickora)
+      return("Operar desde Tickora está apagado en el programa de MT5");
+   if(!IsDemo() && !PermitirCuentaReal)
+      return("Cuenta real: por ahora solo demo (actívalo en el programa con «PermitirCuentaReal»)");
+   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
+      return("Activa «Trading algorítmico» en MetaTrader");
+   if(!MQLInfoInteger(MQL_TRADE_ALLOWED))
+      return("Permite el trading algorítmico en las propiedades del programa de Tickora");
+   if(!AccountInfoInteger(ACCOUNT_TRADE_ALLOWED))
+      return("Tu cuenta no permite operar ahora (¿contraseña de solo lectura?)");
+   return("");
+  }
+
+string AcctJson(const bool full)
+  {
+   long off = ServerOffset();
+   string why = TradeBlock(), lw = "", lc = "";
+   long ls = 0;
+   if(LockState(lw, lc, ls, true) == false)
+      lw = "";
+   string s = "{\"v\":\"" + BT_VERSION + "\",\"login\":" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) +
+              ",\"demo\":" + (IsDemo() ? "1" : "0") + ",\"cur\":\"" + JsonEsc(AccountInfoString(ACCOUNT_CURRENCY)) + "\"" +
+              ",\"ok\":" + (why == "" ? "1" : "0") + ",\"why\":\"" + JsonEsc(why) + "\",\"lock\":\"" + JsonEsc(lw) + "\"" +
+              ",\"max\":" + DoubleToString(LoteMaximo, 2);
+   if(full)
+      s += ",\"bal\":" + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2) + ",\"eq\":" + DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2);
+   string ps = "";
+   int np = 0;
+   for(int i = 0; i < PositionsTotal() && np < 50; i++)
+     {
+      ulong t = PositionGetTicket(i);
+      if(t == 0)
+         continue;
+      string sym = PositionGetString(POSITION_SYMBOL);
+      int dg = (int)SymbolInfoInteger(sym, SYMBOL_DIGITS);
+      ps += (np > 0 ? "," : "") + "[" + IntegerToString((long)t) + ",\"" + JsonEsc(sym) + "\"," + IntegerToString(PositionGetInteger(POSITION_TYPE)) + "," +
+            DoubleToString(PositionGetDouble(POSITION_VOLUME), 2) + "," + DoubleToString(PositionGetDouble(POSITION_PRICE_OPEN), dg) + "," +
+            DoubleToString(PositionGetDouble(POSITION_SL), dg) + "," + DoubleToString(PositionGetDouble(POSITION_TP), dg) + "," +
+            (full ? DoubleToString(PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP), 2) : "0") + "," +
+            IntegerToString(PositionGetInteger(POSITION_TIME_MSC) - off * 1000) + "]";
+      np++;
+     }
+   string os = "";
+   int no = 0;
+   for(int i = 0; i < OrdersTotal() && no < 50; i++)
+     {
+      ulong t = OrderGetTicket(i);
+      if(t == 0)
+         continue;
+      long ty = OrderGetInteger(ORDER_TYPE);
+      if(ty < ORDER_TYPE_BUY_LIMIT || ty > ORDER_TYPE_SELL_STOP)
+         continue;                                 // solo límite y stop
+      string sym = OrderGetString(ORDER_SYMBOL);
+      int dg = (int)SymbolInfoInteger(sym, SYMBOL_DIGITS);
+      os += (no > 0 ? "," : "") + "[" + IntegerToString((long)t) + ",\"" + JsonEsc(sym) + "\"," + IntegerToString(ty) + "," +
+            DoubleToString(OrderGetDouble(ORDER_VOLUME_CURRENT), 2) + "," + DoubleToString(OrderGetDouble(ORDER_PRICE_OPEN), dg) + "," +
+            DoubleToString(OrderGetDouble(ORDER_SL), dg) + "," + DoubleToString(OrderGetDouble(ORDER_TP), dg) + "," +
+            IntegerToString(OrderGetInteger(ORDER_TIME_SETUP_MSC) - off * 1000) + "]";
+      no++;
+     }
+   s += ",\"pos\":[" + ps + "],\"ord\":[" + os + "]";
+   if(full && g_wUntil > TimeLocal() && g_wSym != "")
+     {
+      int dg = (int)SymbolInfoInteger(g_wSym, SYMBOL_DIGITS);
+      s += ",\"q\":{\"s\":\"" + JsonEsc(g_wSym) + "\",\"b\":" + DoubleToString(SymbolInfoDouble(g_wSym, SYMBOL_BID), dg) +
+           ",\"a\":" + DoubleToString(SymbolInfoDouble(g_wSym, SYMBOL_ASK), dg) + "}";
+     }
+   return(s + "}");
+  }
+
+bool OrdDoneHas(const long id)
+  {
+   for(int i = 0; i < ArraySize(g_ordDone); i++)
+      if(g_ordDone[i] == id)
+         return(true);
+   return(false);
+  }
+
+void OrdDoneAdd(const long id)
+  {
+   int n = ArraySize(g_ordDone);
+   if(n > 300)
+     {
+      ArrayRemove(g_ordDone, 0, 150);
+      n = ArraySize(g_ordDone);
+     }
+   ArrayResize(g_ordDone, n + 1);
+   g_ordDone[n] = id;
+  }
+
+void OrdResult(const long id, const bool ok, const uint code, const string msg, const string tk, const string px)
+  {
+   int n = ArraySize(g_ordRes);
+   if(n >= 60)
+      return;
+   ArrayResize(g_ordRes, n + 1);
+   g_ordRes[n] = "{\"i\":" + IntegerToString(id) + ",\"ok\":" + (ok ? "1" : "0") + ",\"c\":\"" + IntegerToString(code) +
+                 "\",\"m\":\"" + JsonEsc(msg) + "\",\"t\":\"" + tk + "\",\"p\":\"" + px + "\"}";
+  }
+
+bool TradeDone(const bool sent, string &msg, string &tk, string &px, uint &code)
+  {
+   code = g_tt.ResultRetcode();
+   bool ok = sent && (code == TRADE_RETCODE_DONE || code == TRADE_RETCODE_PLACED || code == TRADE_RETCODE_DONE_PARTIAL);
+   tk = IntegerToString((long)g_tt.ResultOrder());
+   px = DoubleToString(g_tt.ResultPrice(), 8);
+   msg = ok ? "Hecho" : "MT5: " + g_tt.ResultRetcodeDescription();
+   return(ok);
+  }
+
+bool ExecOne(string &f[], string &msg, string &tk, string &px, uint &code)
+  {
+   code = 0; tk = ""; px = "";
+   string op = f[1], sym = f[2], side = f[3], kind = f[4];
+   double lots = StringToDouble(f[5]), price = StringToDouble(f[6]), sl = StringToDouble(f[7]), tp = StringToDouble(f[8]);
+   ulong ticket = (ulong)StringToInteger(f[9]);
+   msg = TradeBlock();
+   if(msg != "")
+      return(false);
+   if(!SymbolSelect(sym, true))
+     {
+      msg = "Este mercado no está en tu MT5: " + sym;
+      return(false);
+     }
+   int dg = (int)SymbolInfoInteger(sym, SYMBOL_DIGITS);
+   sl = sl > 0 ? NormalizeDouble(sl, dg) : 0;
+   tp = tp > 0 ? NormalizeDouble(tp, dg) : 0;
+   price = price > 0 ? NormalizeDouble(price, dg) : 0;
+   g_tt.SetTypeFillingBySymbol(sym);
+   if(op == "open")
+     {
+      string lw, lc;
+      long lsn;
+      if(LockState(lw, lc, lsn, true))
+        {
+         msg = "Tu plan lo bloquea: " + lw;
+         return(false);
+        }
+      if(sl <= 0)
+        {
+         msg = "Sin stop no se abre: es tu plan";
+         return(false);
+        }
+      if(LoteMaximo > 0 && lots > LoteMaximo + 1e-9)
+        {
+         msg = "Supera tu lote máximo del programa (" + DoubleToString(LoteMaximo, 2) + ")";
+         return(false);
+        }
+      double step = SymbolInfoDouble(sym, SYMBOL_VOLUME_STEP), vmin = SymbolInfoDouble(sym, SYMBOL_VOLUME_MIN), vmax = SymbolInfoDouble(sym, SYMBOL_VOLUME_MAX);
+      if(step > 0)
+         lots = MathFloor(lots / step + 1e-9) * step;
+      if(lots < vmin - 1e-9)
+        {
+         msg = "El lote es menor que el mínimo de tu bróker (" + DoubleToString(vmin, 2) + ")";
+         return(false);
+        }
+      if(vmax > 0 && lots > vmax)
+         lots = vmax;
+      lots = NormalizeDouble(lots, 2);
+      bool buy = (side == "buy"), r = false;
+      if(kind == "mkt")
+         r = buy ? g_tt.Buy(lots, sym, 0, sl, tp, "Tickora") : g_tt.Sell(lots, sym, 0, sl, tp, "Tickora");
+      else
+         if(kind == "lim")
+            r = buy ? g_tt.BuyLimit(lots, price, sym, sl, tp, ORDER_TIME_GTC, 0, "Tickora") : g_tt.SellLimit(lots, price, sym, sl, tp, ORDER_TIME_GTC, 0, "Tickora");
+         else
+            r = buy ? g_tt.BuyStop(lots, price, sym, sl, tp, ORDER_TIME_GTC, 0, "Tickora") : g_tt.SellStop(lots, price, sym, sl, tp, ORDER_TIME_GTC, 0, "Tickora");
+      return(TradeDone(r, msg, tk, px, code));
+     }
+   if(op == "close" || op == "modify")
+     {
+      if(!PositionSelectByTicket(ticket))
+        {
+         msg = "Esa posición ya no está abierta";
+         return(false);
+        }
+      if(op == "close")
+        {
+         double vol = PositionGetDouble(POSITION_VOLUME), step = SymbolInfoDouble(sym, SYMBOL_VOLUME_STEP);
+         if(lots > 0 && step > 0)
+            lots = NormalizeDouble(MathFloor(lots / step + 1e-9) * step, 2);
+         bool r = (lots > 0 && lots < vol - 1e-9) ? g_tt.PositionClosePartial(ticket, lots) : g_tt.PositionClose(ticket);
+         return(TradeDone(r, msg, tk, px, code));
+        }
+      // mover el stop en contra no se hace desde Tickora: es una de las cosas que tu plan quiere evitar
+      double sl0 = PositionGetDouble(POSITION_SL);
+      long ty = PositionGetInteger(POSITION_TYPE);
+      double half = SymbolInfoDouble(sym, SYMBOL_POINT) / 2.0;
+      if(sl0 > 0 && (sl <= 0 || (ty == POSITION_TYPE_BUY ? sl < sl0 - half : sl > sl0 + half)))
+        {
+         msg = "Mover el stop en contra no se permite desde Tickora";
+         return(false);
+        }
+      bool r2 = g_tt.PositionModify(ticket, sl, tp);
+      return(TradeDone(r2, msg, tk, px, code));
+     }
+   if(op == "cancel" || op == "omodify")
+     {
+      if(!OrderSelect(ticket))
+        {
+         msg = "Esa orden ya no está";
+         return(false);
+        }
+      bool r3;
+      if(op == "cancel")
+         r3 = g_tt.OrderDelete(ticket);
+      else
+        {
+         if(sl <= 0)
+           {
+            msg = "Sin stop no se deja una orden: es tu plan";
+            return(false);
+           }
+         double p0 = price > 0 ? price : OrderGetDouble(ORDER_PRICE_OPEN);
+         r3 = g_tt.OrderModify(ticket, p0, sl, tp, ORDER_TIME_GTC, 0);
+        }
+      return(TradeDone(r3, msg, tk, px, code));
+     }
+   msg = "Orden desconocida";
+   return(false);
+  }
+
+void ExecOrders(const string ords)
+  {
+   if(ords == "")
+      return;
+   string list[];
+   int n = StringSplit(ords, ';', list);
+   for(int i = 0; i < n; i++)
+     {
+      string f[];
+      if(StringSplit(list[i], '|', f) < 10)
+         continue;
+      long id = StringToInteger(f[0]);
+      if(id <= 0 || OrdDoneHas(id))
+         continue;
+      OrdDoneAdd(id);
+      string msg = "", tk = "", px = "";
+      uint code = 0;
+      bool ok = ExecOne(f, msg, tk, px, code);
+      OrdResult(id, ok, code, msg, tk, px);
+      Print("Tickora: orden ", id, " (", f[1], " ", f[2], " ", f[3], ") · ", msg);
+     }
+   g_lastSync = 0;                                  // el resultado y la cuenta salen en el siguiente cuarto de segundo
+   g_acctKey = "";
   }

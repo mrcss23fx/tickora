@@ -626,14 +626,14 @@
       const figs = [{ type: "rect", attrs: { x: x0, y: Math.min(c[0].y, c[1].y), width: w, height: Math.abs(c[1].y - c[0].y) }, styles: { style: "fill", color: p.stopA } }];
       const txt = { color: p.tinta, size: 11, family: NUMF, backgroundColor: "transparent", borderSize: 0, paddingLeft: 4, paddingRight: 4, paddingTop: 2, paddingBottom: 2 };
       const label = ex.side === "sell" ? "VENTA" : "COMPRA";
-      figs.push({ type: "text", ignoreEvent: true, attrs: { x: x0 + 4, y: c[1].y + (c[1].y > c[0].y ? 2 : -2), text: "Stop −1 R · " + fmtP(s), baseline: c[1].y > c[0].y ? "top" : "bottom" }, styles: txt });
-      if (t != null && c[2]) {
+      figs.push({ type: "text", ignoreEvent: true, attrs: { x: x0 + 4, y: c[1].y + (c[1].y > c[0].y ? 2 : -2), text: ex.noSl ? "Sin stop" : "Stop −1 R · " + fmtP(s), baseline: c[1].y > c[0].y ? "top" : "bottom" }, styles: txt });
+      if (t != null && c[2] && !ex.noTp) {
         const rr = Math.abs(t - e) / Math.abs(e - s);
         figs.push({ type: "rect", attrs: { x: x0, y: Math.min(c[0].y, c[2].y), width: w, height: Math.abs(c[2].y - c[0].y) }, styles: { style: "fill", color: p.cobA } });
-        figs.push({ type: "text", ignoreEvent: true, attrs: { x: x0 + 4, y: c[2].y + (c[2].y > c[0].y ? 2 : -2), text: "Objetivo +" + nf(rr, 1) + " R · " + fmtP(t), baseline: c[2].y > c[0].y ? "top" : "bottom" }, styles: Object.assign({}, txt, { color: p.cob }) });
+        figs.push({ type: "text", ignoreEvent: true, attrs: { x: x0 + 4, y: c[2].y + (c[2].y > c[0].y ? 2 : -2), text: (ex.noSl ? "Objetivo · " : "Objetivo +" + nf(rr, 1) + " R · ") + fmtP(t), baseline: c[2].y > c[0].y ? "top" : "bottom" }, styles: Object.assign({}, txt, { color: p.cob }) });
       }
       figs.push({ type: "line", ignoreEvent: true, attrs: { coordinates: [{ x: x0, y: c[0].y }, { x: x1, y: c[0].y }] }, styles: { color: p.tinta, size: 1.5 } });
-      const head = ex.result != null ? label + " · " + fmtR(ex.result) : (ex.pend ? (ex.pend === "lim" ? "LÍMITE " : "STOP ") : "") + label + (ex.lots ? " " + nf(ex.lots, 2) : "") + (ex.sim && !ex.pend ? " · PRÁCTICA" : "") + (ex.frac && ex.frac < 1 ? " · " + Math.round(ex.frac * 100) + " %" : "") + " · " + (ex.live != null ? fmtR(ex.live) : fmtP(e));
+      const head = ex.result != null ? label + " · " + fmtR(ex.result) : (ex.pend ? (ex.pend === "lim" ? "LÍMITE " : "STOP ") : "") + label + (ex.lots ? " " + nf(ex.lots, 2) : "") + (ex.sim && !ex.pend ? " · PRÁCTICA" : "") + (ex.real ? " · MT5" : "") + (ex.frac && ex.frac < 1 ? " · " + Math.round(ex.frac * 100) + " %" : "") + " · " + (ex.plTxt != null ? ex.plTxt : ex.live != null ? fmtR(ex.live) : fmtP(e));
       figs.push({ type: "text", ignoreEvent: true, attrs: { x: x1 - 4, y: c[0].y - 3, text: head, align: "right", baseline: "bottom" }, styles: Object.assign({}, txt, ex.result != null ? { color: "#14213a", backgroundColor: p.rot } : {}) });
       return figs;
     }
@@ -1812,7 +1812,7 @@
           ${sel("navBtns", [["hover", "Al pasar el ratón"], ["always", "Siempre"], ["off", "Ocultos"]], "Navegación (acercar, alejar, mover)")}
           ${sec("Márgenes")}
           ${num("mTop", "Arriba", 0, 45, "%")}${num("mBot", "Abajo", 0, 45, "%")}${num("mRight", "A la derecha", 0, 100, "velas")}`,
-        trading: `${desc("Todo es de práctica: Tickora nunca abre operaciones en tu cuenta real.")}${sec("General")}
+        trading: `${desc("Comprar y Vender van a la cuenta de práctica. Con tu MT5 conectado (programa 2.2), toca «Práctica» para operar en tu MT5: al principio solo en cuentas demo, siempre con stop y respetando tu plan.")}${sec("General")}
           ${chk("qoShow", "Botones de compra y venta")}${desc("Muestra los botones de comprar y vender (práctica) encima del gráfico.")}
           ${chk("oneClick", "Operaciones con un solo clic")}${desc("Compra o vende al momento. Si lo quitas, te pide confirmación antes de cada orden.")}
           ${chk("snd", "Sonido al ejecutarse una orden", `<span class="gx-spair">${range("sndVol", 5, 100, " %")}<button type="button" class="gx-btn" data-q="sndtest">Probar</button></span>`)}
@@ -2217,7 +2217,8 @@
       if (mod && String(e.key || "").toLowerCase() === "v" && st.clip) { e.preventDefault(); pasteClip(); return; }
       if (mod && String(e.key || "").toLowerCase() === "d" && st.sel) { e.preventDefault(); dupSel(); return; }
       if (mod && String(e.key || "").toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
-      if ((e.key === "Delete" || e.key === "Backspace") && st.sel) { e.preventDefault(); removeSel(); }
+      if ((e.key === "Delete" || e.key === "Backspace") && st.sel) { e.preventDefault(); removeSel(); return; }
+      if ((e.key === "Delete" || e.key === "Backspace") && !typing && HK.delSel && HK.delSel()) e.preventDefault();
     };
     document.addEventListener("keydown", onKey);
     const shiftTrack = e => { st.shift = !!e.shiftKey; };
