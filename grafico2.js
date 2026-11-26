@@ -479,6 +479,8 @@
     let bp = null, tab = ls.get("tk-bptab", "pos");
     if (main) {
       bp = document.createElement("div"); bp.className = "gx-bp"; if (ls.get("tk-bpopen", false)) bp.classList.add("open"); gx.appendChild(bp);
+      /* plegado no ocupa nada (ni la barra de pestañas): se abre desde el botón «Posiciones y órdenes» de la barra de la derecha */
+      X.bpToggle = on => { const o = on == null ? !bp.classList.contains("open") : !!on; bp.classList.toggle("open", o); ls.set("tk-bpopen", o); paintPanel(); setTimeout(() => ch.resize(), 50); };
       bp.addEventListener("click", e => {
         const t = e.target.closest("button,[data-bpt]"); if (!t) return;
         if (t.dataset.bpt) { tab = t.dataset.bpt; ls.set("tk-bptab", tab); bp.classList.add("open"); ls.set("tk-bpopen", true); paintPanel(); setTimeout(() => ch.resize(), 50); return; }
@@ -520,6 +522,7 @@
         if (tab === "alr" && HK.alertBody) body = HK.alertBody();
       }
       bp.innerHTML = head + (isOpen ? `<div class="gx-bpb">${body}</div>` : "");
+      try { window.dispatchEvent(new CustomEvent("tk-bp", { detail: { open: isOpen, n: open.length + pend.length } })); } catch (e) { /* navegador antiguo */ }
       HK.afterPanel && HK.afterPanel(bp, tab);
     }
 

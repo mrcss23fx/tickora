@@ -797,6 +797,7 @@
     const plus = document.createElement("button"); plus.type = "button"; plus.className = "g3-plus"; plus.hidden = true; plus.title = "Alerta, línea o copiar este precio"; plus.setAttribute("aria-label", "Opciones en este precio"); plus.innerHTML = SV('<path d="M10 5v10M5 10h10"/>', 14);
     canvas.appendChild(plus);
     let plusV = null, plusHide = 0, plusOver = false;
+    let plusRo = null; try { plusRo = new ResizeObserver(() => { plus.hidden = true; }); plusRo.observe(canvas); } catch (e) { /* sin ResizeObserver */ } // al abrir un panel la escala se mueve: el «+» se esconde hasta el siguiente movimiento
     ch.subscribeAction("onCrosshairChange", d => {
       if (!alive || CFG.plusBtn === false || X.R.picking) { plus.hidden = true; return; }
       clearTimeout(plusHide);
@@ -877,7 +878,7 @@
     /* en práctica no hay rangos ni comparados (se verían velas del futuro); al volver, todo vuelve */
     { const pm = HK.onMode; HK.onMode = m => { pm && pm(m); MENU.close(true); setTimeout(() => { if (!alive) return; X.applyScale(); paintBot(); HK.repaint && HK.repaint(); dwPaint(); }, 60); }; }
     { const prevOD2 = HK.onData; HK.onData = () => { prevOD2 && prevOD2(); setTimeout(() => { if (alive) { paintBot(); dwPaint(); g3apply(); } }, 80); }; }
-    { const pd = HK.destroy; HK.destroy = () => { alive = false; clearInterval(tick); clearInterval(slow); document.removeEventListener("keydown", onKey3); PAINT.delete(paintBot); delete CALC[me.key]; delete LAY[me.key]; MENU.close(true); pd && pd(); }; }
+    { const pd = HK.destroy; HK.destroy = () => { alive = false; clearInterval(tick); clearInterval(slow); if (plusRo) plusRo.disconnect(); document.removeEventListener("keydown", onKey3); PAINT.delete(paintBot); delete CALC[me.key]; delete LAY[me.key]; MENU.close(true); pd && pd(); }; }
     setTimeout(g3apply, 0); setTimeout(newsWarn, 4000);
     setTimeout(() => { try { ch.resize(); } catch (e) { /* nada */ } }, 30);
   }

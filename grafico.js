@@ -977,7 +977,11 @@
         let alive = true, t = null;
         const E = tickEngine(tf, cb, round), s0 = snap[sym + "|" + tf];
         if (s0) E.seed(s0.bar, s0.asof);
-        const unT = live && live.subscribe && !/!$/.test(sym) ? live.subscribe(sym, list => { if (!alive || !Array.isArray(list) || !list.length) return; flowAt = Date.now(); E.ticks(list); }) : null;
+        const unT = live && live.subscribe && !/!$/.test(sym) ? live.subscribe(sym, list => {
+          if (!alive || !Array.isArray(list) || !list.length) return;
+          const back = flowAt > 0 && !p.live; flowAt = Date.now(); E.ticks(list);
+          if (back) { clearTimeout(t); t = setTimeout(poll, 400); } // vuelven los ticks tras un corte (pestaña oculta, relevo…): se rellena el hueco
+        }) : null;
         const poll = async () => {
           if (!alive) return;
           try { const r = await p.bars(sym, tf, null, true); if (alive) E.merge(r.bars.slice(-2), r.asof, p.live); } catch (e) { /* lo intenta otra vez */ }

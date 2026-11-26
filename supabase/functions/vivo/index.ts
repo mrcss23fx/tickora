@@ -1,10 +1,12 @@
 // Ticks en vivo del precio público (Dukascopy) para el gráfico.
 // La llama pg_cron cada minuto mientras alguien mira un mercado, y vivo_watch() en el momento en que alguien empieza a mirar,
 // siempre con la cabecera x-cron (el secreto vive en la tabla privada app_secrets).
-// Cada segundo pide los últimos ticks de los mercados que se están mirando y los reparte por Realtime
+// Cada medio segundo pide los últimos ticks de los mercados que se están mirando y los reparte por Realtime
 // (canal «vivo:<MERCADO>», evento «t», carga {s, t: [[hora ms, precio, volumen], …]}). Una sola petición por mercado,
 // la mire una persona o mil. Solo una copia reparte a la vez (turno en la tabla live_relay); cada copia dura hasta
 // el minuto siguiente y la del siguiente minuto toma el relevo.
+// v2 (26-nov-2026): cada medio segundo (cada 0,75 s con más de 8 mercados mirados, cada segundo con más de 16):
+// la vela va 1 s más cerca del mercado. El registro final dice cuánto tarda el tick más nuevo en llegar (mediana).
 // v1 (26-nov-2026).
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { dukaOf } from "./mercados.ts";
@@ -37,6 +39,7 @@ async function run(sb: any, owner: string) {
   const end = (Math.floor(Date.now() / 60000) + 1) * 60000 + 1500; // hasta 1,5 s después del minuto siguiente
   const last = new Map<string, number>(), code = new Map<string, string>();
   let syms: string[] = [], leaseAt = 0, have = false, idle = 0, sent = 0;
+  const ages: number[] = []; // ms entre el tick más nuevo y el momento de repartirlo (para el registro)
   while (Date.now() < end) {
     const t0 = Date.now();
     if (!have || t0 - leaseAt >= 2000) { // renovar el turno y leer qué mercados se miran
@@ -56,13 +59,16 @@ async function run(sb: any, owner: string) {
       const fresh = tk.filter(x => x[0] > lt);
       if (!fresh.length) return;
       last.set(s, fresh[fresh.length - 1][0]);
+      if (ages.length < 2000) ages.push(Date.now() - fresh[fresh.length - 1][0]);
       msgs.push({ topic: "vivo:" + s, event: "t", payload: { s, t: fresh }, private: false });
     }));
     if (msgs.length) { await broadcast(msgs).catch(e => console.log("vivo: broadcast", String(e))); sent += msgs.length; }
-    const wait = 1000 - (Date.now() - t0); if (wait > 0) await sleep(wait);
+    const every = syms.length <= 8 ? 500 : syms.length <= 16 ? 750 : 1000;
+    const wait = every - (Date.now() - t0); if (wait > 0) await sleep(wait);
   }
   if (have) await sb.rpc("vivo_release", { p_owner: owner });
-  console.log("vivo: fin", owner, "mensajes", sent, "mercados", syms.length);
+  ages.sort((a, b) => a - b);
+  console.log("vivo: fin", owner, "mensajes", sent, "mercados", syms.length, "retraso_ms", ages.length ? ages[Math.floor(ages.length / 2)] : "-");
 }
 
 Deno.serve(async (req) => {

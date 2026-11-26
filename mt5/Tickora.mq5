@@ -17,8 +17,8 @@
 //| cumple una de tus normas el programa te avisa, cierra al momento |
 //| las operaciones nuevas o cierra MetaTrader, según elijas.        |
 //| Para cerrar operaciones necesita «Trading algorítmico» activado. |
-//| 2.1: mientras miras el gráfico en la app, le manda también cada  |
-//| tick, y allí la vela se mueve igual que en MetaTrader.           |
+//| 2.1: mientras miras el gráfico en la app, le manda cada medio    |
+//| segundo la vela y sus ticks, y allí se mueve igual que aquí.     |
 //+------------------------------------------------------------------+
 #property copyright   "Tickora"
 #property version     "2.10"
@@ -79,6 +79,7 @@ string   g_lastReq  = "";                       // último historial servido
 ulong    g_lastSync = 0;
 datetime g_lastPair = 0;
 long     g_tickMsc  = 0;                        // último tick enviado a la app (ms, hora del bróker)
+datetime g_lastShow = 0;
 string   g_tickSym  = "";
 //--- candado
 string   g_lock      = "";                      // configuración que manda la app (texto con «|»)
@@ -97,7 +98,7 @@ int OnInit()
    LoadState();
    LoadLock();
    g_key = StringLen(Clave) >= 10 ? Clave : LoadKey();
-   EventSetMillisecondTimer(1000);
+   EventSetMillisecondTimer(250);                  // 4 veces por segundo: los precios en vivo salen cada medio segundo
    if(g_key == "")
       StartPairing();                              // sin clave: enseñamos un código para vincular con la app
    else
@@ -214,9 +215,9 @@ void OnTimer()
         }
       return;
      }
-   // precios en vivo: cada segundo si estás mirando el gráfico en la app; si no, una pregunta cada 5 s
+   // precios en vivo: cada medio segundo si estás mirando el gráfico en la app; si no, una pregunta cada 5 s
    ulong ms = GetTickCount64();
-   if(ms - g_lastSync >= (g_wUntil > now || ArraySize(g_lockEv) > 0 ? 1000 : 5000))
+   if(ms - g_lastSync >= (g_wUntil > now ? 500 : ArraySize(g_lockEv) > 0 ? 1000 : 5000))
      {
       g_lastSync = ms;
       Sync();
@@ -257,8 +258,11 @@ void OnTimer()
       SendPing();
    if(now - g_lastScan > 600)                     // cada 10 min: ¿algo hecho desde el móvil o con el Mac dormido?
       CatchUp();
-   if(now % 5 == 0)
+   if(now % 5 == 0 && now != g_lastShow)
+     {
+      g_lastShow = now;                            // el temporizador va 4 veces por segundo: una vez basta
       ShowStatus();
+     }
   }
 
 //+------------------------------------------------------------------+

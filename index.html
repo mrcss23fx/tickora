@@ -672,12 +672,42 @@ textarea.input{height:auto;padding:9px 11px;resize:vertical;line-height:1.5}
 .wl-row:hover .wl-del,.wl-del:focus-visible{opacity:1}
 .wl-del:hover{color:var(--tinta)}
 .wl-f{padding:10px 14px;border-top:1px solid var(--linea)}
+/* ---------- gráfico sin desplazamiento (26-nov): boleto y normas en un panel; posiciones plegadas no ocupan nada ---------- */
+html.an-lock,html.an-lock body{overflow:hidden;overscroll-behavior:none}
+.anside{width:340px;flex:none;border-left:1px solid var(--linea);display:flex;flex-direction:column;background:var(--card);min-height:0}
+.anside[hidden]{display:none}
+.anside-h{display:flex;align-items:center;gap:6px;padding:12px 10px 10px 14px;border-bottom:1px solid var(--linea)}
+.anside-h b{flex:1;font-size:14px}
+.anside-b{flex:1;overflow:auto;min-height:0;padding:12px;display:flex;flex-direction:column;gap:12px;overscroll-behavior:contain}
+.anside-b>.card{box-shadow:none;margin:0}
+.anside .obar{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;padding:12px;align-items:end}
+.anside .obar .field:first-child,.anside .obar .side2,.anside .obar #anResult{grid-column:1/-1}
+.anside .obar .field:nth-of-type(n+2){grid-column:span 2}
+.anside .obar .side2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.anside .obar .input{height:38px}
+.anside .an-note{margin:-4px 2px 0;font-size:12px;line-height:1.45}
+.anside .an-ban{font-size:13.5px;padding:10px 12px}
+.anside .bsband .row{gap:8px!important}
+.rail button{position:relative}
+.rail-n{position:absolute;top:1px;right:1px;min-width:15px;height:15px;border-radius:8px;background:var(--cobalto);color:var(--onAccent,#fff);font:700 9.5px/15px Inter,system-ui,sans-serif;text-align:center;padding:0 3px;pointer-events:none}
+.rail-n[hidden]{display:none}
+.gx-bp:not(.open){display:none}
 @media (max-width:1023px){
   .anlay{flex-direction:column;height:auto}
   .rail{width:auto;flex-direction:row;border-left:0;border-top:1px solid var(--linea);padding:6px 8px;order:3}
   .rail-lay{display:none}
   .wl{width:auto;border-left:0;border-top:1px solid var(--linea);max-height:55vh;order:2}
   .wl-del{opacity:1}
+  /* sin desplazamiento: el gráfico llena la pantalla hasta la barra de abajo; lista, boleto y posiciones salen como hojas */
+  html.an-lock .main.an{height:calc(100dvh - 64px - env(safe-area-inset-bottom,0px));overflow:hidden;padding:0!important}
+  html.an-lock .main.an>.an-one{height:100%;gap:0}
+  html.an-lock .main.an .tvcard{height:100%!important;min-height:0!important}
+  html.an-lock .main.an .anlay{height:100%}
+  html.an-lock .main.an .tkgrid{flex:1;min-height:0}
+  html.an-lock .main.an .gx-canvas,html.an-lock body.bt-mode .main.an .gx-canvas,html.an-lock .main.an .gx.tools-on .gx-canvas{height:auto!important;flex:1 1 auto;min-height:0}
+  html.an-lock .main.an .rail{height:47px;flex:none}
+  html.an-lock .main.an .wl,html.an-lock .main.an .anside,html.an-lock .main.an .gx-bp.open{position:fixed;left:0;right:0;bottom:calc(111px + env(safe-area-inset-bottom,0px));width:auto;max-height:min(78dvh,calc(100dvh - 160px));z-index:45;border:1px solid var(--borde);border-bottom:0;border-radius:16px 16px 0 0;box-shadow:0 -18px 40px -14px rgba(0,0,0,.55);overflow:hidden}
+  html.an-lock .main.an .gx-bp.open .gx-bpb{max-height:calc(min(78dvh,calc(100dvh - 160px)) - 46px)}
 }
 .gx{position:relative;display:flex;flex-direction:column;height:100%;background:var(--card)}
 .gx-top{display:flex;align-items:center;gap:2px;padding:4px 6px;border-bottom:1px solid var(--linea);overflow-x:auto;white-space:nowrap;scrollbar-width:none;min-height:44px}
@@ -920,9 +950,9 @@ body.bt-mode .live-only{display:none!important}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/klinecharts@10.1.0/dist/umd/klinecharts.min.js"></script>
-<script src="grafico.js?v=34"></script>
-<script src="grafico2.js?v=12"></script>
-<script src="grafico3.js?v=4"></script>
+<script src="grafico.js?v=35"></script>
+<script src="grafico2.js?v=13"></script>
+<script src="grafico3.js?v=5"></script>
 <script src="mercados.js?v=4"></script>
 </head>
 <body>
@@ -1700,8 +1730,9 @@ function paneCount(){const k=isNarrow()?"1":layState().k;return PANES[k]||1}
 function wlRows(){const w=watchState(),cur=window.TkChart&&TkChart.current?TkChart.current.sym:S.an&&S.an.sym;
   return w.list.map(sym=>{const q=(S.quotes||{})[sym];return `<div class="wl-row" role="listitem"><button type="button" class="wl-pick" data-wl="${esc(sym)}" aria-current="${sym===cur}"><b>${esc(sym)}</b><span class="wl-p">${q&&q.last!=null?esc(fmtQ(sym,q.last)):"—"}</span><span class="wl-c ${q&&q.chg!=null?(q.chg>=0?"up":"dn"):""}">${q&&q.chg!=null?(q.chg>=0?"+":"−")+num(Math.abs(q.chg),2)+" %":""}</span></button><button type="button" class="wl-del" data-wl-del="${esc(sym)}" aria-label="Quitar ${esc(sym)} de la lista">${SVG('<path d="M5 5l10 10M15 5L5 15"/>',14,2)}</button></div>`}).join("")||`<div class="small muted" style="padding:14px">Tu lista está vacía. Pulsa + para añadir mercados.</div>`}
 function fmtQ(sym,v){const i=symbolsInfo().find(x=>x.s===sym),d=i&&i.d!=null?i.d:window.TkChart?TkChart.digits(sym):/JPY/.test(sym)?3:/^(XAU|NAS|US|GER|UK|BTC|ETH)/.test(sym)?2:5;return Number(v).toLocaleString("es-ES",{minimumFractionDigits:d,maximumFractionDigits:d})}
-function anLayout(){
-  const L=layState(),w=watchState(),n=paneCount(),k=isNarrow()?"1":L.k;
+function anSideOpen(){return !!lsGet("tk-anside",false)}
+function anLayout(side){
+  const L=layState(),w=watchState(),n=paneCount(),k=isNarrow()?"1":L.k,so=anSideOpen()&&!w.open;
   const panes=Array.from({length:n},(_,i)=>`<div class="tkpane" id="${i?"tkchart"+i:"tkchart"}" data-i="${i}"></div>`).join("");
   return `<div class="anlay"><div class="tkgrid" data-k="${k}">${panes}</div>
     <aside class="wl" id="wl" ${w.open?"":"hidden"} aria-label="Lista de seguimiento">
@@ -1711,8 +1742,14 @@ function anLayout(){
       <div class="wl-list" id="wlList" role="list">${wlRows()}</div>
       <div class="wl-f small muted">Toca un mercado para verlo en el gráfico${n>1?" activo":""}.</div>
     </aside>
+    <aside class="anside" id="anSide" ${so?"":"hidden"} aria-label="Boleto y normas">
+      <div class="anside-h"><b><span class="live-only">Boleto y normas</span><span class="bt-only">Tu sesión de backtesting</span></b><button type="button" class="wl-ib" data-side-toggle aria-label="Cerrar el panel" title="Cerrar">${SVG('<path d="M5 5l10 10M15 5L5 15"/>',15,2)}</button></div>
+      <div class="anside-b">${side||""}</div>
+    </aside>
     <nav class="rail" aria-label="Herramientas del espacio de trabajo">
       <button type="button" data-wl-toggle aria-pressed="${w.open}" title="Lista de seguimiento" aria-label="Lista de seguimiento">${SVG('<path d="M4 5h12M4 10h12M4 15h8"/><circle cx="16" cy="15" r="1.4" fill="currentColor"/>',18)}</button>
+      <button type="button" data-side-toggle aria-pressed="${so}" title="Boleto y normas" aria-label="Boleto y normas">${SVG('<rect x="4" y="3.5" width="12" height="14" rx="2"/><path d="M7.5 3.5v-1h5v1"/><path d="M7 9.5l1.8 1.8L13 7.5"/><path d="M7 14h6"/>',18)}</button>
+      <button type="button" id="bpBtn" aria-pressed="false" title="Posiciones y órdenes" aria-label="Posiciones y órdenes">${SVG('<rect x="3" y="4" width="14" height="12" rx="2"/><path d="M3 8h14M7 11h6M7 13.5h4"/>',18)}<span class="rail-n" id="bpN" hidden></span></button>
       <div class="rail-lay"><button type="button" id="layBtn" aria-haspopup="true" aria-expanded="false" title="Varios gráficos" aria-label="Varios gráficos">${SVG((LAYS.find(x=>x[0]===L.k)||LAYS[0])[2],18)}</button>
         <div class="laymenu" id="layMenu" hidden role="menu">${LAYS.map(([key,l,ic])=>`<button type="button" role="menuitemradio" data-lay="${key}" aria-checked="${L.k===key}">${SVG(ic,18)}<span>${l}</span></button>`).join("")}
           <div class="lay-h">Sincronizar entre gráficos</div>${[["sym","Mercado"],["tf","Marco de tiempo"],["cross","Cursor"],["range","Fechas que se ven"]].map(([k,l])=>`<label class="lay-c"><input type="checkbox" data-sync="${k}" ${L.sync&&L.sync[k]?"checked":""}> ${l}</label>`).join("")}
@@ -1758,7 +1795,19 @@ function bindWatch(){
 }
 function bindLayout(){
   const w=watchState(),wl=document.getElementById("wl");if(!wl)return;
-  document.querySelectorAll("[data-wl-toggle]").forEach(b=>b.onclick=()=>{w.open=!w.open;lsSet("tk-watch",{open:w.open,list:w.list});wl.hidden=!w.open;document.querySelectorAll(".rail [data-wl-toggle]").forEach(x=>x.setAttribute("aria-pressed",String(w.open)));if(w.open)refreshQuotes();setTimeout(()=>TkChart.all.forEach(x=>x.ch.resize()),30)});
+  const sd=document.getElementById("anSide");
+  const sideSet=on=>{if(!sd)return;sd.hidden=!on;lsSet("tk-anside",!!on);document.querySelectorAll(".rail [data-side-toggle]").forEach(x=>x.setAttribute("aria-pressed",String(!!on)));
+    if(on&&w.open){w.open=false;lsSet("tk-watch",{open:false,list:w.list});wl.hidden=true;document.querySelectorAll(".rail [data-wl-toggle]").forEach(x=>x.setAttribute("aria-pressed","false"))}
+    setTimeout(()=>TkChart.all.forEach(x=>x.ch.resize()),60)};
+  window.tkAnSide=sideSet;
+  document.querySelectorAll("[data-side-toggle]").forEach(b=>b.onclick=()=>sideSet(sd&&sd.hidden));
+  const bpb=document.getElementById("bpBtn"),bpn=document.getElementById("bpN");
+  if(bpb)bpb.onclick=()=>{const m=TkChart.all.find(c=>c.key==="main");if(m&&m.X&&m.X.bpToggle)m.X.bpToggle()};
+  window.onTkBp=d=>{if(!bpb||!bpb.isConnected)return;bpb.setAttribute("aria-pressed",String(!!d.open));if(bpn){bpn.hidden=!d.n;bpn.textContent=d.n>9?"9+":String(d.n||"")}};
+  if(!window.__tkBpL){window.__tkBpL=1;window.addEventListener("tk-bp",e=>window.onTkBp&&window.onTkBp(e.detail||{}))}
+  if(S.btRun&&S.btSideFor!==S.btRun.id){S.btSideFor=S.btRun.id;sideSet(true)}   // sesión de backtesting en marcha: su panel a la vista
+  if(!lsGet("tk-anhint",0)&&!lsGet("tk-anside",false)){lsSet("tk-anhint",1);setTimeout(()=>toast(isNarrow()?"El boleto y las normas están ahora en la barra de debajo del gráfico (la hoja con la marca). Las posiciones, en el icono de al lado.":"El boleto y las normas están ahora en la barra de la derecha (la hoja con la marca). Las posiciones, en el icono de debajo."),2600)}
+  document.querySelectorAll("[data-wl-toggle]").forEach(b=>b.onclick=()=>{w.open=!w.open;lsSet("tk-watch",{open:w.open,list:w.list});wl.hidden=!w.open;if(w.open&&sd&&!sd.hidden){sd.hidden=true;lsSet("tk-anside",false);document.querySelectorAll(".rail [data-side-toggle]").forEach(x=>x.setAttribute("aria-pressed","false"))}document.querySelectorAll(".rail [data-wl-toggle]").forEach(x=>x.setAttribute("aria-pressed",String(w.open)));if(w.open)refreshQuotes();setTimeout(()=>TkChart.all.forEach(x=>x.ch.resize()),30)});
   const addB=document.getElementById("wlAddBtn"),add=document.getElementById("wlAdd"),q=document.getElementById("wlQ"),res=document.getElementById("wlRes");
   const all=()=>{const mine=symbolsInfo().map(x=>x.s);return Array.from(new Set(mine.concat(MARKETS.flatMap(g=>g[1]))))};
   const paint=()=>{const v=q.value.trim().toUpperCase(),l=all().filter(x=>!w.list.includes(x)&&(!v||x.includes(v))).slice(0,30);if(v&&/^[A-Z0-9.]{2,15}$/.test(v)&&!l.includes(v)&&!w.list.includes(v))l.unshift(v);
@@ -1809,11 +1858,9 @@ function viewAnalizar(){
   const groups=(mine.length?[["Tu MT5",mine.slice(0,10)]]:[]).concat(MARKETS.map(([g,l])=>[g,l.filter(x=>!mine.includes(x))])).filter(g=>g[1].length);
   const opts=Array.from(new Set(mine.concat([sel]))).map(s=>`<option ${s===sel?"selected":""}>${esc(s)}</option>`).join("");
   const info=syms.find(x=>x.s===sel);
-  return `<div class="stack">
-    <div class="card tvcard" id="tvcard" style="padding:0;overflow:hidden;position:relative">
-      ${window.TkChart?anLayout():`<div class="stack" style="padding:20px;gap:8px"><b>No se pudo cargar el gráfico.</b><span class="small muted">Revisa tu conexión y recarga la página.</span></div>`}
-    </div>
-      <form class="card ticket obar live-only" id="anForm" onsubmit="return false" aria-label="Boleto de orden">
+  /* Todo lo que antes iba debajo del gráfico (boleto, normas, sesión de backtesting) vive ahora en el panel
+     «Boleto y normas» de la barra de la derecha: el gráfico ocupa la pantalla y la página no se desplaza (26-nov). */
+  const side=`<form class="card ticket obar live-only" id="anForm" onsubmit="return false" aria-label="Boleto de orden">
         <label class="field"><span>Mercado</span><select class="input" id="anSym">${opts}</select></label>
         <div class="side2">
           <button type="button" class="sb sell" data-side="sell" aria-pressed="${S.an.side==="sell"}"><span class="t">Vender</span><span class="p">${info&&info.p?esc(String(info.p)):""}</span></button>
@@ -1824,15 +1871,15 @@ function viewAnalizar(){
         <label class="field"><span>Objetivo</span><input class="input" id="anTp" inputmode="decimal" value="${esc(S.an.tp)}" placeholder="precio"></label>
         <div id="anResult"></div>
       </form>
-    <div class="small muted live-only" style="margin-top:-6px">La operación la abres tú en MetaTrader con estos datos. Abrirla desde aquí llegará más adelante, siempre pasando por tu pacto.</div>
+    <div class="small muted live-only an-note">La operación la abres tú en MetaTrader con estos datos. Abrirla desde aquí llegará más adelante, siempre pasando por tu pacto.</div>
     ${window.tkSessionBand?tkSessionBand():""}
     <div class="card bt-only btnote" ${S.btRun?"hidden":""}><b>Estás en backtesting.</b> Elige desde cuándo practicar, avanza y retrocede vela a vela o arrastra la barra para ir a cualquier punto. Pulsa Comprar o Vender para abrir operaciones simuladas: se guardan aparte y no cuentan en tus estadísticas reales. Atajos: ← → una vela, Mayús + ← → diez velas, espacio para reproducir.</div>
-    <div class="grid2 even live-only">
-      <div class="card stack" style="gap:8px" id="anPacto"></div>
-      <div class="stack">
-        ${p.strategy?`<div class="card small" style="color:var(--tinta2)"><span class="lbl" style="display:block;margin-bottom:4px">Tu estrategia</span>${esc(p.strategy)}</div>`:""}
-        <div class="banner" style="font-size:15px">${SVG(IC2.trophy,22,1.8)}Disciplina antes que dinero.</div>
-      </div>
+    <div class="card stack live-only" style="gap:8px" id="anPacto"></div>
+    ${p.strategy?`<div class="card small live-only" style="color:var(--tinta2)"><span class="lbl" style="display:block;margin-bottom:4px">Tu estrategia</span>${esc(p.strategy)}</div>`:""}
+    <div class="banner live-only an-ban">${SVG(IC2.trophy,20,1.8)}Disciplina antes que dinero.</div>`;
+  return `<div class="stack an-one">
+    <div class="card tvcard" id="tvcard" style="padding:0;overflow:hidden;position:relative">
+      ${window.TkChart?anLayout(side):`<div class="stack" style="padding:20px;gap:8px"><b>No se pudo cargar el gráfico.</b><span class="small muted">Revisa tu conexión y recarga la página.</span></div>`}
     </div>
   </div>`;
 }
@@ -1974,7 +2021,7 @@ function chartOpts(i){
     onPrice:main?(p,sym)=>{if(sym===S.an.sym)livePrice(sym,p)}:null,
     onPosition:main?pos=>{const a=S.an,f=v=>Number(v).toFixed(pos.digits);a.side=pos.side;a.entry=f(pos.entry);a.stop=f(pos.stop);a.tp=f(pos.tp);
       [["anEntry","entry"],["anStop","stop"],["anTp","tp"]].forEach(([id,k])=>{const x=document.getElementById(id);if(x)x.value=a[k]});
-      document.querySelectorAll("[data-side]").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.side===a.side)));paintAnalizar();toast("Boleto rellenado con tu dibujo")}:null,
+      document.querySelectorAll("[data-side]").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.side===a.side)));paintAnalizar();if(window.tkAnSide)tkAnSide(true);toast("Boleto rellenado con tu dibujo")}:null,
     loadDrawings:async sym=>{const {data,error}=await sb.from("docs").select("data,updated_at").eq("col","draw").eq("id",sym).maybeSingle();if(error)throw error;if(!data||!data.data||!data.data.list)return null;return {list:data.data.list,t:data.data.t||0}},
     saveDrawings:async(sym,list,t)=>{const {error}=await sb.from("docs").upsert({user_id:S.user.id,col:"draw",id:sym,data:{list,t:t||Date.now()},updated_at:new Date().toISOString()});if(error&&!S.drawErr){S.drawErr=1;toast("No se pudieron guardar los dibujos en la nube; quedan en este navegador")}},
     lotsFor:(sym,e,st,money)=>{const info=symbolsInfo().find(x=>x.s===sym);if(!info||!info.ts||!info.tv||!money||e==null||st==null||e===st)return null;const lpl=Math.abs(e-st)/info.ts*info.tv;let l=Math.floor((money/lpl)/(info.vstep||0.01)+1e-9)*(info.vstep||0.01);if(info.vmax)l=Math.min(l,info.vmax);return l>=(info.vmin||0.01)?+l.toFixed(2):null},
@@ -2146,6 +2193,7 @@ function render(){
   if(S.lastView===key&&ae&&ae.closest&&ae.closest("#main")&&ae.matches("input,textarea,select,[contenteditable]"))return; // no borrar lo que estás escribiendo
   if(key==="analizar"&&S.lastView==="analizar"&&document.getElementById("tkchart")){paintAnalizar();return} // no recargar el gráfico
   S.lastView=key;
+  document.documentElement.classList.toggle("an-lock",r.view==="analizar");   // en el gráfico la página no se desplaza
   if(r.view!=="analizar"&&window.TkChart&&TkChart.current){TkChart.destroy();document.body.style.overflow=""}
   const XV=window.TK_VIEWS&&TK_VIEWS[r.view];
   const NEWV=["app","backtest","historial","emociones","diario","noticias","asistente","inicio","btanalisis","btops","btcal","btnotas","rendimiento","calendario","informe","finanzas","aprender","errores","comofuncionas","bienvenida","ahorro"];
