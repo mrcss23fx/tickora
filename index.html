@@ -1904,7 +1904,7 @@ const vivoTicks={subscribe(sym,fn){
 }};
 document.addEventListener("visibilitychange",()=>{
   if(document.hidden){clearTimeout(VIVO.hid);VIVO.hid=setTimeout(()=>VIVO.subs.forEach(v=>{if(v.ch){sb.removeChannel(v.ch);v.ch=null}}),30000)}
-  else{clearTimeout(VIVO.hid);let n=0;VIVO.subs.forEach((v,sym)=>{if(!v.ch){vivoJoin(sym,v);n++}});if(n)vivoWatch()}
+  else{clearTimeout(VIVO.hid);VIVO.subs.forEach((v,sym)=>{if(!v.ch)vivoJoin(sym,v)});vivoWatch()}   // al volver, avisa ya: si el servidor dejó de repartir, arranca al momento
 });
 /* Precios en vivo de tu MT5 (programa puente 1.3 o más nuevo) */
 function mt5Live(sym){
