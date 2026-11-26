@@ -38,7 +38,7 @@
     dot: '<circle cx="10" cy="10" r="3.2" fill="currentColor" stroke="none"/>'
   };
   const ic = (n, s) => IC3[n] ? SV(IC3[n], s || 16) : U.icon(n, s || 16);
-  const CMP_COL = () => U.DARK ? ["#b394ff", "#4fd1db", "#f07cc0", "#e9c948", "#aab4c8"] : ["#7b4fd6", "#0b8a96", "#b0287a", "#8c6f00", "#5a6478"];
+  const CMP_COL = () => U.CDARK ? ["#b394ff", "#4fd1db", "#f07cc0", "#e9c948", "#aab4c8"] : ["#7b4fd6", "#0b8a96", "#b0287a", "#8c6f00", "#5a6478"];
   const RANGES = [["1D", "1m", 1, "Último día, en velas de 1 minuto"], ["5D", "5m", 5, "Últimos 5 días, en velas de 5 minutos"], ["1M", "30m", 30, "Último mes, en velas de 30 minutos"],
     ["3M", "1h", 91, "Últimos 3 meses, en velas de 1 hora"], ["6M", "2h", 182, "Últimos 6 meses, en velas de 2 horas"], ["YTD", "1d", "ytd", "Desde el 1 de enero, en velas diarias"],
     ["1A", "1d", 365, "Último año, en velas diarias"], ["5A", "1w", 1826, "Últimos 5 años, en velas semanales"], ["Todo", "1M", "all", "Todo el historial, en velas mensuales"]];
@@ -703,7 +703,7 @@
     const dash = k => k === "solid" ? [] : k === "dotted" ? [1, 3] : [4, 4];
     const rgba = (hexc, a) => { const m = /^#([0-9a-f]{6})$/i.exec(hexc || ""); if (!m) return hexc; const n = parseInt(m[1], 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
     /* el fondo del gráfico puede ser claro aunque Tickora esté en modo oscuro (o al revés): los colores se eligen según el fondo de verdad */
-    const darkBg = () => { const m = /^#([0-9a-f]{6})$/i.exec(CFG.bg || ""); if (!m) return !!U.DARK; const v = parseInt(m[1], 16), r = v >> 16, g = (v >> 8) & 255, b = v & 255; return (0.299 * r + 0.587 * g + 0.114 * b) < 140; };
+    const darkBg = () => !!U.CDARK;
     const softCol = () => darkBg() ? "#8a93a8" : "#6b7385";
     LAY[me.key] = {
       TKPDC: ({ ctx, bounding: b, yAxis }) => {

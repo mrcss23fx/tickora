@@ -124,11 +124,15 @@
     ethBg: true, ethCol: null, sessBreak: false, sessCol: null, sessStyle: "dashed", alertCol: null, alertActive: true, alertAutoHide: true, newsWarn: 0 };
   let CFG = Object.assign({}, CFG_DEF, ls.get("tk-cfg", {}));
   if (CFG.grid === false) { CFG.gridV = false; CFG.gridH = false; CFG.grid = true; } // antes había un interruptor general de la cuadrícula
+  /* ¿el fondo del gráfico es oscuro? Con un fondo propio (Ajustes › Lienzo) manda ese color y no el tema de Tickora,
+     así el texto de las escalas, la cruz, los dibujos y la leyenda se leen bien con cualquier fondo */
+  const lumOf = c => { const m = /^#([0-9a-f]{6})$/i.exec(c || ""); if (!m) return null; const v = parseInt(m[1], 16); return 0.299 * (v >> 16) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255); };
+  function CDK() { const a = lumOf(CFG.bg); if (a == null) return DARK; const b = CFG.bgMode === "grad" ? lumOf(CFG.bg2 || (DARK ? "#1d2333" : "#e9edf6")) : null; return (b == null ? a : (a + b) / 2) < 140; }
   function pal() {
-    return DARK ? { tinta: "#e9edf6", suave: "#8f9ab3", linea: "#232f4a", borde: "#33405f", card: "#141d33", cob: "#7b93ff", cobA: "rgba(123,147,255,.16)", stopA: "rgba(233,237,246,.10)", rot: "#fbe27a" }
+    return CDK() ? { tinta: "#e9edf6", suave: "#8f9ab3", linea: "#232f4a", borde: "#33405f", card: "#141d33", cob: "#7b93ff", cobA: "rgba(123,147,255,.16)", stopA: "rgba(233,237,246,.10)", rot: "#fbe27a" }
       : { tinta: "#14213a", suave: "#556079", linea: "#e9edf3", borde: "#c9d1de", card: "#ffffff", cob: "#2443c7", cobA: "rgba(36,67,199,.12)", stopA: "rgba(20,33,58,.10)", rot: "#fbe27a" };
   }
-  const upC = () => CFG.up || pal().cob, downC = () => CFG.down || (DARK ? "#c6cee0" : "#14213a");
+  const upC = () => CFG.up || pal().cob, downC = () => CFG.down || (CDK() ? "#c6cee0" : "#14213a");
   /* tipos de gráfico propios: los de línea se dibujan con un indicador sobre el precio; Heikin Ashi, Renko y ruptura de líneas transforman las velas */
   const DRAWN = ["line", "linemk", "step", "base", "cols", "hl"], XFORM = ["ha", "renko", "lbreak"];
   const haList = (list, prev) => { const out = []; let p = prev || null; for (const b of list) { const c = (b.open + b.high + b.low + b.close) / 4, o = p ? (p.open + p.close) / 2 : (b.open + b.close) / 2; p = { timestamp: b.timestamp, open: o, high: Math.max(b.high, o, c), low: Math.min(b.low, o, c), close: c, volume: b.volume }; out.push(p); } return out; };
@@ -171,7 +175,7 @@
     const bUp = CFG.body !== false ? up : T0, bDn = CFG.body !== false ? down : T0;
     const brUp = CFG.border !== false ? (CFG.bUp || up) : bUp, brDn = CFG.border !== false ? (CFG.bDown || down) : bDn;
     const wkUp = CFG.wick !== false ? (CFG.wUp || up) : T0, wkDn = CFG.wick !== false ? (CFG.wDown || down) : T0;
-    const ctext = { color: DARK ? "#0e1526" : "#ffffff", backgroundColor: p.tinta, borderColor: p.tinta, family: NUMF, size: 11 };
+    const ctext = { color: CDK() ? "#0e1526" : "#ffffff", backgroundColor: p.tinta, borderColor: p.tinta, family: NUMF, size: 11 };
     return {
       grid: { show: CFG.gridV !== false || CFG.gridH !== false, horizontal: Object.assign({ show: CFG.gridH !== false, color: CFG.gridColH || CFG.gridCol || p.linea, size: 1 }, dashOf(CFG.gridStyleH || CFG.gridStyle || "dashed")), vertical: Object.assign({ show: CFG.gridV !== false, color: CFG.gridColV || CFG.gridCol || p.linea, size: 1 }, dashOf(CFG.gridStyleV || CFG.gridStyle || "dashed")) },
       candle: {
@@ -216,7 +220,7 @@
     if (/HH/.test(template)) return hm(/ss/.test(template));
     return dow + date();
   }
-  const IND_COLORS = () => DARK ? ["#7b93ff", "#e0a33a", "#c6cee0", "#4fbf8f", "#d6336c", "#0e9aa7"] : ["#2443c7", "#d9822b", "#14213a", "#2f8f67", "#d6336c", "#0e9aa7"];
+  const IND_COLORS = () => CDK() ? ["#7b93ff", "#e0a33a", "#c6cee0", "#4fbf8f", "#d6336c", "#0e9aa7"] : ["#2443c7", "#d9822b", "#14213a", "#2f8f67", "#d6336c", "#0e9aa7"];
 
   /* ---------- estilo de cada dibujo ---------- */
   const sty = o => { const ed = o.extendData || {}; return { color: ed.color || pal().cob, width: ed.width || 1.5, dash: ed.dash || "solid", text: ed.text || "", size: ed.size || 14, fill: ed.fill !== false, bold: !!ed.bold, italic: !!ed.italic, tcolor: ed.tcolor || "", th: ed.th || "", tv: ed.tv || "" }; };
@@ -584,7 +588,7 @@
       if (c.length < 2) return [];
       const s = sty(o), p = o.points, x = Math.min(c[0].x, c[1].x), y = Math.min(c[0].y, c[1].y), w = Math.abs(c[1].x - c[0].x), h = Math.abs(c[1].y - c[0].y);
       const dp = p[1].value - p[0].value, pct = p[0].value ? dp / p[0].value * 100 : 0, dt = (p[1].timestamp || 0) - (p[0].timestamp || 0), bars = Math.round(Math.abs(dt) / (TF_MS[CUR_TF] || 3e5));
-      const col = kind === "date" ? s.color : dp >= 0 ? s.color : (DARK ? "#c6cee0" : "#14213a");
+      const col = kind === "date" ? s.color : dp >= 0 ? s.color : (CDK() ? "#c6cee0" : "#14213a");
       const f = [{ type: "rect", ignoreEvent: true, attrs: { x, y, width: w, height: h }, styles: { style: "fill", color: alpha(col, .12) } }];
       const midX = x + w / 2, midY = y + h / 2;
       if (kind !== "date") f.push({ type: "line", ignoreEvent: true, attrs: { coordinates: [{ x: midX, y: c[0].y }, { x: midX, y: c[1].y }] }, styles: { color: col, size: 1.5 } });
@@ -986,7 +990,9 @@
     const $ = s => el.querySelector(s), $$ = s => Array.from(el.querySelectorAll(s));
     const box = $(".gx-chart");
     const ch = KC.init(box, { locale: "es-ES", timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Madrid", styles: styles(), decimalFold: { threshold: 99 } });
-    const paintBg = () => { box.style.background = CFG.bgMode === "grad" ? `linear-gradient(180deg, ${CFG.bg || pal().card}, ${CFG.bg2 || (DARK ? "#1d2333" : "#e9edf6")})` : (CFG.bg || ""); if (CFG.bgMode === "grad") { BGC = CFG.bg || pal().card; return; } setTimeout(() => { let n = box, c = ""; while (n && n.nodeType === 1) { c = getComputedStyle(n).backgroundColor; if (c && !/rgba\(0, 0, 0, 0\)|transparent/.test(c)) break; n = n.parentNode; c = ""; } BGC = c || null; }, 0); };
+    const markBg = () => { const cv = box.closest(".gx-canvas") || box.parentNode, cd = CDK(); if (!cv) return; if (cd !== DARK) cv.dataset.cbg = cd ? "dark" : "light"; else delete cv.dataset.cbg; };
+    let cd0 = CDK(); // si el fondo pasa de claro a oscuro (o al revés) se rehacen los indicadores con sus colores legibles
+    const paintBg = () => { markBg(); box.style.background = CFG.bgMode === "grad" ? `linear-gradient(180deg, ${CFG.bg || pal().card}, ${CFG.bg2 || (DARK ? "#1d2333" : "#e9edf6")})` : (CFG.bg || ""); if (CFG.bgMode === "grad") { BGC = CFG.bg || pal().card; return; } setTimeout(() => { let n = box, c = ""; while (n && n.nodeType === 1) { c = getComputedStyle(n).backgroundColor; if (c && !/rgba\(0, 0, 0, 0\)|transparent/.test(c)) break; n = n.parentNode; c = ""; } BGC = c || null; }, 0); };
     paintBg();
     let lastCross = null;
     ch.subscribeAction("onCrosshairChange", d => { lastCross = d; });
@@ -1617,7 +1623,7 @@
     let SETSNAP = null; // ajustes al abrir la ventana (para «Cancelar»)
     function modalSettings(again) {
       if (!again) { const c = Object.assign({}, CFG); delete c.t; SETSNAP = JSON.stringify(c); }
-      const p = pal(), upD = /^#/.test(p.cob) ? p.cob : "#2443c7", dnD = DARK ? "#c6cee0" : "#14213a";
+      const p = pal(), upD = /^#/.test(p.cob) ? p.cob : "#2443c7", dnD = CDK() ? "#c6cee0" : "#14213a";
       const hex = (v, d) => /^#[0-9a-f]{6}$/i.test(String(v || "")) ? v : d;
       const col = (k, def) => `<input type="color" data-cfg="${k}" value="${esc(hex(CFG[k], def))}" aria-label="Color">`;
       const on = k => (CFG[k] ?? CFG_DEF[k]) !== false && (CFG[k] ?? CFG_DEF[k]) != null;
@@ -1631,7 +1637,7 @@
       const styleSel = (k, def) => `<select class="gx-in gx-ssty" data-cfg="${k}" aria-label="Estilo de línea">${LS.map(([v, t]) => `<option value="${v}" ${(CFG[k] || def) === v ? "selected" : ""}>${t}</option>`).join("")}</select>`;
       const pair = (a, ad, b, bd) => `<span class="gx-spair">${col(a, ad)}${col(b, bd)}</span>`;
       const sec = t => `<div class="gx-mh gx-ssec">${t}</div>`;
-      const lineC = hex(p.linea, DARK ? "#26262e" : "#e6e8ee"), softC = hex(p.suave, "#8a93a8");
+      const lineC = hex(p.linea, CDK() ? "#26262e" : "#e6e8ee"), softC = hex(p.suave, "#8a93a8");
       const tzName = v => { try { const z = v === "auto" ? Intl.DateTimeFormat().resolvedOptions().timeZone : v; const x = new Intl.DateTimeFormat("en-US", { timeZone: z, timeZoneName: "shortOffset" }).formatToParts(new Date()).find(q => q.type === "timeZoneName"); return x ? "(" + x.value.replace("GMT", "UTC") + ") " : ""; } catch (e) { return ""; } };
       const tpls = ls.get("tk-cfgtpl", {}), tn = Object.keys(tpls);
       const prev = `<div class="gx-sprev">${[[1, 0, .8, .2, .9], [0, .7, .9, .4, .3], [1, .35, .6, .2, .7], [1, .55, .75, .45, .95], [0, .85, .95, .5, .6], [0, .5, .65, .1, .2]].map(([u, o, h, l, c]) => { const up = !!u, bc = up ? (CFG.body !== false ? (CFG.up || upD) : "transparent") : (CFG.body !== false ? (CFG.down || dnD) : "transparent"), br = CFG.border !== false ? (up ? CFG.bUp || CFG.up || upD : CFG.bDown || CFG.down || dnD) : bc, wk = CFG.wick !== false ? (up ? CFG.wUp || CFG.up || upD : CFG.wDown || CFG.down || dnD) : "transparent", top = (1 - Math.max(o, c)) * 100, bot = Math.min(o, c) * 100; return `<span class="gx-spc"><i class="w" style="background:${esc(wk)};top:${(1 - h) * 100}%;bottom:${l * 100}%"></i><i class="b" style="background:${esc(bc)};border-color:${esc(br)};top:${top}%;bottom:${bot}%"></i></span>`; }).join("")}</div>`;
@@ -1647,7 +1653,7 @@
           ${desc("Primer color: vela alcista · segundo: bajista. Sin cuerpo quedan solo los bordes (velas huecas).")}
           <div class="gx-quick"><button type="button" class="gx-btn" data-q="tickora">Tickora</button><button type="button" class="gx-btn" data-q="clasica">Verde y rojo</button><button type="button" class="gx-btn" data-q="mono">Blanco y negro</button><button type="button" class="gx-btn" data-q="hueca">Huecas</button></div>
           ${sec("Datos")}
-          ${chk("ethBg", "Fondo fuera del horario regular", col("ethCol", DARK ? "#2a3045" : "#dfe4ee"))}
+          ${chk("ethBg", "Fondo fuera del horario regular", col("ethCol", CDK() ? "#2a3045" : "#dfe4ee"))}
           ${desc("Sombrea las horas en las que su bolsa está cerrada: acciones, índices y futuros de índices de EE. UU., Europa y Asia.")}
           ${sel("prec", [["auto", "Por defecto"], ...[0, 1, 2, 3, 4, 5, 6, 7, 8].map(n => [String(n), n === 0 ? "Sin decimales" : n + (n === 1 ? " decimal" : " decimales")])], "Precisión")}
           ${sel("tz", TZLIST.map(([v, l]) => [v, tzName(v) + l]), "Zona horaria")}`,
@@ -1706,7 +1712,7 @@
           ${chk("execMk", "Marcas de ejecución")}${desc("Flechas donde entraste y saliste: tus operaciones reales del diario y las de práctica de este mercado.")}
           <div class="gx-sind">${chk("execLbl", "Etiquetas de ejecución (precio y resultado)")}</div>`,
         alertas: `${sec("En el gráfico")}
-          ${chk("showAlerts", "Líneas de alerta", col("alertCol", DARK ? "#5fd4c0" : "#0e8f7e"))}
+          ${chk("showAlerts", "Líneas de alerta", col("alertCol", CDK() ? "#5fd4c0" : "#0e8f7e"))}
           ${chk("alertActive", "Solo alertas activas")}${desc("Si lo quitas, también se ven en gris las que ya saltaron.")}
           ${sec("Avisos")}
           ${chk("alertAutoHide", "Ocultar automáticamente los avisos")}${desc("Si lo quitas, el aviso de una alerta se queda en la pantalla hasta que lo cierres.")}`,
@@ -1749,7 +1755,7 @@
           if (q === "sndtest") { HK.sound && HK.sound("fill", true); return; }
           if (q === "tickora") Object.assign(CFG, { up: null, down: null, bUp: null, bDown: null, wUp: null, wDown: null, body: true, border: true, wick: true });
           if (q === "clasica") Object.assign(CFG, { up: "#26a69a", down: "#ef5350", bUp: null, bDown: null, wUp: null, wDown: null, body: true, border: true, wick: true });
-          if (q === "mono") Object.assign(CFG, { up: DARK ? "#e9edf6" : "#ffffff", down: DARK ? "#5e6a85" : "#14213a", bUp: DARK ? "#e9edf6" : "#14213a", bDown: DARK ? "#5e6a85" : "#14213a", wUp: DARK ? "#e9edf6" : "#14213a", wDown: DARK ? "#5e6a85" : "#14213a", body: true, border: true, wick: true });
+          if (q === "mono") Object.assign(CFG, { up: CDK() ? "#e9edf6" : "#ffffff", down: CDK() ? "#5e6a85" : "#14213a", bUp: CDK() ? "#e9edf6" : "#14213a", bDown: CDK() ? "#5e6a85" : "#14213a", wUp: CDK() ? "#e9edf6" : "#14213a", wDown: CDK() ? "#5e6a85" : "#14213a", body: true, border: true, wick: true });
           if (q === "hueca") Object.assign(CFG, { body: false, border: true, wick: true });
           if (q === "reset") { if (!confirm("¿Volver a los ajustes de siempre en todos los gráficos?")) return; Object.keys(CFG).forEach(k => delete CFG[k]); Object.assign(CFG, CFG_DEF); }
           cfgSave(); restyleAll(); applyRight(); modalSettings(true);
@@ -2126,8 +2132,8 @@
       stopBacktest() { R.end = null; if (R.on) exitReplay(); },
       get replayTs() { return R.on && !R.picking && bar() ? bar().timestamp : null; },
       setSymbol(sym) { if (sym === st.sym) return; flushRemote(); const was = R.on; if (R.on) exitReplay(); st.sym = sym; F.hidden = true; load(); restore(); if (was) enterReplay(); },
-      setTheme(dark) { DARK = !!dark; ch.setStyles(styles()); applyInd(); paintBg(); applyCursor(); },
-      restyle() { ch.setStyles(styles()); paintBg(); applyScale(); applyLook(); try { $(".gx-typeic").innerHTML = icon(typeIcon(CFG.type), 18); } catch (e) { /* nada */ } HK.onRestyle && HK.onRestyle(); },
+      setTheme(dark) { DARK = !!dark; cd0 = CDK(); ch.setStyles(styles()); applyInd(); paintBg(); applyCursor(); HK.onRestyle && HK.onRestyle(); },
+      restyle() { ch.setStyles(styles()); paintBg(); applyScale(); applyLook(); { const cd = CDK(); if (cd !== cd0) { cd0 = cd; applyInd(); } } try { $(".gx-typeic").innerHTML = icon(typeIcon(CFG.type), 18); } catch (e) { /* nada */ } HK.onRestyle && HK.onRestyle(); },
       price: () => st.price,
       reloadDraw(list) { build(list); st.hist.push(JSON.stringify(serial())); },
       stop() { pause(); if (st.unsub) { st.unsub(); st.unsub = null; } }
@@ -2161,5 +2167,5 @@
   }
   /* velas sueltas para el cuadro de la portada */
   function bars(sym, tf, o) { o = o || {}; const prov = binSym(sym) ? binance() : publico(o.invoke, o.digits != null ? o.digits : guessDigits(sym)); return prov.bars(sym, tf, null); }
-  window.TkChart = { mount, destroy, quote, bars, digits: guessDigits, sources: { binance, publico }, U: { TFS, TF_MS, TF_SHORT, DERIV, IND, IND_BY, CATS, CFG, pal, styles, aggBars, tidyBars, fmtR, icon, addTf, withDerived, binSym, TZS: TZLIST, get DARK() { return DARK; } }, get current() { return inst; }, get all() { return Array.from(ALL); } };
+  window.TkChart = { mount, destroy, quote, bars, digits: guessDigits, sources: { binance, publico }, U: { TFS, TF_MS, TF_SHORT, DERIV, IND, IND_BY, CATS, CFG, pal, styles, aggBars, tidyBars, fmtR, icon, addTf, withDerived, binSym, TZS: TZLIST, get DARK() { return DARK; }, get CDARK() { return CDK(); } }, get current() { return inst; }, get all() { return Array.from(ALL); } };
 })();
