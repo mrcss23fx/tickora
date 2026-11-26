@@ -17,9 +17,11 @@
 //| cumple una de tus normas el programa te avisa, cierra al momento |
 //| las operaciones nuevas o cierra MetaTrader, según elijas.        |
 //| Para cerrar operaciones necesita «Trading algorítmico» activado. |
+//| 2.1: mientras miras el gráfico en la app, le manda también cada  |
+//| tick, y allí la vela se mueve igual que en MetaTrader.           |
 //+------------------------------------------------------------------+
 #property copyright   "Tickora"
-#property version     "2.00"
+#property version     "2.10"
 #property description "Apunta solas tus operaciones en Tickora, con la captura del gráfico al entrar y al salir. Nunca abre operaciones. Con el candado activado en Tickora puede avisarte, cerrar las operaciones nuevas o cerrar MetaTrader cuando se cumple una de tus normas."
 #include <Trade\Trade.mqh>
 
@@ -32,7 +34,7 @@ input bool   RehacerFoto     = true;  // Si no hubo foto en el momento, rehacerl
 #define BT_URL      "https://xsvezicjksfrklwjskfv.supabase.co"
 #define BT_RPC      "/rest/v1/rpc/bridge_ingest"
 #define BT_APIKEY   "sb_publishable_qLIhdI4CuQuisOstwl0fWg_dhW61xcm"
-#define BT_VERSION  "2.0"
+#define BT_VERSION  "2.1"
 #define BT_LOCKFILE "tickora_candado.txt"
 #define BT_KEYFILE  "bitacora_clave.txt"
 #define BT_STATE    "bitacora_estado.csv"
@@ -76,6 +78,8 @@ datetime g_wUntil   = 0;                        // hasta cuándo seguimos envian
 string   g_lastReq  = "";                       // último historial servido
 ulong    g_lastSync = 0;
 datetime g_lastPair = 0;
+long     g_tickMsc  = 0;                        // último tick enviado a la app (ms, hora del bróker)
+string   g_tickSym  = "";
 //--- candado
 string   g_lock      = "";                      // configuración que manda la app (texto con «|»)
 bool     g_lockOn    = false;
@@ -287,6 +291,28 @@ string BarsJson(const MqlRates &r[], const int n, const int digits, const long o
    return(out);
   }
 
+//--- ticks desde el último envío (como mucho 300): la app los reproduce con el mismo ritmo, como aquí
+string TicksJson(const string sym, const int digits, const long off)
+  {
+   MqlTick tk[];
+   long from = (sym == g_tickSym && g_tickMsc > 0) ? g_tickMsc + 1 : ((long)TimeCurrent() - 2) * 1000;
+   int n = CopyTicks(sym, tk, COPY_TICKS_INFO, (ulong)from, 300);
+   if(n <= 0)
+      return("");
+   g_tickSym = sym;
+   g_tickMsc = tk[n - 1].time_msc;
+   string out = "";
+   for(int i = 0; i < n; i++)
+     {
+      if(tk[i].bid <= 0)
+         continue;
+      if(out != "")
+         out += ",";
+      out += "[" + IntegerToString(tk[i].time_msc - off * 1000) + "," + DoubleToString(tk[i].bid, digits) + ",1]";
+     }
+   return(out);
+  }
+
 string JsonGet(const string js, const string key)
   {
    int p = StringFind(js, "\"" + key + "\":");
@@ -319,11 +345,13 @@ void Sync()
      {
       ENUM_TIMEFRAMES tf = TfOf(g_wTf);
       int digits = (int)SymbolInfoInteger(g_wSym, SYMBOL_DIGITS);
+      string tj = TicksJson(g_wSym, digits, off);    // primero los ticks: la vela que se lee después ya los incluye
       MqlRates r[];
       ArraySetAsSeries(r, false);
       int n = CopyRates(g_wSym, tf, 0, 2, r);
       if(n > 0)
-         data = "\"live\":{\"sym\":\"" + JsonEsc(g_wSym) + "\",\"tf\":\"" + g_wTf + "\",\"bars\":[" + BarsJson(r, n, digits, off) + "]}";
+         data = "\"live\":{\"sym\":\"" + JsonEsc(g_wSym) + "\",\"tf\":\"" + g_wTf + "\",\"bars\":[" + BarsJson(r, n, digits, off) + "]" +
+                (tj != "" ? ",\"ticks\":[" + tj + "]" : "") + "}";
      }
    int nev = ArraySize(g_lockEv);
    if(nev > 20)

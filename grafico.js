@@ -855,7 +855,7 @@
       subscribe(sym, tf, cb) {
         /* la vela llega cada 2 s por «kline»; entre medias, cada operación («aggTrade») mueve la vela al momento, como en MT5 */
         let ws = null, alive = true, cur = null, lastT = 0, raf = 0, dirty = false, lastEmit = 0;
-        const flush = () => { raf = 0; if (!alive || !cur || !dirty) return; const now = performance.now(); if (now - lastEmit < 40 && !document.hidden) { raf = requestAnimationFrame(flush); return; } dirty = false; lastEmit = now; cb(Object.assign({}, cur)); };
+        const flush = () => { raf = 0; if (!alive || !cur || !dirty) return; const now = performance.now(); if (now - lastEmit < 80 && !document.hidden) { raf = requestAnimationFrame(flush); return; } dirty = false; lastEmit = now; cb(Object.assign({}, cur)); };
         const kick = () => { dirty = true; if (document.hidden) flush(); else if (!raf) raf = requestAnimationFrame(flush); };
         const open = () => {
           if (!alive) return;
@@ -886,6 +886,73 @@
       }
     };
   }
+  /* Vela en vivo a partir de ticks: llegan en tandas de ~1 s y se reproducen con el ritmo con el que ocurrieron,
+     así la vela se mueve tick a tick como en MetaTrader. Lo usan el precio público (ticks de la función «vivo») y
+     tu MT5 (el programa 2.1 manda sus ticks junto a la vela). */
+  function tickEngine(tf, cb, round) {
+    let cur = null, lastT = 0, lastQ = 0, raf = 0, dirty = false, lastEmit = 0, qEnd = 0, alive = true;
+    const q = [], rd = round || (v => +v);
+    const emit = () => { if (!cur || !alive) return; dirty = false; lastEmit = performance.now(); cb(Object.assign({}, cur)); };
+    const setBar = b => { // una vela que manda (de «velas» o de MT5)
+      if (!cur || b.timestamp > cur.timestamp) cur = Object.assign({}, b);
+      else if (b.timestamp === cur.timestamp) Object.assign(cur, b);
+      else { cb(Object.assign({}, b)); return; } // la vela anterior, ya cerrada: se corrige
+      dirty = true;
+    };
+    const apply = it => {
+      if (it.bar) { setBar(it.bar); return; }
+      const x = it.x; if (x[0] <= lastT || !cur) return;
+      const k = barKey(x[0], tf), pr = rd(x[1]);
+      if (k > cur.timestamp) cur = { timestamp: k, open: pr, high: pr, low: pr, close: pr, volume: +x[2] || 0 };
+      else if (k === cur.timestamp) { cur.high = Math.max(cur.high, pr); cur.low = Math.min(cur.low, pr); cur.close = pr; cur.volume = +((cur.volume || 0) + (+x[2] || 0)).toFixed(6); }
+      else return;
+      lastT = x[0]; dirty = true;
+    };
+    const pump = () => {
+      raf = 0; if (!alive) return;
+      const now = performance.now();
+      while (q.length && q[0].due <= now) apply(q.shift());
+      if (dirty && (now - lastEmit >= 40 || !q.length)) emit();
+      if (q.length || dirty) raf = requestAnimationFrame(pump);
+    };
+    return {
+      get cur() { return cur; },
+      seed(bar, asof) { if (bar && (!cur || bar.timestamp >= cur.timestamp)) cur = Object.assign({}, bar); if (asof > lastT) lastT = asof; if (lastQ < lastT) lastQ = lastT; },
+      /* ticks [[ms, precio, volumen], …]; «after»: velas que mandan al acabar la tanda (MT5 manda la vela con sus ticks) */
+      ticks(list, after) {
+        if (!alive) return;
+        const fresh = (Array.isArray(list) ? list : []).filter(x => Array.isArray(x) && x[0] > lastQ && isFinite(x[1])).sort((a, b) => a[0] - b[0]);
+        const tail = (after || []).map(b => ({ bar: b }));
+        if (!fresh.length && !tail.length) return;
+        if (fresh.length) lastQ = fresh[fresh.length - 1][0];
+        if (document.hidden || q.length > 400) { // en segundo plano: sin animar
+          while (q.length) apply(q.shift()); fresh.forEach(x => apply({ x })); tail.forEach(apply); if (dirty) emit(); return;
+        }
+        const now = performance.now(), start = Math.max(now, qEnd), span = fresh.length ? fresh[fresh.length - 1][0] - fresh[0][0] : 0;
+        const k = start - now > 1200 || span > 2500 ? Math.min(1, 700 / Math.max(1, span)) : 1; // si se acumula retraso, más deprisa
+        fresh.forEach(x => q.push({ x, due: start + (x[0] - fresh[0][0]) * k }));
+        const endDue = start + span * k;
+        tail.forEach(it => { it.due = endDue; q.push(it); });
+        qEnd = endDue + 1;
+        if (!raf) raf = requestAnimationFrame(pump);
+      },
+      /* las dos últimas velas de un sondeo: corrigen la anterior y completan la actual sin volver atrás en el tiempo */
+      merge(bars, asof, flowing) {
+        if (!alive) return;
+        (bars || []).forEach(b => {
+          if (!cur || b.timestamp > cur.timestamp) { cur = Object.assign({}, b); if (asof > lastT) lastT = asof; dirty = true; }
+          else if (b.timestamp === cur.timestamp) {
+            cur.open = b.open; cur.high = Math.max(cur.high, b.high); cur.low = Math.min(cur.low, b.low);
+            if (asof > lastT || !flowing) { cur.close = b.close; cur.volume = b.volume; if (asof > lastT) lastT = asof; } else cur.volume = Math.max(cur.volume || 0, b.volume || 0);
+            dirty = true;
+          } else cb(Object.assign({}, b));
+        });
+        if (lastQ < lastT) lastQ = lastT;
+        if (dirty) emit();
+      },
+      stop() { alive = false; if (raf) cancelAnimationFrame(raf); raf = 0; q.length = 0; }
+    };
+  }
   function publico(invoke, digits, live) {
     let delayed = false, deep = false, flowAt = 0;
     const round = v => +(+v).toFixed(digits);
@@ -904,62 +971,20 @@
         return { bars, more: !!data.more, asof };
       },
       subscribe(sym, tf, cb) {
-        /* Ticks en vivo (función «vivo», por Realtime): llegan en tandas de ~1 s y se reproducen con el ritmo con el que
-           ocurrieron, así la vela se mueve tick a tick como en MT5. Cada 15 s (cada 60 s si llegan ticks) se piden las
-           últimas velas a «velas» para corregir la vela anterior y por si se pierde algún tick. */
-        let alive = true, t = null, raf = 0, dirty = false, lastEmit = 0, qEnd = 0;
-        const s0 = snap[sym + "|" + tf];
-        let cur = s0 ? Object.assign({}, s0.bar) : null, lastT = s0 ? s0.asof : 0, lastQ = lastT;
-        const q = [];
-        const emit = () => { if (!cur) return; dirty = false; lastEmit = performance.now(); cb(Object.assign({}, cur)); };
-        const apply = x => { // x = [hora en ms, precio, volumen]
-          if (x[0] <= lastT || !cur) return;
-          const k = barKey(x[0], tf), pr = round(x[1]);
-          if (k > cur.timestamp) cur = { timestamp: k, open: pr, high: pr, low: pr, close: pr, volume: +x[2] || 0 };
-          else if (k === cur.timestamp) { cur.high = Math.max(cur.high, pr); cur.low = Math.min(cur.low, pr); cur.close = pr; cur.volume = +((cur.volume || 0) + (+x[2] || 0)).toFixed(6); }
-          else return;
-          lastT = x[0]; dirty = true;
-        };
-        const pump = () => {
-          raf = 0; if (!alive) return;
-          const now = performance.now();
-          while (q.length && q[0].due <= now) apply(q.shift().x);
-          if (dirty && (now - lastEmit >= 40 || !q.length)) emit();
-          if (q.length || dirty) raf = requestAnimationFrame(pump);
-        };
-        const onTicks = list => {
-          if (!alive || !Array.isArray(list) || !list.length) return;
-          flowAt = Date.now();
-          const fresh = list.filter(x => Array.isArray(x) && x[0] > lastQ && isFinite(x[1])).sort((a, b) => a[0] - b[0]);
-          if (!fresh.length) return;
-          lastQ = fresh[fresh.length - 1][0];
-          if (document.hidden || q.length > 400) { while (q.length) apply(q.shift().x); fresh.forEach(apply); if (dirty) emit(); return; } // en segundo plano: sin animar
-          const now = performance.now(), start = Math.max(now, qEnd), span = fresh[fresh.length - 1][0] - fresh[0][0];
-          const k = start - now > 1200 || span > 2500 ? Math.min(1, 700 / Math.max(1, span)) : 1; // si se acumula retraso, más deprisa
-          fresh.forEach(x => q.push({ x, due: start + (x[0] - fresh[0][0]) * k }));
-          qEnd = q[q.length - 1].due + 1;
-          if (!raf) raf = requestAnimationFrame(pump);
-        };
-        const unT = live && live.subscribe && !/!$/.test(sym) ? live.subscribe(sym, onTicks) : null;
+        /* Ticks en vivo (función «vivo», por Realtime) reproducidos con su ritmo: la vela se mueve tick a tick como en MT5.
+           Cada 15 s (cada 60 s si llegan ticks) se piden las últimas velas a «velas» para corregir la vela anterior
+           y por si se pierde algún tick. */
+        let alive = true, t = null;
+        const E = tickEngine(tf, cb, round), s0 = snap[sym + "|" + tf];
+        if (s0) E.seed(s0.bar, s0.asof);
+        const unT = live && live.subscribe && !/!$/.test(sym) ? live.subscribe(sym, list => { if (!alive || !Array.isArray(list) || !list.length) return; flowAt = Date.now(); E.ticks(list); }) : null;
         const poll = async () => {
           if (!alive) return;
-          try {
-            const r = await p.bars(sym, tf, null, true); if (!alive) return;
-            r.bars.slice(-2).forEach(b => {
-              if (!cur || b.timestamp > cur.timestamp) { cur = Object.assign({}, b); if (r.asof > lastT) lastT = r.asof; dirty = true; }
-              else if (b.timestamp === cur.timestamp) {
-                cur.open = b.open; cur.high = Math.max(cur.high, b.high); cur.low = Math.min(cur.low, b.low);
-                if (r.asof > lastT || !p.live) { cur.close = b.close; cur.volume = b.volume; if (r.asof > lastT) lastT = r.asof; } else cur.volume = Math.max(cur.volume || 0, b.volume || 0);
-                dirty = true;
-              } else cb(b); // vela anterior, ya cerrada: la corrige
-            });
-            if (lastQ < lastT) lastQ = lastT;
-            if (dirty) emit();
-          } catch (e) { /* lo intenta otra vez */ }
+          try { const r = await p.bars(sym, tf, null, true); if (alive) E.merge(r.bars.slice(-2), r.asof, p.live); } catch (e) { /* lo intenta otra vez */ }
           if (alive) t = setTimeout(poll, p.live ? 60000 : 15000);
         };
         t = setTimeout(poll, 15000);
-        return () => { alive = false; clearTimeout(t); if (raf) cancelAnimationFrame(raf); if (unT) unT(); };
+        return () => { alive = false; clearTimeout(t); E.stop(); if (unT) unT(); };
       }
     };
     return p;
@@ -2248,5 +2273,5 @@
   }
   /* velas sueltas para el cuadro de la portada */
   function bars(sym, tf, o) { o = o || {}; const prov = binSym(sym) ? binance() : publico(o.invoke, o.digits != null ? o.digits : guessDigits(sym)); return prov.bars(sym, tf, null); }
-  window.TkChart = { mount, destroy, quote, bars, digits: guessDigits, sources: { binance, publico }, U: { TFS, TF_MS, TF_SHORT, DERIV, IND, IND_BY, CATS, CFG, pal, styles, aggBars, tidyBars, fmtR, icon, addTf, withDerived, binSym, TZS: TZLIST, get DARK() { return DARK; }, get CDARK() { return CDK(); } }, get current() { return inst; }, get all() { return Array.from(ALL); } };
+  window.TkChart = { mount, destroy, quote, bars, digits: guessDigits, sources: { binance, publico, tickEngine }, U: { TFS, TF_MS, TF_SHORT, DERIV, IND, IND_BY, CATS, CFG, pal, styles, aggBars, tidyBars, fmtR, icon, addTf, withDerived, binSym, TZS: TZLIST, get DARK() { return DARK; }, get CDARK() { return CDK(); } }, get current() { return inst; }, get all() { return Array.from(ALL); } };
 })();

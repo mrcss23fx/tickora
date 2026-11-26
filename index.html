@@ -920,7 +920,7 @@ body.bt-mode .live-only{display:none!important}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/klinecharts@10.1.0/dist/umd/klinecharts.min.js"></script>
-<script src="grafico.js?v=33"></script>
+<script src="grafico.js?v=34"></script>
 <script src="grafico2.js?v=12"></script>
 <script src="grafico3.js?v=4"></script>
 <script src="mercados.js?v=4"></script>
@@ -1917,7 +1917,7 @@ function mt5Provider(sym){
   const pub=TkChart.sources.publico((n,body)=>sb.functions.invoke(n,{body}),d,window.TK_TICKS||vivoTicks);
   const toBar=a=>({timestamp:a[0],open:+a[1],high:+a[2],low:+a[3],close:+a[4],volume:+a[5]||0});
   const wait=ms=>new Promise(r=>setTimeout(r,ms));
-  let off=false;
+  let off=false;const lastBar={};   // última vela de cada marco (para empezar a mover la vela en vivo)
   const ver=parseFloat((S.bridge&&S.bridge.last_info&&S.bridge.last_info.version)||"0");
   const okTf=tf=>!["30m","1w"].includes(tf)||ver>=1.31;   // 30 min y semanal llegan con el programa 1.31
   return {
@@ -1936,7 +1936,7 @@ function mt5Provider(sym){
           const {data}=await sb.from("bridge_hist").select("req,sym,tf,bars").maybeSingle();
           if(data&&data.req===req){
             if((data.tf&&data.tf!==tf)||(data.sym&&data.sym!==s)){wrong=true;break}   // otro gráfico cambió el marco a la vez: lo pedimos otra vez
-            const bars=(data.bars||[]).map(toBar).filter(x=>!to||x.timestamp<to);return {bars,more:(data.bars||[]).length>=900}
+            const bars=(data.bars||[]).map(toBar).filter(x=>!to||x.timestamp<to);if(!to&&bars.length)lastBar[tf]=bars[bars.length-1];return {bars,more:(data.bars||[]).length>=900}
           }
         }
         if(!wrong)break;
@@ -1947,8 +1947,11 @@ function mt5Provider(sym){
     subscribe(s,tf,cb){
       if(off||!okTf(tf))return pub.subscribe(s,tf,cb);
       const hb=setInterval(()=>sb.rpc("bridge_watch_set",{p_sym:s,p_tf:tf}),20000);
-      const ch=sb.channel("live-"+S.user.id+"-"+Date.now()).on("postgres_changes",{event:"*",schema:"public",table:"bridge_live",filter:"user_id=eq."+S.user.id},p=>{const r=p.new;if(!r||r.sym!==s||r.tf!==tf)return;(r.bars||[]).forEach(a=>cb(toBar(a)))}).subscribe();
-      return ()=>{clearInterval(hb);sb.removeChannel(ch)};
+      // programa 2.1: cada segundo llegan las dos últimas velas y los ticks de ese segundo; los ticks se reproducen con su ritmo
+      // y, al acabar, manda la vela de MT5. Con programas anteriores solo llegan las velas (una vez por segundo).
+      const E=TkChart.sources.tickEngine(tf,cb,v=>+(+v).toFixed(d));if(lastBar[tf])E.seed(lastBar[tf],0);
+      const ch=sb.channel("live-"+S.user.id+"-"+Date.now()).on("postgres_changes",{event:"*",schema:"public",table:"bridge_live",filter:"user_id=eq."+S.user.id},p=>{const r=p.new;if(!r||r.sym!==s||r.tf!==tf)return;E.ticks(Array.isArray(r.ticks)?r.ticks:[],(r.bars||[]).map(toBar))}).subscribe();
+      return ()=>{clearInterval(hb);sb.removeChannel(ch);E.stop()};
     }
   };
 }
@@ -2048,7 +2051,7 @@ function viewPlan(mode){
             <form class="row" id="pairForm" style="gap:8px;margin-top:8px" onsubmit="return false"><input class="input mono" id="pairCode" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123 456" style="max-width:160px;font-size:20px;letter-spacing:.12em;text-align:center"><button type="submit" class="btn">Vincular</button></form></li>
         </ol>
         <div class="small muted">El programa solo lee tus operaciones y hace la foto del gráfico. No abre ni cierra nada. Puedes vincular varias cuentas: repite el paso 3 en cada MetaTrader.</div>
-        <details><summary class="small muted" style="cursor:pointer">Opciones avanzadas</summary><div class="stack" style="gap:8px;margin-top:10px"><div class="small muted">Si prefieres pegar una clave en el programa en vez de usar el código:</div><button type="button" class="btn2" id="newKey" style="align-self:flex-start">Crear una clave</button><a class="small" href="../mt5/Tickora.mq5" download>Descargar el programa (.mq5) para instalarlo a mano</a></div></details>
+        <details><summary class="small muted" style="cursor:pointer">Opciones avanzadas</summary><div class="stack" style="gap:8px;margin-top:10px"><div class="small muted">Si prefieres pegar una clave en el programa en vez de usar el código:</div><button type="button" class="btn2" id="newKey" style="align-self:flex-start">Crear una clave</button><a class="small" href="mt5/Tickora.mq5" download>Descargar el programa (.mq5) para instalarlo a mano</a></div></details>
       </div>
     </div>
     <div class="stack">
