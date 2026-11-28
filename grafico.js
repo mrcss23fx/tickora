@@ -639,6 +639,56 @@
     }
   });
 
+  /* Posición abierta con los botones de comprar y vender (práctica, backtesting y MT5): como en TradingView, tres líneas
+     de lado a lado: la entrada, el stop en rojo y el objetivo en verde, cada una con su etiqueta. Se arrastra cada línea
+     por separado (posLnEvents) y la «×» de la etiqueta cierra. Puntos: [entrada, stop, objetivo]. */
+  const LN_RED = "#e5484d", LN_GREEN = "#2f9e6e";
+  KC.registerOverlay({
+    name: "tkPosLn", totalStep: 4, needDefaultPointFigure: false, needDefaultXAxisFigure: false, needDefaultYAxisFigure: true,
+    createPointFigures: ({ coordinates: c, overlay: o, bounding: bd }) => {
+      if (c.length < 3) return [];
+      const p = pal(), ex = o.extendData || {}, pts = o.points, W = bd.width;
+      const e = pts[0].value, s = pts[1].value, t = pts[2].value, risk = Math.abs(e - s);
+      const figs = [];
+      const lab = (key, y, text, bg, fg, right) => {
+        const w = Math.ceil(text.length * 6.3) + 12, x = Math.max(4, W - (right || 0) - w - 64);
+        figs.push({ key, type: "text", attrs: { x, y, text, baseline: "middle" }, styles: { color: fg, size: 11, family: NUMF, weight: 600, backgroundColor: bg, borderColor: bg, borderSize: 1, borderRadius: 3, paddingLeft: 6, paddingRight: 6, paddingTop: 3, paddingBottom: 3 } });
+        return x;
+      };
+      const line = (key, y, color, size, dash) => {
+        figs.push({ key, type: "rect", attrs: { x: 0, y: y - 4, width: W, height: 8 }, styles: { style: "fill", color: "rgba(0,0,0,0)" } }); // zona para cogerla
+        figs.push({ key, type: "line", ignoreEvent: true, attrs: { coordinates: [{ x: 0, y }, { x: W, y }] }, styles: { color, size, style: dash ? "dashed" : "solid", dashedValue: [6, 4] } });
+      };
+      if (!ex.noSl) { line("sl", c[1].y, LN_RED, 1, true); lab("sl", c[1].y, "SL " + fmtP(s) + (ex.slTxt ? " · " + ex.slTxt : " · −1 R"), LN_RED, "#fff"); }
+      if (!ex.noTp) { line("tp", c[2].y, LN_GREEN, 1, true); lab("tp", c[2].y, "TP " + fmtP(t) + (ex.tpTxt ? " · " + ex.tpTxt : risk ? " · +" + nf(Math.abs(t - e) / risk, 1) + " R" : ""), LN_GREEN, "#fff"); }
+      const col = ex.side === "sell" ? p.tinta : p.cob;
+      line("en", c[0].y, col, 1.5, !!ex.pend);
+      const head = (ex.pend ? (ex.pend === "lim" ? "LÍMITE " : "STOP ") : "") + (ex.side === "sell" ? "VENTA" : "COMPRA") + (ex.lots ? " " + nf(ex.lots, 2) : "") + (ex.sim ? " · PRÁCTICA" : "") + (ex.real ? " · MT5" : "") + (ex.frac && ex.frac < 1 ? " · " + Math.round(ex.frac * 100) + " %" : "") + (ex.pend ? " · " + fmtP(e) : " · " + (ex.plTxt != null ? ex.plTxt : ex.live != null ? fmtR(ex.live) : fmtP(e))) + (ex.noSl ? " · sin stop" : "");
+      const xh = lab("en", c[0].y, head, p.card, p.tinta, ex.closable ? 22 : 0);
+      figs[figs.length - 1].styles.borderColor = col;
+      if (ex.closable) { const w = Math.ceil(head.length * 6.3) + 12; figs.push({ key: "x", type: "text", attrs: { x: xh + w + 2, y: c[0].y, text: "×", baseline: "middle" }, styles: { color: "#fff", size: 13, family: NUMF, weight: 700, backgroundColor: col, borderColor: col, borderSize: 1, borderRadius: 3, paddingLeft: 6, paddingRight: 6, paddingTop: 1, paddingBottom: 2 } }); }
+      return figs;
+    }
+  });
+  /* Arrastrar una sola línea (la entrada solo si es una orden pendiente) y la «×» para cerrar.
+     o: { movable(i) → bool, onEnd(points), onClose(), onSelected(), onDeselected() } */
+  function posLnEvents(o) {
+    let snap = null, idx = -1;
+    const which = f => ({ en: 0, sl: 1, tp: 2 })[f && f.key];
+    return {
+      onSelected: () => o.onSelected && o.onSelected(), onDeselected: () => o.onDeselected && o.onDeselected(),
+      // KLineChart no avisa de la selección en esta figura: se marca al hacer clic (quien la usa la quita con cualquier otro clic)
+      onClick: ev => { if (ev.figure && ev.figure.key === "x" && o.onClose) { o.onClose(); return true; } if (o.onSelected) o.onSelected(); return false; },
+      onPressedMoveStart: ev => { snap = ev.overlay.points.map(q => Object.assign({}, q)); const i = which(ev.figure); idx = i != null && (!o.movable || o.movable(i)) ? i : -1; },
+      onPressedMoving: ev => {
+        if (!snap) return; const P = ev.overlay.points;
+        for (let i = 0; i < P.length && i < snap.length; i++) { const v = P[i].value; Object.assign(P[i], snap[i]); if (i === idx) P[i].value = v; }
+        if (idx < 0) ev.preventDefault && ev.preventDefault();
+      },
+      onPressedMoveEnd: ev => { const moved = idx >= 0; snap = null; idx = -1; if (moved && o.onEnd) o.onEnd(ev.overlay.points); }
+    };
+  }
+
   /* ---------- indicadores propios ---------- */
   const wilder = (list, n) => { let a = null; return list.map((k, i) => { const pc = i ? list[i - 1].close : k.close; const tr = Math.max(k.high - k.low, Math.abs(k.high - pc), Math.abs(k.low - pc)); a = a == null ? tr : (a * (n - 1) + tr) / n; return a; }); };
   const emaArr = (vals, n) => { const k = 2 / (n + 1); let e = null; return vals.map(v => (e = e == null ? v : v * k + e * (1 - k))); };
@@ -2278,5 +2328,5 @@
   }
   /* velas sueltas para el cuadro de la portada */
   function bars(sym, tf, o) { o = o || {}; const prov = binSym(sym) ? binance() : publico(o.invoke, o.digits != null ? o.digits : guessDigits(sym)); return prov.bars(sym, tf, null); }
-  window.TkChart = { mount, destroy, quote, bars, digits: guessDigits, sources: { binance, publico, tickEngine }, U: { TFS, TF_MS, TF_SHORT, DERIV, IND, IND_BY, CATS, CFG, pal, styles, aggBars, tidyBars, fmtR, icon, addTf, withDerived, binSym, TZS: TZLIST, get DARK() { return DARK; }, get CDARK() { return CDK(); } }, get current() { return inst; }, get all() { return Array.from(ALL); } };
+  window.TkChart = { mount, destroy, quote, bars, digits: guessDigits, sources: { binance, publico, tickEngine }, U: { TFS, TF_MS, TF_SHORT, DERIV, IND, IND_BY, CATS, CFG, pal, styles, aggBars, tidyBars, fmtR, icon, addTf, withDerived, binSym, posLnEvents, TZS: TZLIST, get DARK() { return DARK; }, get CDARK() { return CDK(); } }, get current() { return inst; }, get all() { return Array.from(ALL); } };
 })();

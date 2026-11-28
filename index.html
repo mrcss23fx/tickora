@@ -950,10 +950,10 @@ body.bt-mode .live-only{display:none!important}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/klinecharts@10.1.0/dist/umd/klinecharts.min.js"></script>
-<script src="grafico.js?v=36"></script>
-<script src="grafico2.js?v=14"></script>
-<script src="grafico3.js?v=6"></script>
-<script src="grafico4.js?v=1"></script>
+<script src="grafico.js?v=37"></script>
+<script src="grafico2.js?v=15"></script>
+<script src="grafico3.js?v=7"></script>
+<script src="grafico4.js?v=2"></script>
 <script src="mercados.js?v=4"></script>
 </head>
 <body>
@@ -1872,7 +1872,7 @@ function viewAnalizar(){
         <label class="field"><span>Objetivo</span><input class="input" id="anTp" inputmode="decimal" value="${esc(S.an.tp)}" placeholder="precio"></label>
         <div id="anResult"></div>
       </form>
-    <div class="small muted live-only an-note">La operación la abres tú en MetaTrader con estos datos. Abrirla desde aquí llegará más adelante, siempre pasando por tu pacto.</div>
+    <div class="small muted live-only an-note">Con tu MT5 conectado (programa 2.2) también puedes abrirla desde el gráfico: toca «Práctica» arriba a la izquierda para pasar a MT5 y usa Comprar o Vender. Siempre con stop y pasando por tu plan.</div>
     ${window.tkSessionBand?tkSessionBand():""}
     <div class="card bt-only btnote" ${S.btRun?"hidden":""}><b>Estás en backtesting.</b> Elige desde cuándo practicar, avanza y retrocede vela a vela o arrastra la barra para ir a cualquier punto. Pulsa Comprar o Vender para abrir operaciones simuladas: se guardan aparte y no cuentan en tus estadísticas reales. Atajos: ← → una vela, Mayús + ← → diez velas, espacio para reproducir.</div>
     <div class="card stack live-only" style="gap:8px" id="anPacto"></div>
@@ -2077,7 +2077,8 @@ function chartOpts(i){
     onPrice:main?(p,sym)=>{if(sym===S.an.sym)livePrice(sym,p)}:null,
     onPosition:main?pos=>{const a=S.an,f=v=>Number(v).toFixed(pos.digits);a.side=pos.side;a.entry=f(pos.entry);a.stop=f(pos.stop);a.tp=f(pos.tp);
       [["anEntry","entry"],["anStop","stop"],["anTp","tp"]].forEach(([id,k])=>{const x=document.getElementById(id);if(x)x.value=a[k]});
-      document.querySelectorAll("[data-side]").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.side===a.side)));paintAnalizar();if(window.tkAnSide)tkAnSide(true);toast("Boleto rellenado con tu dibujo")}:null,
+      document.querySelectorAll("[data-side]").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.side===a.side)));paintAnalizar()}:null,
+    onEnter:main?()=>{if(window.tkAnSide)tkAnSide(true)}:null, // el panel de boleto y normas se abre al entrar con Comprar o Vender, no al dibujar
     loadDrawings:async sym=>{const {data,error}=await sb.from("docs").select("data,updated_at").eq("col","draw").eq("id",sym).maybeSingle();if(error)throw error;if(!data||!data.data||!data.data.list)return null;return {list:data.data.list,t:data.data.t||0}},
     saveDrawings:async(sym,list,t)=>{const {error}=await sb.from("docs").upsert({user_id:S.user.id,col:"draw",id:sym,data:{list,t:t||Date.now()},updated_at:new Date().toISOString()});if(error&&!S.drawErr){S.drawErr=1;toast("No se pudieron guardar los dibujos en la nube; quedan en este navegador")}},
     lotsFor:(sym,e,st,money)=>{const info=symbolsInfo().find(x=>x.s===sym);if(!info||!info.ts||!info.tv||!money||e==null||st==null||e===st)return null;const lpl=Math.abs(e-st)/info.ts*info.tv;let l=Math.floor((money/lpl)/(info.vstep||0.01)+1e-9)*(info.vstep||0.01);if(info.vmax)l=Math.min(l,info.vmax);return l>=(info.vmin||0.01)?+l.toFixed(2):null},

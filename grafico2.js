@@ -360,17 +360,24 @@
     function drawPos(p) {
       if (p.sym !== st.sym || (HK.qoReal && HK.qoReal.on())) return; // operando en tu MT5 se ven sus posiciones, no las de práctica
       const ms = TF_MS[st.tf] || 3e5, t0 = p.openTime || p.created, tw = Math.max(ms * 20, (nowTs() - t0) + ms * 8);
-      const ex = { side: p.side, sim: true, pend: p.status === "pending" ? p.kind : null, lots: p.lots, frac: p.frac, live: p.status === "open" ? liveR(p) : null };
+      const ex = { side: p.side, sim: true, pend: p.status === "pending" ? p.kind : null, lots: p.lots, frac: p.frac, live: p.status === "open" ? liveR(p) : null, noTp: p.tp == null, closable: true };
       const pts = [{ timestamp: t0, value: p.entry }, { timestamp: t0 + tw, value: p.stop }, { timestamp: t0 + tw, value: p.tp != null ? p.tp : p.entry }];
-      if (P.ov[p.id]) { try { ch.overrideOverlay({ id: P.ov[p.id], extendData: ex, points: pts }); return; } catch (e) { /* se volvió a crear */ } }
-      P.ov[p.id] = ch.createOverlay({ name: "tkPos", groupId: "sim", extendData: ex, points: pts,
+      if (P.ov[p.id] && ch.getOverlays({ id: P.ov[p.id] })[0]) { if (!P.drag) { try { ch.overrideOverlay({ id: P.ov[p.id], extendData: ex, points: pts }); } catch (e) { /* nada */ } } return; }
+      // como en TradingView: línea de entrada, stop en rojo y objetivo en verde; cada una se arrastra por separado y la «×» cierra
+      const evs = U.posLnEvents({
+        movable: i => i > 0 || p.status === "pending",
         onSelected: () => { P.sel = p.id; }, onDeselected: () => { if (P.sel === p.id) P.sel = null; },
-        onPressedMoveEnd: ev => { const q = P.list.find(z => z.id === p.id); if (!q) return; const pt = ev.overlay.points, px = nowPrice();
+        onClose: () => { const q = P.list.find(z => z.id === p.id); if (!q) return; if (q.status === "pending") { undraw(q); P.list = P.list.filter(z => z !== q); persist(); paintPanel(); X.hint("Orden de práctica anulada."); setTimeout(() => X.hint(""), 2000); } else closePos(q); },
+        onEnd: pt => { P.drag = false; const q = P.list.find(z => z.id === p.id); if (!q) return; const px = nowPrice();
           if (q.status === "pending") { const ne = rd(pt[0].value); if (ne > 0) q.entry = ne; }
-          const ns = rd(pt[1].value), nt = pt[2] ? rd(pt[2].value) : null, buy = q.side === "buy";
+          const ns = rd(pt[1].value), nt = q.tp != null || Math.abs(pt[2].value - q.entry) > 1e-12 ? rd(pt[2].value) : null, buy = q.side === "buy";
           if (q.status !== "open" || (buy ? ns < px : ns > px)) q.stop = ns; if (nt != null && (buy ? nt > q.entry : nt < q.entry)) q.tp = nt;
           if (q.status === "pending") q.risk = Math.abs(q.entry - q.stop);
-          drawPos(q); persist(); paintPanel(); } });
+          drawPos(q); persist(); paintPanel(); }
+      });
+      const st0 = evs.onPressedMoveStart, en0 = evs.onPressedMoveEnd;
+      evs.onPressedMoveStart = ev => { P.drag = true; st0(ev); }; evs.onPressedMoveEnd = ev => { P.drag = false; en0(ev); const q = P.list.find(z => z.id === p.id); if (q) drawPos(q); };
+      P.ov[p.id] = ch.createOverlay(Object.assign({ name: "tkPosLn", groupId: "sim", extendData: ex, points: pts }, evs));
     }
     function undraw(p) { if (P.ov[p.id]) { try { ch.removeOverlay({ id: P.ov[p.id] }); } catch (e) { /* ya no está */ } delete P.ov[p.id]; } }
     function redrawAll() { P.sel = null; Object.keys(P.ov).forEach(id => { try { ch.removeOverlay({ id: P.ov[id] }); } catch (e) { /* nada */ } }); P.ov = {}; if ((U.CFG || {}).showPos === false) return; P.list.filter(p => (p.mode === "replay") === !!R.on).forEach(drawPos); }
@@ -448,6 +455,7 @@
     function toBE(p) { const px = nowPrice(), buy = p.side === "buy"; if (px == null || (buy ? px <= p.entry : px >= p.entry)) { X.hint("Para mover el stop a la entrada, el precio tiene que ir a tu favor."); setTimeout(() => X.hint(""), 2500); return; } p.stop0 = p.stop0 || p.stop; p.stop = p.entry; drawPos(p); persist(); paintPanel(); }
     HK.openSim = side => { if (!main) return; place({ side }); };
     /* Supr o Retroceso con una posición de práctica seleccionada: la cierra a mercado (o anula la orden pendiente) */
+    me.el.addEventListener("pointerdown", () => { P.sel = null; }, true); // un clic en otro sitio quita la selección (el de la línea la vuelve a poner)
     HK.delSel = () => { const p = P.sel && P.list.find(z => z.id === P.sel); P.sel = null; if (!p) return false;
       if (p.status === "pending") { undraw(p); P.list = P.list.filter(z => z !== p); persist(); paintPanel(); X.hint("Orden de práctica anulada."); setTimeout(() => X.hint(""), 2000); } else closePos(p);
       return true; };
@@ -467,6 +475,7 @@
       qo = document.createElement("div"); qo.className = "gx-qo"; canvas.appendChild(qo);
       qo.addEventListener("click", e => { const b = e.target.closest("[data-qo]"); if (!b) return; e.stopPropagation(); const t = b.dataset.qo;
         if (t === "mode" && HK.qoReal) { HK.qoReal.toggle(); paintQo(); return; }
+        if ((t === "buy" || t === "sell") && X.opts.onEnter) X.opts.onEnter(t);
         if (HK.qoReal && HK.qoReal.on()) { if (t === "buy" || t === "sell") HK.qoReal.click(t); if (t === "ticket") HK.qoReal.ticket(); return; } // con tu MT5 (grafico4.js)
         if (t === "buy" || t === "sell") place({ side: t }); if (t === "ticket") ticket(b); });
     }

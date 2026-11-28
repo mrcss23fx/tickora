@@ -827,7 +827,7 @@
       const b = e.target.closest && e.target.closest('.gx-qo [data-qo="buy"], .gx-qo [data-qo="sell"]'); if (!b || CFG.oneClick !== false || !HK.place) return;
       e.stopPropagation(); e.preventDefault(); const side = b.dataset.qo, r = b.getBoundingClientRect();
       const real = HK.qoReal && HK.qoReal.on();
-      MENU.open([{ head: real ? HK.qoReal.label() + " · a mercado" : "Práctica · a mercado" }, { t: side === "buy" ? "Comprar ahora" : "Vender ahora", ic: "check", f: () => real ? HK.qoReal.click(side) : HK.place({ side }) }, { t: "Cancelar", ic: "x" }], r.left, r.bottom + 6, { label: "Confirmar la orden", focusFirst: true });
+      MENU.open([{ head: real ? HK.qoReal.label() + " · a mercado" : "Práctica · a mercado" }, { t: side === "buy" ? "Comprar ahora" : "Vender ahora", ic: "check", f: () => { if (X.opts.onEnter) X.opts.onEnter(side); return real ? HK.qoReal.click(side) : HK.place({ side }); } }, { t: "Cancelar", ic: "x" }], r.left, r.bottom + 6, { label: "Confirmar la orden", focusFirst: true });
     }, true);
     HK.sound = (kind, force) => { if (force || CFG.snd) beep(kind, CFG.sndVol); };
     { const h0 = X.hint; X.hint = t => {

@@ -161,12 +161,18 @@
       const id = o.kind + o.ticket, ms = (U.TF_MS && U.TF_MS[st.tf]) || 3e5, t0 = o.t0 || Date.now(), tw = Math.max(ms * 20, Date.now() - t0 + ms * 8);
       const noSl = !(o.sl > 0), noTp = !(o.tp > 0);
       const pts = [{ timestamp: t0, value: o.entry }, { timestamp: t0 + tw, value: noSl ? o.entry : o.sl }, { timestamp: t0 + tw, value: noTp ? o.entry : o.tp }];
-      const ex = { side: o.side, real: true, lots: o.lots, pend: o.pend || null, noSl, noTp, plTxt: o.kind === "pos" ? money(o.pl, s.acct.cur) : null };
+      const ex = { side: o.side, real: true, lots: o.lots, pend: o.pend || null, noSl, noTp, closable: true, plTxt: o.kind === "pos" ? money(o.pl, s.acct.cur) : null };
       if (ov[id] && ch.getOverlays({ id: ov[id] })[0]) { if (!dragging) { try { ch.overrideOverlay({ id: ov[id], extendData: ex, points: pts }); } catch (e) { /* nada */ } } return id; }
-      ov[id] = ch.createOverlay({ name: "tkPos", groupId: "mt5", extendData: ex, points: pts,
+      // como en TradingView: entrada, stop en rojo y objetivo en verde; cada línea se arrastra por separado y la «×» cierra
+      const evs = U.posLnEvents({
+        movable: i => i > 0 || o.kind === "ord",
         onSelected: () => { sel = o.ticket + "|" + o.kind; }, onDeselected: () => { if (sel === o.ticket + "|" + o.kind) sel = null; },
-        onPressedMoveStart: () => { dragging = true; },
-        onPressedMoveEnd: ev => { dragging = false; moved(o.kind, o.ticket, ev.overlay.points); } });
+        onClose: () => { const z = items(S0()).find(q => q.kind === o.kind && q.ticket === o.ticket); if (z) closeAsk(z); },
+        onEnd: P => moved(o.kind, o.ticket, P)
+      });
+      const st0 = evs.onPressedMoveStart, en0 = evs.onPressedMoveEnd;
+      evs.onPressedMoveStart = ev => { dragging = true; st0(ev); }; evs.onPressedMoveEnd = ev => { dragging = false; en0(ev); };
+      ov[id] = ch.createOverlay(Object.assign({ name: "tkPosLn", groupId: "mt5", extendData: ex, points: pts }, evs));
       return id;
     }
     function redraw() {
@@ -207,6 +213,7 @@
       if (buy ? q.b <= o.entry : q.a >= o.entry) { say("Para mover el stop a la entrada, el precio tiene que ir a tu favor."); return; }
       send({ op: "modify", sym: o.sym, ticket: o.ticket, sl: rd(o.entry, s), tp: o.tp > 0 ? rd(o.tp, s) : 0 }, () => "MT5: stop en la entrada");
     }
+    me.el.addEventListener("pointerdown", () => { sel = null; }, true); // un clic en otro sitio quita la selección
     /* Supr con una posición u orden de MT5 seleccionada: pregunta y la cierra o anula */
     { const prev = HK.delSel; HK.delSel = () => {
       if (sel && mode === "mt5") { const s = S0(), o = items(s).find(z => z.ticket + "|" + z.kind === sel); sel = null; if (o) { closeAsk(o); return true; } }
